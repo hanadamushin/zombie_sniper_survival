@@ -1,0 +1,406 @@
+// Static-world queries shared by the player (03), bullets and zombies (04) and the defence layer (06).
+// Everything here is a pure function of a TacticalMap; nothing touches GameState.
+//
+//   heightAt(map, x, z)                       terrain height
+//   isWalkable(map, tx, ty)                   4 m nav tile
+//   raycastWorld(map, origin, dir, maxDist)   first hit on terrain / buildings / stairs / rocks / trunks
+//   segmentHitsStatic(map, a, b)              line-of-sight / bullet segment test
+//   supportAt(map, x, z, feetY, stepUp)       what a walker at (x, z) stands on
+//   pushOut(map, pos, radius, feetY, height)  keep a circle out of walls and trunks
+//   createSpatialHash()                       16 m buckets for dynamic objects (zombies, survivors)
+
+import { TACTICAL } from '../../data/tactical.ts';
+import { sampleGradient, sampleHeight, TRUNK_SHARE, trunkRadius, type Ladder, type SolidKind, type TacticalMap } from '../../gen/index.ts';
+
+export type Vec3 = [number, number, number];
+
+export function heightAt(map: TacticalMap, x: number, z: number): number {
+  return sampleHeight(map.height, map.n, map.tile, x, z);
+}
+
+/** Terrain gradient (dh/dx, dh/dz) at (x, z). */
+export function gradientAt(map: TacticalMap, x: number, z: number, out: [number, number]): [number, number] {
+  return sampleGradient(map.height, map.n, map.tile, x, z, out);
+}
+
+/** Nav tile test; tiles outside the map are not walkable. */
+export function isWalkable(map: TacticalMap, tx: number, ty: number): boolean {
+  return tx >= 0 && ty >= 0 && tx < map.tiles && ty < map.tiles && map.walk[ty * map.tiles + tx] === 1;
+}
+
+export interface RayHit {
+  /** Distance along the (normalised) direction. */
+  dist: number;
+  pos: Vec3;
+  normal: Vec3;
+  kind: 'terrain' | 'tree' | SolidKind;
+  /** Index into map.solids / map.trees, or -1 for terrain. */
+  index: number;
+}
+
+/**
+ * First intersection of a ray with the static world within maxDist, or null.
+ * The ray ends where it leaves the playable square.
+ */
+export function raycastWorld(map: TacticalMap, origin: Readonly<Vec3>, dir: Readonly<Vec3>, maxDist: number): RayHit | null {
+  const len = Math.hypot(dir[0], dir[1], dir[2]);
+  if (len === 0 || maxDist <= 0) return null;
+  const dx = dir[0] / len;
+  const dy = dir[1] / len;
+  const dz = dir[2] / len;
+  const [ox, oy, oz] = origin;
+  const S = map.size;
+
+  // Clip to the map square.
+  let t0 = 0;
+  let t1 = maxDist;
+  for (const [o, d] of [[ox, dx], [oz, dz]] as const) {
+    if (Math.abs(d) < 1e-12) {
+      if (o < 0 || o > S) return null;
+    } else {
+      const a = (0 - o) / d;
+      const b = (S - o) / d;
+      t0 = Math.max(t0, Math.min(a, b));
+      t1 = Math.min(t1, Math.max(a, b));
+    }
+  }
+  if (t0 > t1) return null;
+
+  let best = t1;
+  let kind: RayHit['kind'] | null = null;
+  let index = -1;
+  let nx = 0;
+  let ny = 1;
+  let nz = 0;
+
+  // --- solids and tree trunks: walk the 16 m hash cells along the ray ---
+  const hash = map.hash;
+  const cs = hash.cell;
+  const hn = hash.n;
+  const sx = ox + dx * t0;
+  const sz = oz + dz * t0;
+  let cx = Math.min(hn - 1, Math.max(0, Math.floor(sx / cs)));
+  let cz = Math.min(hn - 1, Math.max(0, Math.floor(sz / cs)));
+  const stepX = dx > 0 ? 1 : -1;
+  const stepZ = dz > 0 ? 1 : -1;
+  const invX = Math.abs(dx) > 1e-12 ? 1 / dx : Infinity;
+  const invY = Math.abs(dy) > 1e-12 ? 1 / dy : Infinity;
+  const invZ = Math.abs(dz) > 1e-12 ? 1 / dz : Infinity;
+  let tMaxX = invX === Infinity ? Infinity : t0 + ((dx > 0 ? (cx + 1) * cs : cx * cs) - sx) * invX;
+  let tMaxZ = invZ === Infinity ? Infinity : t0 + ((dz > 0 ? (cz + 1) * cs : cz * cs) - sz) * invZ;
+  const tDeltaX = Math.abs(cs * invX);
+  const tDeltaZ = Math.abs(cs * invZ);
+  let tCell = t0;
+  const trees = map.trees;
+  while (tCell <= best && cx >= 0 && cz >= 0 && cx < hn && cz < hn) {
+    const c = cz * hn + cx;
+    for (const si of hash.solids[c]!) {
+      const s = map.solids[si]!;
+      // Slab test.
+      let tn = t0;
+      let tf = best;
+      let axis = -1;
+      let a = (s.x0 - ox) * invX;
+      let b = (s.x1 - ox) * invX;
+      if (invX === Infinity) {
+        if (ox < s.x0 || ox > s.x1) continue;
+      } else {
+        if (a > b) [a, b] = [b, a];
+        if (a > tn) { tn = a; axis = 0; }
+        if (b < tf) tf = b;
+      }
+      if (invY === Infinity) {
+        if (oy < s.y0 || oy > s.y1) continue;
+      } else {
+        a = (s.y0 - oy) * invY;
+        b = (s.y1 - oy) * invY;
+        if (a > b) [a, b] = [b, a];
+        if (a > tn) { tn = a; axis = 1; }
+        if (b < tf) tf = b;
+      }
+      if (invZ === Infinity) {
+        if (oz < s.z0 || oz > s.z1) continue;
+      } else {
+        a = (s.z0 - oz) * invZ;
+        b = (s.z1 - oz) * invZ;
+        if (a > b) [a, b] = [b, a];
+        if (a > tn) { tn = a; axis = 2; }
+        if (b < tf) tf = b;
+      }
+      if (tn > tf || tn >= best) continue;
+      best = tn;
+      kind = s.kind;
+      index = si;
+      nx = axis === 0 ? -stepX : 0;
+      ny = axis === 1 ? (dy > 0 ? -1 : 1) : 0;
+      nz = axis === 2 ? -stepZ : 0;
+      if (axis === -1) ny = 1; // started inside the box
+    }
+    const h2 = dx * dx + dz * dz;
+    if (h2 > 1e-12) {
+      for (const ti of hash.trees[c]!) {
+        // Vertical cylinder: 2D circle, then the height range of the bare trunk.
+        const r = trunkRadius(trees.h[ti]!);
+        const px = ox - trees.x[ti]!;
+        const pz = oz - trees.z[ti]!;
+        const bq = px * dx + pz * dz;
+        const cq = px * px + pz * pz - r * r;
+        const disc = bq * bq - h2 * cq;
+        if (disc < 0) continue;
+        const t = (-bq - Math.sqrt(disc)) / h2;
+        if (t < t0 || t >= best) continue;
+        const y = oy + dy * t;
+        if (y < trees.y[ti]! - 0.5 || y > trees.y[ti]! + trees.h[ti]! * TRUNK_SHARE) continue;
+        best = t;
+        kind = 'tree';
+        index = ti;
+        nx = (px + dx * t) / r;
+        ny = 0;
+        nz = (pz + dz * t) / r;
+      }
+    }
+    if (tMaxX < tMaxZ) {
+      tCell = tMaxX;
+      tMaxX += tDeltaX;
+      cx += stepX;
+    } else {
+      tCell = tMaxZ;
+      tMaxZ += tDeltaZ;
+      cz += stepZ;
+    }
+  }
+
+  // --- terrain: march, then bisect the crossing ---
+  const step = map.tile / 2;
+  let prev = t0;
+  if (oy + dy * t0 < heightAt(map, sx, sz)) {
+    best = t0;
+    kind = 'terrain';
+    index = -1;
+  } else {
+    for (let t = t0 + step; prev < best; t += step) {
+      const tt = Math.min(t, best);
+      if (oy + dy * tt < heightAt(map, ox + dx * tt, oz + dz * tt)) {
+        let lo = prev;
+        let hi = tt;
+        for (let i = 0; i < 16; i++) {
+          const mid = (lo + hi) / 2;
+          if (oy + dy * mid < heightAt(map, ox + dx * mid, oz + dz * mid)) hi = mid;
+          else lo = mid;
+        }
+        best = hi;
+        kind = 'terrain';
+        index = -1;
+        break;
+      }
+      prev = tt;
+    }
+  }
+  if (kind === null) return null;
+  const pos: Vec3 = [ox + dx * best, oy + dy * best, oz + dz * best];
+  if (kind === 'terrain') {
+    const g = gradientAt(map, pos[0], pos[2], [0, 0]);
+    const inv = 1 / Math.hypot(g[0], 1, g[1]);
+    nx = -g[0] * inv;
+    ny = inv;
+    nz = -g[1] * inv;
+  }
+  return { dist: best, pos, normal: [nx, ny, nz], kind, index };
+}
+
+/** True when the segment a -> b touches terrain, a solid or a tree trunk. */
+export function segmentHitsStatic(map: TacticalMap, a: Readonly<Vec3>, b: Readonly<Vec3>): boolean {
+  const d: Vec3 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+  const len = Math.hypot(d[0], d[1], d[2]);
+  if (len < 1e-9) return false;
+  const hit = raycastWorld(map, a, d, len);
+  return hit !== null && hit.dist < len - 1e-6;
+}
+
+/**
+ * Height a walker at (x, z) with feet at feetY stands on: the terrain, or the top of a solid
+ * under it that is no more than stepUp above the feet.
+ */
+export function supportAt(map: TacticalMap, x: number, z: number, feetY: number, stepUp: number = TACTICAL.player.stepUp): number {
+  let best = heightAt(map, x, z);
+  const hash = map.hash;
+  const cx = Math.min(hash.n - 1, Math.max(0, Math.floor(x / hash.cell)));
+  const cz = Math.min(hash.n - 1, Math.max(0, Math.floor(z / hash.cell)));
+  for (const si of hash.solids[cz * hash.n + cx]!) {
+    const s = map.solids[si]!;
+    if (x >= s.x0 && x <= s.x1 && z >= s.z0 && z <= s.z1 && s.y1 > best && s.y1 <= feetY + stepUp) best = s.y1;
+  }
+  return best;
+}
+
+/**
+ * Push a vertical cylinder (centre pos, radius, feetY .. feetY + height) out of the solids and tree
+ * trunks it overlaps. Solids whose top is within stepUp of the feet do not block (they are stepped
+ * onto). Mutates pos [x, z]; returns true when it moved.
+ */
+export function pushOut(map: TacticalMap, pos: [number, number], radius: number, feetY: number, height: number, stepUp: number = TACTICAL.player.stepUp): boolean {
+  const hash = map.hash;
+  const n = hash.n;
+  const cs = hash.cell;
+  let moved = false;
+  for (let iter = 0; iter < 3; iter++) {
+    let again = false;
+    const cx0 = Math.max(0, Math.floor((pos[0] - radius) / cs));
+    const cx1 = Math.min(n - 1, Math.floor((pos[0] + radius) / cs));
+    const cz0 = Math.max(0, Math.floor((pos[1] - radius) / cs));
+    const cz1 = Math.min(n - 1, Math.floor((pos[1] + radius) / cs));
+    for (let cz = cz0; cz <= cz1; cz++) {
+      for (let cx = cx0; cx <= cx1; cx++) {
+        const c = cz * n + cx;
+        for (const si of hash.solids[c]!) {
+          const s = map.solids[si]!;
+          if (s.y1 <= feetY + stepUp || s.y0 >= feetY + height) continue;
+          const qx = Math.min(s.x1, Math.max(s.x0, pos[0]));
+          const qz = Math.min(s.z1, Math.max(s.z0, pos[1]));
+          const dx = pos[0] - qx;
+          const dz = pos[1] - qz;
+          const d2 = dx * dx + dz * dz;
+          if (d2 >= radius * radius) continue;
+          if (d2 > 1e-10) {
+            const d = Math.sqrt(d2);
+            pos[0] = qx + (dx / d) * radius;
+            pos[1] = qz + (dz / d) * radius;
+          } else {
+            // Centre inside the box: leave through the nearest face.
+            const l = pos[0] - s.x0;
+            const r = s.x1 - pos[0];
+            const t = pos[1] - s.z0;
+            const b = s.z1 - pos[1];
+            const m = Math.min(l, r, t, b);
+            if (m === l) pos[0] = s.x0 - radius;
+            else if (m === r) pos[0] = s.x1 + radius;
+            else if (m === t) pos[1] = s.z0 - radius;
+            else pos[1] = s.z1 + radius;
+          }
+          again = true;
+          moved = true;
+        }
+        const trees = map.trees;
+        for (const ti of hash.trees[c]!) {
+          const ty = trees.y[ti]!;
+          if (feetY > ty + trees.h[ti]! * TRUNK_SHARE || feetY + height < ty - 0.5) continue;
+          const rr = radius + trunkRadius(trees.h[ti]!);
+          const dx = pos[0] - trees.x[ti]!;
+          const dz = pos[1] - trees.z[ti]!;
+          const d2 = dx * dx + dz * dz;
+          if (d2 >= rr * rr) continue;
+          const d = Math.sqrt(d2);
+          if (d > 1e-6) {
+            pos[0] = trees.x[ti]! + (dx / d) * rr;
+            pos[1] = trees.z[ti]! + (dz / d) * rr;
+          } else pos[0] += rr;
+          again = true;
+          moved = true;
+        }
+      }
+    }
+    if (!again) break;
+  }
+  return moved;
+}
+
+/** Ladder whose climb zone contains (x, z) at a height within its span, or null. */
+export function ladderAt(map: TacticalMap, x: number, z: number, feetY: number): Ladder | null {
+  for (const l of map.ladders) {
+    if (x >= l.x0 - 0.1 && x <= l.x1 + 0.1 && z >= l.z0 - 0.1 && z <= l.z1 + 0.1 && feetY >= l.y0 - 0.6 && feetY <= l.y1 + 0.05) return l;
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Dynamic objects
+// ---------------------------------------------------------------------------------------------
+
+/** Uniform grid of buckets for moving things (zombies, survivors, corpses), keyed by entity id. */
+export interface SpatialHash {
+  /** Insert, or move if the id is already present. */
+  set(id: number, x: number, z: number): void;
+  remove(id: number): void;
+  clear(): void;
+  readonly size: number;
+  /** Ids whose bucket overlaps the circle (a superset: test exact distances yourself). Appends to `out`. */
+  query(x: number, z: number, radius: number, out: number[]): number[];
+  /** Ids in buckets within `pad` of the segment (superset). Appends to `out`. */
+  querySegment(ax: number, az: number, bx: number, bz: number, pad: number, out: number[]): number[];
+}
+
+export function createSpatialHash(cell: number = TACTICAL.hashCell, size: number = TACTICAL.size): SpatialHash {
+  const n = Math.ceil(size / cell);
+  const buckets: number[][] = Array.from({ length: n * n }, () => []);
+  const where = new Map<number, number>();
+  const clampI = (v: number): number => Math.min(n - 1, Math.max(0, Math.floor(v / cell)));
+  const drop = (id: number, c: number): void => {
+    const b = buckets[c]!;
+    const i = b.indexOf(id);
+    if (i >= 0) {
+      b[i] = b[b.length - 1]!;
+      b.pop();
+    }
+  };
+  const collect = (cx0: number, cz0: number, cx1: number, cz1: number, out: number[]): void => {
+    for (let cz = cz0; cz <= cz1; cz++) for (let cx = cx0; cx <= cx1; cx++) for (const id of buckets[cz * n + cx]!) out.push(id);
+  };
+  return {
+    set(id, x, z) {
+      const c = clampI(z) * n + clampI(x);
+      const old = where.get(id);
+      if (old === c) return;
+      if (old !== undefined) drop(id, old);
+      buckets[c]!.push(id);
+      where.set(id, c);
+    },
+    remove(id) {
+      const old = where.get(id);
+      if (old === undefined) return;
+      drop(id, old);
+      where.delete(id);
+    },
+    clear() {
+      for (const b of buckets) b.length = 0;
+      where.clear();
+    },
+    get size() {
+      return where.size;
+    },
+    query(x, z, radius, out) {
+      collect(clampI(x - radius), clampI(z - radius), clampI(x + radius), clampI(z + radius), out);
+      return out;
+    },
+    querySegment(ax, az, bx, bz, pad, out) {
+      const len = Math.hypot(bx - ax, bz - az);
+      const steps = Math.max(1, Math.ceil(len / cell));
+      let lastX0 = -1;
+      let lastZ0 = -1;
+      let lastX1 = -1;
+      let lastZ1 = -1;
+      const seen = new Set<number>();
+      for (let i = 0; i <= steps; i++) {
+        const x = ax + ((bx - ax) * i) / steps;
+        const z = az + ((bz - az) * i) / steps;
+        const cx0 = clampI(x - pad);
+        const cz0 = clampI(z - pad);
+        const cx1 = clampI(x + pad);
+        const cz1 = clampI(z + pad);
+        if (cx0 === lastX0 && cz0 === lastZ0 && cx1 === lastX1 && cz1 === lastZ1) continue;
+        lastX0 = cx0;
+        lastZ0 = cz0;
+        lastX1 = cx1;
+        lastZ1 = cz1;
+        for (let cz = cz0; cz <= cz1; cz++) {
+          for (let cx = cx0; cx <= cx1; cx++) {
+            const c = cz * n + cx;
+            if (seen.has(c)) continue;
+            seen.add(c);
+            for (const id of buckets[c]!) out.push(id);
+          }
+        }
+      }
+      return out;
+    },
+  };
+}

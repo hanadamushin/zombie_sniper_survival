@@ -39,6 +39,7 @@
 │   ├─ build-grid.ts       #   日本グリッド生成
 │   ├─ run-infection.ts    #   感染シミュレーション事前計算
 │   ├─ preview.ts          #   検証用 PNG（`node tools/preview.ts <dir>`）
+│   ├─ tactical-preview.ts #   戦術マップを上から見た PNG（`node tools/tactical-preview.ts <dir> [seed]`）
 │   └─ data/               #   都市表・山脈表・交通ハブ表（手書き）
 ├─ src/
 │   ├─ main.ts             # 起動、ゲームループ
@@ -50,7 +51,7 @@
 │   │   ├─ time.ts         #   時刻の純関数（daylight, addMinutes, effectiveSpeed…）
 │   │   ├─ loop.ts         #   固定ステップのアキュムレータ
 │   │   └─ save.ts         #   唯一 IndexedDB に触れてよい core ファイル
-│   ├─ data/               # 定義テーブル（balance, render, buildings, techs, zombies, weapons, traits, jobs, resources）
+│   ├─ data/               # 定義テーブル（balance, tactical, render, buildings, techs, zombies, weapons, traits, jobs, resources）
 │   ├─ sim/                # 純ロジック（ヘッドレス実行可）
 │   │   ├─ index.ts        #   createSim() / tick(state, dt, input) — 各システムを決まった順で呼ぶ
 │   │   ├─ system.ts       #   System インターフェース（step/minute/hour/day フックとコマンドハンドラ）
@@ -60,7 +61,7 @@
 │   │   ├─ colony/         #   生存者、仕事、経済、遠征、士気
 │   │   ├─ build/          #   設計図、建設、耐久、堀、襲来
 │   │   └─ research/       #   技術、時代、勝利条件
-│   ├─ gen/                # シードからの戦術マップ生成（sim からも render からも使う純関数）
+│   ├─ gen/                # シードからの戦術マップ生成（sim からも render からも使う純関数）。index.ts が入口、types.ts に TacticalMap
 │   ├─ render/             # Three.js（地形、建物、ゾンビ、生存者、スコープ、空）
 │   ├─ ui/                 # Preact（HUD、指揮パネル、戦略地図、メニュー）
 │   ├─ input/              # キーボード・マウス（のちにタッチ）→ コマンド/入力状態
@@ -172,9 +173,10 @@ export interface WorldState {
 
 export interface PlayerState {
   cell: CellId;
-  pos: [number, number, number]; yaw: number; pitch: number;
+  pos: [number, number, number]; yaw: number; pitch: number;   // pos は足元。x 東 / y 上 / z 南、ヨー 0 = 北(−z)
+  vel: [number, number, number]; eye: number;                 // 03 が追加（速度、現在の目の高さ）
   stance: 'stand' | 'crouch' | 'prone';
-  hp: number; stamina: number; breath: number;
+  hp: number; stamina: number; winded: boolean; breath: number;   // winded: スタミナ切れ（03 が追加）
   infectedUntil: { day: number; minute: number } | null;
   weapon: { id: string; mag: number; zeroIdx: number; zoom: number; boltT: number; reloadT: number };
   scoped: boolean;
@@ -283,21 +285,35 @@ export interface InputFrame { moveX: number; moveZ: number; lookDX: number; look
 
 ### 描画・UI・入力の入口
 
-- `render/index.ts`: `renderer.register(subRenderer)`。`SubRenderer { id, init(ctx), update(state, frame), reset?(state), resize?, dispose? }`。登録順に毎フレーム `update` され、最後に1回だけ描画。新規ゲーム・ロードで state が差し替わると `reset` が呼ばれる。仮の地面とカメラは `renderer.unregister('ground' | 'camera')` で外せる
+- `render/index.ts`: 組み込みは `camera` → `sky` → `tactical-world` の順（M0 の仮地面は撤去済み）。追加は `renderer.register(subRenderer)`。`SubRenderer { id, init(ctx), update(state, frame), reset?(state), resize?, dispose? }`。登録順に毎フレーム `update` され、最後に1回だけ描画。新規ゲーム・ロードで state が差し替わると `reset` が呼ばれる。FOV は `renderer.view.setFov()`
 - `ui/`: `ui.sync(state)` で 10Hz 再描画（モード・速度変更時は即時）。モードごとの枠は `ui/components/modes.tsx`。UI からの操作は `UiActions`（`dispatch` ほか）経由
 - `input/`: `poll()` が `InputFrame` を返し、最初のステップが消費したら `consume()`。キー割り当ては `input/bindings.ts`。ポインタロックは tactical のみ
 - セーブ: `core/save.ts`。`packState` が保存対象を絞る（戦術の zombies/corpses/bullets は捨てる、menu モードは command として保存）。形を変えたら `STATE_VERSION` を上げ `MIGRATIONS` に追加
 
 ## 7. 戦術マップと当たり判定
 
-- 作戦区域: 1024m × 1024m、ハイトマップ 257×257（4m 間隔）。`gen/` が `(mapSeed, land, cellStatic)` から決定的に生成:
-  地形、道路、建物（軸平行の箱）、樹木、草むら、探索ポイント。本拠セルでは中央を平坦化
-- ナビ/建築グリッド: 4m タイル 256×256。フローフィールドは拠点（司令部）を目標に Dijkstra。`BuildState.gridRev` 変更時のみ再計算（1回 < 5ms を目標）
+- 作戦区域: 1024m × 1024m、ハイトマップ 257×257（4m 間隔）。`gen/` の `generateTacticalMap({ mapSeed, land, isHome, lootSpots })` が決定的に生成:
+  地形、道路、建物（軸平行の箱）、外階段・はしご・鉄塔、樹木、草むら、岩、探索ポイント、高所の射点、開始位置、4m 通行グリッド。本拠セルでは中央 半径120m を平坦化して空ける
+- **座標系**: x = 東、z = 南、y = 上（m）。プレイ範囲は `[0, 1024]²`、北は −z。ハイトマップの標本 (ix, iz) は (4·ix, 4·iz)、タイル (tx, ty) は `[4tx, 4tx+4) × [4ty, 4ty+4)`。ヨー 0 は北向きで、正のヨーは左（西）へ回る。前方ベクトルは `(−sin yaw·cos pitch, sin pitch, −cos yaw·cos pitch)`
+- **`TacticalMap` は `GameState` に入れない**（セーブしない）。`mapSeed = mapSeedFor(state.seed, cell)` から再生成してメモリに持つ。
+  置き場所は `sim/tactical/area.ts`: `ensureArea(state, grid)` が `state.tactical`（§5 のフィールドのみ）とマップを現在セルに合わせ、`mapOf(state)` / `areaOf(state)` で sim・render・UI が参照する
+  - 生成の契機は状態から判定: 移動中は `state.tactical = null`、移動していなくて区域がなければ作る（開始直後・到着時）、区域はあるがマップがなければ `tactical.mapSeed` から作り直す（ロード後。`lootSpots[].taken` は保存値を重ねる）。通過するだけのセルでは作らない
+  - 生成は 1 回 50〜80ms。メインループは `areaPending()` の間ロード表示を 2 フレーム出してから `ensureArea()` を呼ぶ（ヘッドレスでは次の tick が同じことをする）
+- 地形の高さは描画メッシュと同じ三角形分割で補間する（`gen/height.ts`。各 4m 升を (ix, iz+1)–(ix+1, iz) の対角で分割）
+- 当たり判定の実体は `TacticalMap.solids`（AABB: 建物・階段の段・鉄塔の床と脚・岩）と樹木の幹（円柱）。16m の静的ハッシュ `map.hash` に登録済み。建物の箱は床面より 6m 下まで伸びている（斜面との隙間を塞ぐ）
+- 共通関数（`sim/tactical/collision.ts`。04・06 はこれを使う）:
+  - `heightAt(map, x, z)`、`isWalkable(map, tx, ty)`、`gradientAt`
+  - `raycastWorld(map, origin, dir, maxDist)` → `{ dist, pos, normal, kind: 'terrain'|'building'|'stair'|'rock'|'prop'|'tree', index }`。樹木は幹（高さの 55% まで）だけが弾と視線を遮る
+  - `segmentHitsStatic(map, a, b)`（視線・弾の線分）
+  - `supportAt(map, x, z, feetY)`（立てる高さ: 地形か、足元から 0.5m 以内の箱の上面）、`pushOut(map, [x, z], radius, feetY, height)`（壁と幹からの押し戻し）、`ladderAt`
+  - `createSpatialHash()` — 動的オブジェクト用の 16m ハッシュ（`set / remove / query / querySegment`）。現在の区域のものは `areaOf(state).dynamic`
+- プレイヤー: `sim/tactical/player.ts` の `updatePlayer(player, map, input, dt, lookScale)`。視線レイは `viewRay(player)`、方位は `headingDeg(yaw)`
+- ナビ/建築グリッド: 4m タイル 256×256（`map.walk`: 建物・階段・大岩・急斜面が 0）。フローフィールドは拠点（司令部）を目標に Dijkstra。`BuildState.gridRev` 変更時のみ再計算（1回 < 5ms を目標）
 - 弾の当たり判定: 弾の線分 vs
   - ゾンビ: 頭（球）・胴（カプセル）・脚（カプセル）の解析判定。空間ハッシュ（16mセル）で候補を絞る
-  - 建物・壁: AABB（空間ハッシュ）
-  - 地形: ハイトマップのレイマーチ
+  - 建物・壁・幹・地形: `raycastWorld`（箱はスラブ法、地形は 2m 刻みのレイマーチ＋二分法）
 - プレイヤー・ゾンビの移動衝突: ハイトマップ＋AABB の押し戻し。物理エンジンは使わない
+- 生成結果の確認: `node tools/tactical-preview.ts <dir> [seed]` が 5 区分＋本拠版を上から見た PNG に書き出す
 
 ## 8. 描画方針（性能予算）
 
@@ -305,7 +321,9 @@ export interface InputFrame { moveX: number; moveZ: number; lookDX: number; look
 - ゾンビ: 部位ごとの `InstancedMesh`（胴・頭・腕×2・脚×2）。歩行アニメは CPU で行列計算（最大150体）
 - 生存者も同方式（色違い）。本拠セルにいるときのみ描画
 - 建物・樹木・草: InstancedMesh ＋ 距離カリング。影はプレイヤー周辺のみ（または無し＋接地ブロブ）
-- 視程 800m ＋フォグ。夜はフォグ色と環境光で表現
+- 視程 800m ＋フォグ。夜はフォグ色と環境光で表現。空は地平線でフォグ色に溶けるドーム（太陽・月・星はドームのシェーダ内、1 ドローコール）
+- 戦術ワールド（`render/tactical/`）: 地形 1（1m/texel のプロシージャル地面テクスチャ）＋外周の粗い地形 1、建物・階段・鉄塔・はしごは箱の InstancedMesh 1（窓はフラグメントシェーダ）、切妻屋根 1、岩 1、草むら 1（カメラから 150m 以内のみ）、樹木は 2 種 × 4×4 チャンク（視錐台・距離カリング）。実測 15〜40 ドローコール
+- カメラは `renderer.view`（`render/tactical/camera.ts`）。スコープは `renderer.view.setFov(度)` で絞り、`setFov(null)` で戻す
 - スコープ: カメラ FOV を倍率に応じて絞る＋円形マスクのオーバーレイ（レティクルは CSS/SVG ではなく専用の全画面クアッドで描き、mil 目盛りを FOV と正確に対応させる）。レンダーターゲット二重描画はしない
 - 他セルの出来事（遠征・駐屯地・感染）は一切描画しない（数値のみ）
 

@@ -12,8 +12,9 @@ import * as THREE from 'three';
 import type { EventBus } from '../core/events.ts';
 import type { GameState } from '../core/types.ts';
 import { RENDER } from '../data/render.ts';
-import { createCameraRig, createGroundPlaceholder } from './placeholder.ts';
 import { createSkyRenderer } from './sky.ts';
+import { createCameraRig, type CameraRig } from './tactical/camera.ts';
+import { createTacticalRenderer } from './tactical/index.ts';
 
 export interface RenderContext {
   readonly renderer: THREE.WebGLRenderer;
@@ -47,6 +48,8 @@ export interface SubRenderer {
 
 export interface Renderer {
   readonly ctx: RenderContext;
+  /** First-person / overhead camera. 04 (scope) zooms through view.setFov(). */
+  readonly view: CameraRig;
   register(sub: SubRenderer): void;
   unregister(id: string): void;
   /** Draw one frame. */
@@ -81,8 +84,10 @@ export function createRenderer(canvas: HTMLCanvasElement, events: EventBus): Ren
   };
   window.addEventListener('resize', resize);
 
+  const view = createCameraRig();
   const api: Renderer = {
     ctx,
+    view,
     register(sub) {
       if (subs.some((s) => s.id === sub.id)) throw new Error(`SubRenderer "${sub.id}" is already registered`);
       subs.push(sub);
@@ -113,9 +118,9 @@ export function createRenderer(canvas: HTMLCanvasElement, events: EventBus): Ren
     },
   };
 
-  // Built-ins for M0. Order matters: camera last so later sub-renderers can read it next frame.
+  // Built-ins. Order matters: the camera first (sky dome and grass follow it), the world last.
+  api.register(view);
   api.register(createSkyRenderer());
-  api.register(createGroundPlaceholder());
-  api.register(createCameraRig());
+  api.register(createTacticalRenderer());
   return api;
 }

@@ -118,7 +118,7 @@ button.primary small { color: var(--muted); font-size: 12px; }
 }
 .hint {
   position: absolute;
-  bottom: 24px;
+  bottom: 72px;
   left: 0;
   right: 0;
   margin: 0;
@@ -129,6 +129,40 @@ button.primary small { color: var(--muted); font-size: 12px; }
 }
 
 /* ---- strategic map (02) ---- */
+/* ---- tactical HUD (03): compass, stance, stamina ---- */
+.compass {
+  position: absolute;
+  top: 78px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 3px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.compass-point { font-weight: 600; min-width: 2.2em; text-align: center; }
+.compass-deg { color: var(--muted); font-size: 12px; }
+.stance-box {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.stance { font-weight: 600; }
+.stamina { display: block; width: 84px; height: 4px; background: rgba(255, 255, 255, 0.15); border-radius: 2px; overflow: hidden; }
+.stamina > span { display: block; height: 100%; background: var(--accent); }
+.mode-layer.loading { background: #0c1014; pointer-events: auto; z-index: 1; }
+
 .map-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; touch-action: none; }
 .mode-layer.world-map { display: block; padding: 0; top: 40px; overflow: hidden; }
 .world-map .panel, .intro .panel { position: absolute; z-index: 1; }

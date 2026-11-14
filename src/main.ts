@@ -13,7 +13,10 @@ import { continuationFrame, createInitialState, type CellId, type Difficulty, ty
 import { BALANCE } from './data/balance.ts';
 import { createInput } from './input/index.ts';
 import { createRenderer } from './render/index.ts';
+import { worldBuildMs } from './render/tactical/index.ts';
 import { createSim } from './sim/index.ts';
+import { areaPending, ensureArea, mapOf } from './sim/tactical/area.ts';
+import { supportAt } from './sim/tactical/collision.ts';
 import { initWorld } from './sim/world/scenario.ts';
 import { beginAt, findStartCandidates } from './sim/world/start.ts';
 import { createUi } from './ui/index.tsx';
@@ -163,9 +166,22 @@ sim.events.on('speedChanged', () => ui.sync(state));
 let last = performance.now();
 let uiTimer = 0;
 let fps = 60;
+/** Frames spent showing the loading screen for a pending operation area. */
+let areaFrames = 0;
+
+/** Main-thread time spent in sim + render submission, and the number of frames — debug / perf checks. */
+let cpuMs = 0;
+let frames = 0;
 
 function frame(now: number): void {
   requestAnimationFrame(frame);
+  const t0 = performance.now();
+  runFrame(now);
+  cpuMs += performance.now() - t0;
+  frames++;
+}
+
+function runFrame(now: number): void {
   const realDt = Math.min((now - last) / 1000, 1);
   last = now;
   if (realDt > 0) fps += (1 / realDt - fps) * 0.05;
@@ -176,10 +192,23 @@ function frame(now: number): void {
   const inputFrame = input.poll();
   sim.applyCommands(s); // commands must work while paused too
   const alpha = stepper.advance(realDt, effectiveSpeed(s), (first) => {
+    if (areaPending(s, grid)) return; // wait for the loading frames below
     sim.tick(s, FIXED, first ? inputFrame : continuationFrame(inputFrame));
     if (first) input.consume();
   });
   if (state !== s) return; // a listener ended the session during the tick
+
+  // Entering an operation area (new game, arrival, load): let the loading screen paint, then
+  // generate the map. The sim would do the same inside its next tick, just without the notice.
+  if (areaPending(s, grid)) {
+    if (areaFrames === 0) ui.sync(s);
+    if (++areaFrames > 2) {
+      ensureArea(s, grid);
+      areaFrames = 0;
+      stepper.reset();
+      ui.sync(s);
+    }
+  } else areaFrames = 0;
 
   renderer.draw(s, alpha, realDt);
 
@@ -191,16 +220,65 @@ function frame(now: number): void {
 }
 requestAnimationFrame(frame);
 
-// Debug / e2e handle (read-only use; mutate through dispatch).
+// Debug / e2e handle (read-only use; mutate through dispatch). `debug` bypasses the rules on
+// purpose: it exists for screenshots and perf checks, never call it from game code.
+interface DebugApi {
+  /** Jump to the first cell of a land class (optionally the n-th), as if arriving by road. */
+  gotoLand(land: string, nth?: number): number | null;
+  /** Put the player at (x, z) on the ground (or at height y) and look along yaw / pitch (radians). */
+  teleport(x: number, z: number, yaw?: number, pitch?: number, y?: number): void;
+  setClock(hour: number): void;
+  /** Last frame's draw calls / triangles, cumulative main-thread ms and frame count, and how long the last world build took. */
+  renderInfo(): { calls: number; triangles: number; cpuMs: number; frames: number; buildMs: number };
+}
 declare global {
   interface Window {
-    __game?: { readonly state: GameState | null; dispatch: typeof sim.dispatch; sim: typeof sim };
+    __game?: {
+      readonly state: GameState | null;
+      /** Generated operation area of the current cell (null on the road / before it is built). */
+      readonly map: ReturnType<typeof mapOf>;
+      dispatch: typeof sim.dispatch;
+      sim: typeof sim;
+      renderer: typeof renderer;
+      debug: DebugApi;
+    };
   }
 }
 window.__game = {
   get state() {
     return state;
   },
+  get map() {
+    return state ? mapOf(state) : null;
+  },
   dispatch: sim.dispatch,
   sim,
+  renderer,
+  debug: {
+    gotoLand(land, nth = 0) {
+      if (!state || !grid) return null;
+      const cells = grid.landIds.filter((id) => grid!.cells[id]!.land === land);
+      const cell = cells[Math.min(cells.length - 1, nth)];
+      if (cell === undefined) return null;
+      state.world.travel = null;
+      state.player.cell = cell;
+      state.tactical = null;
+      return cell;
+    },
+    teleport(x, z, yaw, pitch, y) {
+      const map = state ? mapOf(state) : null;
+      if (!state || !map) return;
+      // Without y: stand on whatever is highest there (roof, stairs or ground).
+      state.player.pos = [x, y ?? supportAt(map, x, z, Infinity), z];
+      state.player.vel = [0, 0, 0];
+      if (yaw !== undefined) state.player.yaw = yaw;
+      if (pitch !== undefined) state.player.pitch = pitch;
+    },
+    setClock(hour) {
+      if (!state) return;
+      state.time.minute = Math.floor(hour * 60) % 1440;
+      state.time.sub = 0;
+    },
+    renderInfo: () => ({ calls: renderer.ctx.renderer.info.render.calls, triangles: renderer.ctx.renderer.info.render.triangles, cpuMs, frames, buildMs: worldBuildMs() }),
+  },
 };

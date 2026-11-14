@@ -7,7 +7,9 @@
 import { useState } from 'preact/hooks';
 import type { GameState, StaticGrid } from '../../core/types.ts';
 import { BALANCE } from '../../data/balance.ts';
-import { t } from '../i18n/ja.ts';
+import { TACTICAL } from '../../data/tactical.ts';
+import { headingDeg } from '../../sim/tactical/player.ts';
+import { t, type TextKey } from '../i18n/ja.ts';
 import type { UiActions } from '../store.ts';
 import { WorldMap } from '../world/WorldMap.tsx';
 import { slotLabel } from './TitleScreen.tsx';
@@ -19,11 +21,34 @@ interface ModeProps {
   grid: StaticGrid | null;
 }
 
-export function TacticalLayer(_props: ModeProps) {
+const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'] as const;
+
+export function TacticalLayer({ state }: ModeProps) {
+  const p = state.player;
+  const heading = Math.round(headingDeg(p.yaw)) % 360;
+  const point = COMPASS[Math.round(heading / 45) % 8]!;
+  const stamina = Math.round((p.stamina / TACTICAL.player.staminaMax) * 100);
   return (
     <div class="mode-layer tactical" data-testid="mode-tactical">
+      <div class="compass" data-testid="hud-compass" data-heading={heading}>
+        <span class="compass-point">{t(`compass.${point}` as TextKey)}</span>
+        <span class="compass-deg">{String(heading).padStart(3, '0')}°</span>
+      </div>
       <div class="crosshair" />
+      <div class="stance-box">
+        <span class="stance" data-testid="hud-stance" data-stance={p.stance}>{t(`stance.${p.stance}` as TextKey)}</span>
+        <span class="stamina" title={t('hud.stamina')}><span style={{ width: `${stamina}%` }} /></span>
+      </div>
       <p class="hint">{t('tactical.clickToAim')}</p>
+    </div>
+  );
+}
+
+/** Shown while the operation area of the current cell is being generated. */
+export function AreaLoading() {
+  return (
+    <div class="mode-layer loading" data-testid="area-loading">
+      <div class="panel">{t('tactical.loading')}</div>
     </div>
   );
 }

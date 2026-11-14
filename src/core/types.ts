@@ -3,9 +3,10 @@
 // Fields may be ADDED by later sessions; renames/removals must be recorded in docs/PROGRESS.md.
 
 import { BALANCE } from '../data/balance.ts';
+import { TACTICAL } from '../data/tactical.ts';
 import { seedRng, type RngState } from './rng.ts';
 
-export const STATE_VERSION = 1;
+export const STATE_VERSION = 2;
 
 export type CellId = number; // gy * gridW + gx
 export type EntityId = number; // allocated from state.nextId (see allocId)
@@ -113,12 +114,20 @@ export interface StaticGrid {
 
 export interface PlayerState {
   cell: CellId;
+  /** Feet position in the operation area (x east, y up, z south; metres). */
   pos: [number, number, number];
+  /** Velocity in m/s (added by 03, save version 2). */
+  vel: [number, number, number];
+  /** Yaw 0 looks north (-z), positive turns left; pitch positive looks up (radians). */
   yaw: number;
   pitch: number;
   stance: Stance;
+  /** Current eye height above pos (eases between stances; added by 03). */
+  eye: number;
   hp: number;
   stamina: number;
+  /** Ran out of stamina: no sprinting until it has partly recovered (added by 03). */
+  winded: boolean;
   breath: number;
   infectedUntil: { day: number; minute: number } | null;
   weapon: { id: string; mag: number; zeroIdx: number; zoom: number; boltT: number; reloadT: number };
@@ -316,11 +325,14 @@ export function createInitialState(seed: number, difficulty: Difficulty): GameSt
     player: {
       cell: 0,
       pos: [0, 0, 0],
+      vel: [0, 0, 0],
       yaw: 0,
       pitch: 0,
       stance: 'stand',
+      eye: TACTICAL.player.eyeHeight.stand,
       hp: p.hp,
       stamina: p.stamina,
+      winded: false,
       breath: p.breath,
       infectedUntil: null,
       weapon: { id: p.startWeapon, mag: p.startMag, zeroIdx: 0, zoom: p.startZoom, boltT: 0, reloadT: 0 },

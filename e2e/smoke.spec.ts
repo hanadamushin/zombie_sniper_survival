@@ -37,6 +37,32 @@ test('boots, runs a new game and resumes it after a reload', async ({ page }) =>
   await expect(page.getByTestId('hud-clock')).toHaveText(/^06:0\d$/);
   expect(await mode(page)).toBe('tactical');
 
+  // The operation area of the home cell is generated; the player stands in its flat middle.
+  await page.waitForFunction(() => window.__game?.map != null);
+  await expect(page.getByTestId('area-loading')).toBeHidden();
+  const area = await page.evaluate(() => {
+    const g = window.__game!;
+    return { isHome: g.map!.params.isHome, land: g.map!.params.land, pos: g.state!.player.pos, vantages: g.map!.vantages.length };
+  });
+  expect(area.isHome).toBe(true);
+  expect(['rural', 'forest']).toContain(area.land);
+  expect(area.pos[0]).toBe(512);
+  expect(area.pos[2]).toBe(512);
+  expect(area.vantages).toBeGreaterThanOrEqual(3);
+  await expect(page.getByTestId('hud-compass')).toHaveAttribute('data-heading', '0');
+
+  // Walk north (W), then crouch (C) and go prone (Z).
+  await page.keyboard.down('KeyW');
+  await expect.poll(() => page.evaluate(() => window.__game!.state!.player.pos[2]), { timeout: 10_000 }).toBeLessThan(510);
+  await page.keyboard.up('KeyW');
+  await page.keyboard.press('KeyC');
+  await expect(page.getByTestId('hud-stance')).toHaveAttribute('data-stance', 'crouch');
+  await page.keyboard.press('KeyZ');
+  await expect(page.getByTestId('hud-stance')).toHaveAttribute('data-stance', 'prone');
+  await expect.poll(() => page.evaluate(() => window.__game!.state!.player.eye)).toBeLessThan(0.4);
+  await page.keyboard.press('KeyZ');
+  await expect(page.getByTestId('hud-stance')).toHaveAttribute('data-stance', 'stand');
+
   // The clock advances (1 game minute per real second at x1).
   const t0 = await clock(page);
   await expect.poll(() => clock(page), { timeout: 10_000 }).toBeGreaterThan(t0);
@@ -80,6 +106,11 @@ test('boots, runs a new game and resumes it after a reload', async ({ page }) =>
   const resumed = await clock(page);
   expect(resumed).toBeGreaterThanOrEqual(saved);
   expect(resumed).toBeLessThanOrEqual(saved + 2);
+  // The same operation area is rebuilt from its seed, and the player is where they were.
+  await page.waitForFunction(() => window.__game?.map != null);
+  const again = await page.evaluate(() => ({ pos: window.__game!.state!.player.pos, seed: window.__game!.map!.params.mapSeed, saved: window.__game!.state!.tactical!.mapSeed }));
+  expect(again.seed).toBe(again.saved);
+  expect(again.pos[2]).toBeLessThan(510);
 
   expect(errors).toEqual([]);
 });
@@ -140,13 +171,73 @@ test('timelapse, start selection and travel on the strategic map', async ({ page
   const t0 = await clock(page);
   await page.getByTestId('travel-go').click();
   await expect(page.getByTestId('travel-status')).toBeVisible();
+  // On the road there is no operation area.
+  await expect.poll(() => page.evaluate(() => window.__game!.state!.tactical === null && window.__game!.map === null)).toBe(true);
   await expect.poll(() => page.evaluate(() => window.__game!.state!.player.cell), { timeout: 30_000 }).toBe(target.cell);
   await expect(page.getByTestId('travel-status')).toBeHidden();
+  // Arrival: the area of the new cell, entered from a road at its edge.
+  await page.waitForFunction((cell) => window.__game?.map != null && window.__game.state!.tactical?.cell === cell, target.cell);
+  const arrived = await page.evaluate(() => {
+    const g = window.__game!;
+    const [x, , z] = g.state!.player.pos;
+    return { isHome: g.map!.params.isHome, edge: Math.min(x, z, 1024 - x, 1024 - z) };
+  });
+  expect(arrived.isHome).toBe(false);
+  expect(arrived.edge).toBeLessThan(20);
   expect((await clock(page)) - t0).toBeGreaterThanOrEqual(180);
   expect(await page.evaluate(() => window.__game!.state!.world.cells.visited[window.__game!.state!.player.cell])).toBe(true);
 
   // Other map views render too.
   await page.getByTestId('view-loot').click();
   await page.getByTestId('view-pop').click();
+  expect(errors).toEqual([]);
+});
+
+test('every land class renders within the draw-call budget', async ({ page }) => {
+  test.setTimeout(240_000);
+  const errors = trackErrors(page);
+  await page.goto('/?seed=12&scenario=0');
+  await startNewGame(page);
+  await page.waitForFunction(() => window.__game?.map != null);
+  const report: string[] = [];
+  for (const land of ['urban', 'suburb', 'rural', 'forest', 'mountain']) {
+    await page.evaluate((l) => window.__game!.debug.gotoLand(l, 40), land);
+    await page.waitForFunction((l) => window.__game?.map?.params.land === l, land, { timeout: 60_000 });
+    // Stand on the best vantage point, look across the map, let the first frames (uploads, shader
+    // compilation) pass, then sample frame times for 4 s.
+    const stats = await page.evaluate(async () => {
+      const g = window.__game!;
+      g.debug.setClock(12);
+      const v = g.map!.vantages.reduce((a, b) => (b.pos[1] > a.pos[1] ? b : a));
+      g.debug.teleport(v.pos[0], v.pos[2], Math.atan2(-(512 - v.pos[0]), -(512 - v.pos[2])), -0.1);
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+      const before = g.debug.renderInfo();
+      const times: number[] = [];
+      let last = performance.now();
+      const end = last + 4000;
+      await new Promise<void>((resolve) => {
+        const tick = (now: number): void => {
+          times.push(now - last);
+          last = now;
+          if (now < end) requestAnimationFrame(tick);
+          else resolve();
+        };
+        requestAnimationFrame(tick);
+      });
+      times.shift();
+      times.sort((a, b) => a - b);
+      const info = g.debug.renderInfo();
+      return {
+        median: times[Math.floor(times.length / 2)]!, p95: times[Math.floor(times.length * 0.95)]!, samples: times.length,
+        cpu: (info.cpuMs - before.cpuMs) / Math.max(1, info.frames - before.frames), vantages: g.map!.vantages.length, ...info,
+      };
+    });
+    report.push(`${land}: ${stats.calls} draw calls, ${stats.triangles} triangles, frame ${stats.median.toFixed(1)} ms median / ${stats.p95.toFixed(1)} ms p95 (${stats.samples} frames), ` +
+      `main thread ${stats.cpu.toFixed(2)} ms/frame, world build ${stats.buildMs.toFixed(0)} ms`);
+    expect(stats.calls, land).toBeLessThan(100);
+    expect(stats.vantages, land).toBeGreaterThanOrEqual(3);
+  }
+  // Numbers for docs/PROGRESS.md (software rendering in CI; see the note there).
+  console.log(report.join('\n'));
   expect(errors).toEqual([]);
 });

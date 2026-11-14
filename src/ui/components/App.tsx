@@ -1,7 +1,8 @@
 import type { UiActions, UiSnapshot } from '../store.ts';
 import { Intro } from '../world/Intro.tsx';
 import { Hud } from './Hud.tsx';
-import { CommandLayer, MenuOverlay, TacticalLayer, WorldLayer } from './modes.tsx';
+import { areaPending } from '../../sim/tactical/area.ts';
+import { AreaLoading, CommandLayer, MenuOverlay, TacticalLayer, WorldLayer } from './modes.tsx';
 import { TitleScreen } from './TitleScreen.tsx';
 
 export function App({ snap, actions }: { snap: UiSnapshot; actions: UiActions }) {
@@ -18,6 +19,7 @@ export function App({ snap, actions }: { snap: UiSnapshot; actions: UiActions })
       {state.mode === 'command' && <CommandLayer {...props} />}
       {state.mode === 'world' && <WorldLayer {...props} />}
       {state.mode === 'menu' && <MenuOverlay {...props} />}
+      {state.mode !== 'world' && areaPending(state, snap.grid) && <AreaLoading />}
     </div>
   );
 }

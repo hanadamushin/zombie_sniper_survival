@@ -60,7 +60,14 @@ type Migration = (old: Record<string, unknown>) => Record<string, unknown>;
  * bump STATE_VERSION in types.ts and add an entry here that fills in / converts the fields.
  */
 const MIGRATIONS: Record<number, Migration> = {
-  // 1: (old) => ({ ...old, newField: defaultValue, version: 2 }),
+  // 1 -> 2 (03): player.vel / eye / winded for first-person movement.
+  1: (old) => {
+    const player = { ...(old.player as Record<string, unknown>) };
+    player.vel ??= [0, 0, 0];
+    player.eye ??= 1.7;
+    player.winded ??= false;
+    return { ...old, player };
+  },
 };
 
 export class SaveError extends Error {}

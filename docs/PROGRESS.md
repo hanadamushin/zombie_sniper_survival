@@ -81,3 +81,61 @@
   - コマンド: `travel` を実装
   - イベント: `travelStarted`, `cellEntered`, `travelArrived`, `travelEncounter`, `infectionStepped`。`commandRejected` の理由に `noMap` / `alreadyTravelling` / `noRoute` / `travelling`
   - `BALANCE.infection`, `BALANCE.world`
+
+## 03 戦術3Dワールド — 2026-11-14
+- 完了したこと:
+  - **マップ生成**（`src/gen/`）: `generateTacticalMap({ mapSeed, land, isHome, lootSpots })` → `TacticalMap`（ハイトマップ 257²、建物、当たり判定の箱、道路、区画、樹木、草むら、岩、探索ポイント、高所の射点、開始位置、4m 通行グリッド、16m 静的ハッシュ）。5 区分すべて対応、1 回 50〜80ms
+    - urban: 大通り（幅 22m）と街路の格子、中高層ビル 700 棟前後、外階段つきビル 6 棟、公園・駐車場・広場
+    - suburb: 街路格子に切妻の住宅 1000 棟前後、団地（外階段）、はしごつき商店、公園、丘 1 つ
+    - rural: 起伏の緩い地形に丘 3 つ、道路＋農道、集落（民家・納屋・物置）、田畑の区画、火の見櫓
+    - forest / mountain: 高低差 50m / 150m 級、林道 1 本、小屋、森林には監視塔。稜線・山頂が射点
+    - 高所の射点は必ず 3 か所以上（丘は周囲の木を払って見通しを確保。足りなければ鉄塔を追加）。本拠セルは中央 半径 120m を平坦化して空ける
+  - **衝突・照会**（`sim/tactical/collision.ts`）: `heightAt` / `isWalkable` / `raycastWorld` / `segmentHitsStatic` / `supportAt` / `pushOut` / `ladderAt` / `createSpatialHash`
+  - **プレイヤー**（`sim/tactical/player.ts`）: 視点、歩き・走り・しゃがみ・伏せ、スタミナ、地形追従、箱と幹との衝突、段差 0.5m の乗り越え（外階段）、はしご、落下、急斜面の減速。`viewRay(player)` / `headingDeg(yaw)`
+  - **セル遷移**（`sim/tactical/area.ts`）: 開始直後・到着時・ロード後に区域を用意、移動中は `state.tactical = null`。同じセルは同じ地形（テスト済み）。ロード表示つき
+  - **描画**（`src/render/tactical/`）: 地形（1m/texel のプロシージャル地面テクスチャ＋近景ディテール）、外周の粗い地形、建物・階段・鉄塔・はしご（窓はシェーダ）、切妻屋根、樹木（チャンク分割）、岩、草むら。空ドーム・太陽・月・星を `render/sky.ts` に追加し、光源が太陽／月に追従
+  - HUD: 方位（8 方位＋度）、姿勢、スタミナ。`tools/tactical-preview.ts`（`npm run tactical:preview`）で上から見た PNG
+  - テスト 27 件追加（決定的生成、区分ごとの性格、射点 3 か所 × 30 マップ、本拠の平坦化、レイキャスト、移動速度、階段・はしご・落下、4 分間のランダム歩行で埋まらない・すり抜けない、遷移とセーブ／ロード、v1 セーブの移行）。e2e に移動・姿勢・到着・ロード後の再生成・全区分の描画を追加
+  - 受け入れ基準は 5 区分とも Playwright のスクリーンショットで目視確認（射点からの眺望、外階段、鉄塔、昼・夕・夜、指揮視点、幅 360px）
+- **性能の実測（重要な但し書きつき）**: この環境には GPU がなく、Chromium は SwiftShader（CPU によるソフトウェア描画、4 vCPU）で動く。そのためフレーム時間は実機の目安にならない。`npm run e2e` の最後のテストが各区分の最高の射点から 4 秒間計測して出力する（1280×720）:
+
+  | 区分 | ドローコール | 三角形 | メインスレッド(sim+描画発行) | フレーム時間（SwiftShader、中央値） | ワールド構築 |
+  |---|---|---|---|---|---|
+  | urban | 12 | 17.0万 | 0.9 ms | 283 ms | 286 ms |
+  | suburb | 28 | 17.5万 | 0.6 ms | 233 ms | 424 ms |
+  | rural | 37 | 18.6万 | 0.9 ms | 267 ms | 293 ms |
+  | forest | 39 | 37.2万 | 1.1 ms | 333 ms | 276 ms |
+  | mountain | 28 | 20.7万 | 1.3 ms | 433 ms | 296 ms |
+
+  - 確かに言えるのは「ドローコール 12〜39（予算 100 未満）、三角形 40 万未満、CPU 側は 1 フレーム約 1ms」まで。**「内蔵 GPU で 60fps」は未検証**（ソフトウェア描画では画素数に比例して遅く、解像度を 1/4 にすると約 3.5 倍速くなる＝塗り律速）。実機での確認を 04 か 10 で必ず行うこと。重い場合の調整点は `RENDER.maxPixelRatio`、`RENDER.groundAnisotropy`、`RENDER.flora.grassMax` / `treeChunks`、`TACTICAL.flora.*.treesPerHa`
+  - 「ワールド構築」はロード表示中に 1 回だけ起きる（大半は地面テクスチャ 1024² の生成）
+- 未完了・既知の問題:
+  - 影なし（接地感は弱い）。夕方の地面がやや暗い。建物は箱のみで内部には入れない（探索ポイントは扉の前の座標）
+  - 外階段・屋上に手すりがない（端から落ちる。落下ダメージは未実装）。はしごは W/S のみで、途中で横に降りられない
+  - 切妻屋根は描画だけで当たり判定は軒高までの箱（屋根の三角部分は弾が抜ける）。樹木は幹（高さの 55% まで）だけが弾・視線を遮り、樹冠は素通し
+  - マップ外周の粗い地形には木も建物もない（フォグで薄れるが、端に立つと分かる）。区域の端 2m から先へは進めない
+  - 都市・郊外が本拠になった場合も中央は空くが、道路の塗りは残る（開始地点は rural / forest なので通常起きない）
+  - プレイヤーの移動は戦術モード以外では止まる（入力が来ない）。x10 でも毎ステップ更新しているが軽い
+  - ゾンビ用の経路は `map.walk`（4m）だけ。階段タイルは通行不可にしてある（ゾンビは屋上に来ない前提）
+- 仕様からの変更点（更新した docs）:
+  - `02_systems_spec.md` に §3.6「移動（戦術層）」を追加（速度・目の高さ・スタミナ・段差・斜面・はしご・座標系）
+  - `04_architecture.md` §5 に `PlayerState.vel / eye / winded` を追記、§7 を実装に合わせて書き直し（座標系、`TacticalMap` の置き場所、共通関数の一覧）、§8 に戦術ワールドの描画構成、§6 の描画入口を更新
+  - `STATE_VERSION` を 2 に上げ、v1 → v2 のマイグレーションを追加（`player.vel / eye / winded` を補う）
+  - M0 の仮地面・仮カメラ（`render/placeholder.ts`）は削除し、`render/index.ts` が `camera` → `sky` → `tactical-world` を登録する形にした（`unregister` は不要）
+  - 目の高さは `RENDER.camera.eyeHeight` から `TACTICAL.player.eyeHeight`（1.7 / 1.0 / 0.3）へ移動。地面はプロンプトの「頂点カラー」ではなくプロシージャルな DataTexture（道路や畝を 4m 格子より細かく描くため。外周の粗い地形は頂点カラー）
+- 次のセッションへの注意（04 向け）:
+  - **マップの取り方**: `areaOf(state)` → `{ map, dynamic }`（`sim/tactical/area.ts`）。`map` は読み取り専用。`dynamic` は 16m 空間ハッシュで、ゾンビを `set(id, x, z)` で登録して使う。`tacticalSystem.step` の `updatePlayer` の後ろに弾 → ゾンビ → 死体を足す
+  - **座標**: x 東 / y 上 / z 南、北が −z。ヨー 0 = 北向き、正で左回り。視線は `viewRay(state.player)`（原点は目の位置 `pos.y + player.eye`）。方向は `viewDir(yaw, pitch)`
+  - **スコープ**: FOV は `renderer.view.setFov(度)`（`main.ts` の `renderer`、`window.__game.renderer`）。マウス感度は `updatePlayer(..., lookScale)` の第 5 引数で倍率に合わせて下げる
+  - **遮蔽**: `raycastWorld(map, origin, dir, maxDist)` の `kind` で着弾の種類（土煙か壁か）が分かる。視認判定は `segmentHitsStatic`。レイはプレイ範囲 `[0,1024]²` の外に出た時点で終わる
+  - **出現位置**: マップ端なら `map.spawn.edge` や `map.roads` の端点、歩ける場所は `isWalkable(map, tx, ty)`、高さは `heightAt`。移動の押し戻しは `pushOut(map, [x, z], 半径, 足元Y, 身長)`、立つ高さは `supportAt`
+  - **`state.tactical` は移動中 `null`**、到着後の最初の tick で新しい区域に作り直される（zombies / corpses / bullets は空で始まる）。ロード後も同じ。`reserve` にはセルの Z を入れてあるだけなので 04 が意味を決めてよい。`wind` は `[0, 0]`
+  - **本拠セル**は `map.params.isHome`。中央 `map.spawn.home`（512, 512）の半径 120m は平坦で何もない（06 の建築用地）
+  - 射撃場（04 の F）は `gen/builder.ts` の `createFlatBuilder()` ＋ `addBuilding` / `addStairs` / `addTower` → `finishMap()` で手組みのマップを作れる（テストがこの方法を使っている）
+  - デバッグ: `window.__game.debug.gotoLand('urban')`（その区分のセルへ瞬間移動）、`.teleport(x, z, yaw, pitch)`、`.setClock(時)`、`.renderInfo()`。`window.__game.map` で現在のマップ
+  - 夜の明るさは `RENDER.sky.ambientNight` / `sunNight` と `RENDER.celestial.ambientNightColor`。フォグは 150〜800m
+- 追加した共有型・コマンド・イベント:
+  - 型: `PlayerState.vel` / `eye` / `winded`（`STATE_VERSION` 2）。`TacticalMap` ほか生成物の型は `src/gen/types.ts`（`GameState` には含めない）
+  - データ: `src/data/tactical.ts` の `TACTICAL`（区域の寸法、プレイヤー移動、区分ごとの地形・植生・街区）、`RENDER.celestial` / `ground` / `buildings` / `flora`
+  - コマンド・イベントの追加なし（区域の切り替えは `travelStarted` / `travelArrived` ではなく状態から判定している）
+  - `Renderer.view`（`setFov` / `fov`）、`window.__game.map` / `.renderer` / `.debug`、npm script `tactical:preview`

@@ -15,6 +15,7 @@
     "test": "vitest run",
     "check": "tsc --noEmit && eslint . && vitest run",
     "data": "node tools/build-data.ts",
+    "tactical:preview": "node tools/tactical-preview.ts tmp/tactical",
     "e2e": "playwright test"
   },
   "dependencies": {
