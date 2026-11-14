@@ -1,0 +1,129 @@
+:root {
+  --bg: rgba(12, 16, 20, 0.78);
+  --bg-solid: #0c1014;
+  --fg: #e6e9ea;
+  --muted: #9aa5a8;
+  --accent: #c9a24a;
+  --border: rgba(255, 255, 255, 0.16);
+  font-family: system-ui, -apple-system, 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic UI', sans-serif;
+  font-size: 14px;
+  color: var(--fg);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-solid);
+}
+
+#scene {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* The overlay never blocks the canvas except where a control is drawn. */
+#ui { position: fixed; inset: 0; pointer-events: none; }
+#ui button, #ui .panel, #ui .title-screen { pointer-events: auto; }
+
+button {
+  font: inherit;
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.14); }
+button:disabled { opacity: 0.45; cursor: default; }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+button.primary { width: 100%; padding: 12px; font-size: 16px; }
+button.primary small { color: var(--muted); font-size: 12px; }
+.chip { padding: 3px 9px; border-radius: 999px; font-size: 12px; }
+.chip.active { background: var(--accent); border-color: var(--accent); color: #17130a; }
+
+.label { color: var(--muted); font-size: 12px; }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.error { color: #ff8d7a; margin: 0; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* ---- title ---- */
+.title-screen {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  overflow: auto;
+  background: radial-gradient(ellipse at 50% 30%, #2a3138 0%, #0c1014 70%);
+}
+.title-card { width: min(100%, 380px); display: flex; flex-direction: column; gap: 12px; }
+.title-card h1 { margin: 0; font-size: clamp(36px, 12vw, 56px); letter-spacing: 0.12em; text-align: center; }
+.subtitle { margin: 0 0 12px; text-align: center; color: var(--muted); letter-spacing: 0.2em; font-size: 12px; }
+.save-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.save-row { display: flex; justify-content: space-between; gap: 12px; }
+
+/* ---- in game ---- */
+.game-ui { position: absolute; inset: 0; }
+
+.hud-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  padding: 6px 10px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  z-index: 2;
+}
+.hud-group { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.hud-group.debug { margin-left: auto; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.clock { font-variant-numeric: tabular-nums; font-size: 16px; font-weight: 600; }
+.speed { min-width: 4.5em; color: var(--muted); font-size: 12px; }
+
+.mode-layer { position: absolute; inset: 0; display: grid; place-items: center; padding: 64px 12px 12px; }
+.mode-layer.menu { background: rgba(0, 0, 0, 0.55); pointer-events: auto; }
+.mode-layer.world { background: rgba(8, 12, 18, 0.9); pointer-events: auto; }
+.mode-layer.command { place-items: end center; }
+
+.panel {
+  max-width: min(100%, 420px);
+  padding: 14px 16px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.panel.placeholder { color: var(--muted); text-align: center; }
+.menu-panel { width: min(100%, 360px); display: flex; flex-direction: column; gap: 12px; }
+.menu-panel h2 { margin: 0; font-size: 18px; }
+.status { margin: 0; min-height: 1.3em; color: var(--accent); }
+.help { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+
+.crosshair {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+}
+.hint {
+  position: absolute;
+  bottom: 24px;
+  left: 0;
+  right: 0;
+  margin: 0;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.75);
+  text-shadow: 0 1px 2px #000;
+  font-size: 12px;
+}

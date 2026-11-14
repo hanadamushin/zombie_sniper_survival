@@ -3,7 +3,15 @@
 崩壊後の日本で、スナイパーが生存者を雇い、駐屯地を広げ、国を建て直す。
 **スコープ越しの精密狙撃** と **サバイバル建国シミュレーション** を組み合わせたブラウザゲーム（PC優先）。
 
-現在の状態: **設計フェーズ完了 / 実装未着手**
+現在の状態: **M0（土台）完了** — 進捗は [docs/PROGRESS.md](docs/PROGRESS.md)
+
+```
+npm install
+npm run dev      # 開発サーバ
+npm run check    # 型検査 + lint + テスト
+npm run build    # 本番ビルド（dist/）
+npm run e2e      # Playwright スモーク
+```
 
 ## ドキュメント
 

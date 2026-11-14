@@ -35,3 +35,4 @@
 - `npm run build` — 本番ビルド
 - `npm run check` — tsc + eslint + vitest
 - `npm run data` — 地図・感染データの再生成（`tools/`）
+- `npm run e2e` — Playwright スモーク（ビルドして preview サーバで実行。`check` には含まれない）
