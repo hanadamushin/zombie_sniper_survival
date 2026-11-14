@@ -5,15 +5,18 @@
 //   MenuOverlay   — pause menu, save slots, settings (08)
 
 import { useState } from 'preact/hooks';
-import type { GameState } from '../../core/types.ts';
+import type { GameState, StaticGrid } from '../../core/types.ts';
 import { BALANCE } from '../../data/balance.ts';
 import { t } from '../i18n/ja.ts';
 import type { UiActions } from '../store.ts';
+import { WorldMap } from '../world/WorldMap.tsx';
 import { slotLabel } from './TitleScreen.tsx';
 
 interface ModeProps {
   state: GameState;
   actions: UiActions;
+  /** Static map (null until loaded). */
+  grid: StaticGrid | null;
 }
 
 export function TacticalLayer(_props: ModeProps) {
@@ -33,12 +36,8 @@ export function CommandLayer(_props: ModeProps) {
   );
 }
 
-export function WorldLayer(_props: ModeProps) {
-  return (
-    <div class="mode-layer world" data-testid="mode-world">
-      <div class="panel placeholder">{t('world.placeholder')}</div>
-    </div>
-  );
+export function WorldLayer({ state, actions, grid }: ModeProps) {
+  return <WorldMap state={state} grid={grid} actions={actions} />;
 }
 
 export function MenuOverlay({ actions }: ModeProps) {

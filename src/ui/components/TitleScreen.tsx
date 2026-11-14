@@ -16,6 +16,8 @@ export function TitleScreen({ actions }: { actions: UiActions }) {
   const [saves, setSaves] = useState<SaveMeta[] | null>(null);
   const [difficulty, setDifficulty] = useState<Difficulty>(1);
   const [error, setError] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [dataError, setDataError] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -27,6 +29,17 @@ export function TitleScreen({ actions }: { actions: UiActions }) {
 
   const load = (slot: string) => {
     void actions.loadSlot(slot).then((ok) => setError(!ok));
+  };
+  const newGame = () => {
+    setBusy(true);
+    setDataError(false);
+    void actions.newGame(difficulty).then((ok) => {
+      // On success this screen is replaced by the opening.
+      if (!ok) {
+        setBusy(false);
+        setDataError(true);
+      }
+    });
   };
   const latest = saves?.[0];
 
@@ -45,9 +58,10 @@ export function TitleScreen({ actions }: { actions: UiActions }) {
           ))}
         </div>
 
-        <button class="primary" data-testid="new-game" onClick={() => actions.newGame(difficulty)}>
-          {t('title.newGame')}
+        <button class="primary" data-testid="new-game" disabled={busy} onClick={newGame}>
+          {busy ? t('title.loading') : t('title.newGame')}
         </button>
+        {dataError && <p class="error">{t('title.dataFailed')}</p>}
         <button class="primary" data-testid="continue" disabled={!latest} onClick={() => latest && load(latest.slot)}>
           {t('title.continue')}
           {latest ? <small> — {saveSummary(latest)}</small> : saves ? <small> — {t('title.noSave')}</small> : null}

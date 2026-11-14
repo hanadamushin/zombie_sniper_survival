@@ -2,17 +2,20 @@
 // GameState is mutated in place by the sim, so components simply re-read it on each sync.
 
 import { render } from 'preact';
-import type { GameState } from '../core/types.ts';
+import type { GameState, StaticGrid } from '../core/types.ts';
 import { App } from './components/App.tsx';
-import type { UiActions, UiSnapshot } from './store.ts';
+import type { IntroData, UiActions, UiSnapshot } from './store.ts';
 import './styles.css';
 
 export interface Ui {
   sync(state: GameState | null, perf?: { fps: number; drawCalls: number }): void;
+  setGrid(grid: StaticGrid | null): void;
+  /** Show (or hide, with null) the opening: timelapse and start selection. */
+  setIntro(intro: IntroData | null): void;
 }
 
 export function createUi(root: HTMLElement, actions: UiActions): Ui {
-  const snap: UiSnapshot = { state: null, rev: 0, fps: 0, drawCalls: 0 };
+  const snap: UiSnapshot = { grid: null, intro: null, state: null, rev: 0, fps: 0, drawCalls: 0 };
   const paint = (): void => render(<App snap={{ ...snap }} actions={actions} />, root);
   paint();
   return {
@@ -23,6 +26,14 @@ export function createUi(root: HTMLElement, actions: UiActions): Ui {
         snap.fps = perf.fps;
         snap.drawCalls = perf.drawCalls;
       }
+      paint();
+    },
+    setGrid(grid) {
+      snap.grid = grid;
+      paint();
+    },
+    setIntro(intro) {
+      snap.intro = intro;
       paint();
     },
   };

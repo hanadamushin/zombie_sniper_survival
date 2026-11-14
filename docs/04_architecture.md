@@ -37,7 +37,9 @@
 ├─ tools/                  # ビルド時スクリプト（Node 22.18+ の型ストリップで直接実行。`npm run data`）
 │   ├─ build-data.ts       #   `npm run data` の入口（下の2つを呼ぶ）
 │   ├─ build-grid.ts       #   日本グリッド生成
-│   └─ run-infection.ts    #   感染シミュレーション事前計算
+│   ├─ run-infection.ts    #   感染シミュレーション事前計算
+│   ├─ preview.ts          #   検証用 PNG（`node tools/preview.ts <dir>`）
+│   └─ data/               #   都市表・山脈表・交通ハブ表（手書き）
 ├─ src/
 │   ├─ main.ts             # 起動、ゲームループ
 │   ├─ core/               # 型、イベントバス、コマンド、PRNG、時間、セーブ
@@ -165,6 +167,8 @@ export interface WorldState {
 // セルの静的データ（pop0, land, lat/lon, region…）は state に入れず、
 // public/data/grid.json から読み込んだ StaticGrid を別途参照する。
 // sim へは createSim({ grid }) / sim.setGrid(grid) で渡し、システムは ctx.grid で読む。
+// StaticGrid = { gridW, gridH, cellKm, proj, cells: (StaticCell|null)[], landIds, hubs: Hub[], prefNames, regionNames, places }
+// 読み込みは src/worldData.ts（fetch）→ sim/world/grid.ts の parseGrid。同梱シナリオは sim/world/scenario.ts。
 
 export interface PlayerState {
   cell: CellId;
@@ -271,6 +275,7 @@ export interface InputFrame { moveX: number; moveZ: number; lookDX: number; look
 `techCompleted`, `eraAdvanced`, `dayStarted`, `hourStarted`, `wagesPaid`, `outpostFounded`, `outpostLost`, `victory`, `defeat`
 
 基盤が追加したイベント: `speedChanged{speed}`, `modeChanged{mode, prev}`, `commandRejected{command, reason}`。
+02 が追加したイベント: `travelStarted{from, to, minutes}`, `cellEntered{cell, from}`, `travelArrived{cell}`, `travelEncounter{cell, danger}`（枠のみ）, `infectionStepped{day, homeInflow}`。
 `dayStarted` は 00:00 に、同じ tick の `hourStarted{hour:0}` より先に発火する。
 
 イベントは tick 中にバッファされ、tick 末に購読者へ配信（`sim.events.on(type, fn)` / `onAny`）。sim 内システムが他システムのイベントを見る場合は「次の tick で処理」と決め、`ctx.prevEvents`（直前の tick で出たイベント）を読む。

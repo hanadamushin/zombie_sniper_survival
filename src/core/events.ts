@@ -41,7 +41,14 @@ export type GameEvent =
   | { type: 'defeat'; reason: string }
   // --- world (02/06) ---
   | { type: 'outpostFounded'; id: EntityId; cell: CellId }
-  | { type: 'outpostLost'; id: EntityId; cell: CellId };
+  | { type: 'outpostLost'; id: EntityId; cell: CellId }
+  // --- world: travel and infection (02) ---
+  | { type: 'travelStarted'; from: CellId; to: CellId; minutes: number }
+  | { type: 'cellEntered'; cell: CellId; from: CellId }
+  | { type: 'travelArrived'; cell: CellId }
+  /** Placeholder: rolled when entering a cell on the road; no effect yet (later sessions). */
+  | { type: 'travelEncounter'; cell: CellId; danger: number }
+  | { type: 'infectionStepped'; day: number; homeInflow: number };
 
 export type GameEventType = GameEvent['type'];
 export type EventOf<K extends GameEventType> = Extract<GameEvent, { type: K }>;

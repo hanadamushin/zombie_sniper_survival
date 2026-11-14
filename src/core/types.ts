@@ -80,15 +80,35 @@ export interface StaticCell {
   pop0: number;
   land: Land;
   coastal: boolean;
-  region: number;
-  pref: number;
-  hubId?: number;
+  region: number; // index into StaticGrid.regionNames (0..7)
+  pref: number; // JIS prefecture code 1..47 (index into StaticGrid.prefNames)
+  hubId?: number; // index into StaticGrid.hubs
+}
+/** Transport hub (Shinkansen station / airport cell). `links` are hub ids. Added by 02. */
+export interface Hub {
+  id: number;
+  name: string;
+  cell: CellId;
+  /** Name of the international gateway (outbreak source candidate), or null. */
+  intl: string | null;
+  links: number[];
 }
 export interface StaticGrid {
   gridW: number;
   gridH: number;
+  /** Cell edge length in km (10). */
+  cellKm: number;
+  /** Equirectangular projection: lon = lon0 + x_km / kmPerLon, lat = latTop - y_km / kmPerLat. */
+  proj: { lon0: number; latTop: number; kmPerLon: number; kmPerLat: number };
   /** Indexed by CellId; null for sea cells. */
   cells: (StaticCell | null)[];
+  /** Ids of all land cells, ascending. Bundled infection data is indexed in this order. */
+  landIds: CellId[];
+  hubs: Hub[];
+  prefNames: string[];
+  regionNames: string[];
+  /** Named places (largest town of a cell) for map labels. */
+  places: { name: string; cell: CellId }[];
 }
 
 export interface PlayerState {

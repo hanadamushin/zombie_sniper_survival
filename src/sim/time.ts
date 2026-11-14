@@ -56,6 +56,11 @@ export const timeCommands: CommandHandlers = {
 
   setMode(state, cmd, ctx) {
     if (cmd.mode === state.mode) return;
+    // On the road there is no tactical map to return to (02): stay on the strategic layers.
+    if (cmd.mode === 'tactical' && state.world.travel) {
+      ctx.emit({ type: 'commandRejected', command: cmd.type, reason: 'travelling' });
+      return;
+    }
     const prev = state.mode;
     state.mode = cmd.mode;
     ctx.emit({ type: 'modeChanged', mode: cmd.mode, prev });
