@@ -56,5 +56,7 @@ export function isNight(minute: number): boolean {
 
 /** Speed the main loop should actually run at (the in-game menu always pauses). */
 export function effectiveSpeed(state: GameState): number {
-  return state.mode === 'menu' ? 0 : state.time.speed;
+  if (state.mode === 'menu' || state.time.speed === 0) return 0;
+  // Journeys between cells are fast-forwarded (spec §1); pausing still works.
+  return state.world.travel ? BALANCE.world.travel.speed : state.time.speed;
 }

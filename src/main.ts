@@ -8,12 +8,16 @@
 import { createStepper } from './core/loop.ts';
 import { AUTO_SLOT, createDefaultSaveStore, listSaves, loadGame, saveGame, type SlotId } from './core/save.ts';
 import { effectiveSpeed } from './core/time.ts';
-import { continuationFrame, createInitialState, type Difficulty, type GameState } from './core/types.ts';
+import { stream } from './core/rng.ts';
+import { continuationFrame, createInitialState, type CellId, type Difficulty, type GameState, type StaticGrid } from './core/types.ts';
 import { BALANCE } from './data/balance.ts';
 import { createInput } from './input/index.ts';
 import { createRenderer } from './render/index.ts';
 import { createSim } from './sim/index.ts';
+import { initWorld } from './sim/world/scenario.ts';
+import { beginAt, findStartCandidates } from './sim/world/start.ts';
 import { createUi } from './ui/index.tsx';
+import { loadGrid, loadScenario } from './worldData.ts';
 
 const FIXED = BALANCE.time.fixedStep;
 
@@ -41,11 +45,55 @@ function start(next: GameState): void {
   ui.sync(state);
 }
 
-function newGame(difficulty: Difficulty): void {
+/** Static map; loaded on first use and handed to the sim and the UI. */
+let grid: StaticGrid | null = null;
+async function ensureGrid(): Promise<StaticGrid> {
+  if (!grid) {
+    grid = await loadGrid();
+    sim.setGrid(grid);
+    ui.setGrid(grid);
+  }
+  return grid;
+}
+
+/** A prepared new game that waits on the opening screen for its start location. */
+let pending: GameState | null = null;
+
+async function newGame(difficulty: Difficulty): Promise<boolean> {
   // Seed from the wall clock (or ?seed=123 for reproducible runs). Not part of the sim.
-  const param = new URLSearchParams(location.search).get('seed');
-  const seed = param !== null && Number.isFinite(Number(param)) ? Number(param) : Date.now();
-  start(createInitialState(seed >>> 0, difficulty));
+  const params = new URLSearchParams(location.search);
+  const param = params.get('seed');
+  const seed = (param !== null && Number.isFinite(Number(param)) ? Number(param) : Date.now()) >>> 0;
+  const scenarioParam = Number(params.get('scenario') ?? NaN);
+  const scenarioCount = BALANCE.infection.scenarioSeeds.length;
+  const scenario = Number.isInteger(scenarioParam) && scenarioParam >= 0 && scenarioParam < scenarioCount ? scenarioParam : seed % scenarioCount;
+  try {
+    const g = await ensureGrid();
+    const data = await loadScenario(scenario);
+    const next = createInitialState(seed, difficulty);
+    initWorld(next, g, data);
+    const candidates = findStartCandidates(next.world.cells, g, stream(next, 'world.start'));
+    pending = next;
+    ui.setIntro({ scenario: data, candidates });
+    return true;
+  } catch (err) {
+    console.warn('[data] failed to load the map', err);
+    return false;
+  }
+}
+
+function chooseStart(cell: CellId): void {
+  if (!pending || !grid) return;
+  const next = pending;
+  pending = null;
+  beginAt(next, grid, cell);
+  ui.setIntro(null);
+  start(next);
+}
+
+function cancelIntro(): void {
+  pending = null;
+  ui.setIntro(null);
 }
 
 async function saveSlot(slot: SlotId): Promise<boolean> {
@@ -63,6 +111,9 @@ async function loadSlot(slot: SlotId): Promise<boolean> {
   try {
     const loaded = await loadGame(store, slot);
     if (!loaded) return false;
+    const g = await ensureGrid();
+    // Saves from before the world map existed (or for another grid) cannot be continued.
+    if (loaded.world.gridW !== g.gridW || loaded.world.cells.Z.length !== g.gridW * g.gridH) return false;
     start(loaded);
     return true;
   } catch (err) {
@@ -81,6 +132,8 @@ function quitToTitle(): void {
 const ui = createUi(uiRoot, {
   dispatch: sim.dispatch,
   newGame,
+  chooseStart,
+  cancelIntro,
   loadSlot,
   saveSlot,
   listSaves: () => listSaves(store),
