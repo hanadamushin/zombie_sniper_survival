@@ -67,3 +67,8 @@
 - 遠征は 02 の関数を使う: 経路と所要時間は `sim/world/travel.ts` の `findRoute`、危険度は `derive.ts` の `dangerOf`、討伐数の反映は `removeZombies(state, cell, n)`、物資は `world.cells.loot` を減らす（戦術マップの探索ポイント数も loot から決まる）。陸続きでないセルは経路なしになるので、編成 UI で選べないようにする
 - 拠点の人数は 02 の `settlementAttraction` が毎日読んで、本拠へのゾンビ流入（`hordeMeter`）に反映している。`Survivor.status` / `location` を正しく保つこと
 - プレイヤーが移動中（`world.travel` あり）や本拠以外のセルにいる間も、共同体の時間は進む（移動中は x30 の早送り）。「x1 と x10 で生産量が一致」のテストに x30 も加える
+### 03 の結果を受けて
+
+- **戦術マップがあるのはプレイヤーのいるセルだけ**（`areaOf(state)`。移動中は `state.tactical = null`）。生存者の歩行・作業アニメーションはプレイヤーが本拠セルにいるときだけ動かし、不在・移動中は位置の更新を止めて数値の加算だけを続ける。どちらでも1日の成果が一致することをテストする（G の x1 / x10 のテストと同じ枠）
+- 拠点内の移動は `map.walk`（4m 通行グリッド）と `isWalkable` を使う。本拠セルの中央 `map.spawn.home` の半径 120m は平坦な空き地で、司令部・仮の畑はここに置く
+- 探索ポイントは `map` の探索ポイント（扉の前の座標）と `state.tactical.lootSpots`。建物の中には入れない
