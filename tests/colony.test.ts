@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { GameEvent } from '../src/core/events.ts';
 import { stream } from '../src/core/rng.ts';
 import { deserialize, serialize } from '../src/core/save.ts';
-import { createInitialState, emptyInputFrame, RESOURCE_IDS, type GameState, type JobId, type StaticGrid, type Survivor } from '../src/core/types.ts';
+import { STATE_VERSION, createInitialState, emptyInputFrame, RESOURCE_IDS, type GameState, type JobId, type StaticGrid, type Survivor } from '../src/core/types.ts';
 import { BALANCE } from '../src/data/balance.ts';
 import { COLONY, EXPEDITION_WEAPONS, expeditionWeapon } from '../src/data/colony.ts';
 import { TRAITS } from '../src/data/traits.ts';
@@ -262,6 +262,8 @@ describe('time', () => {
   function day(dt: number, full = false): GameState {
     const r = rig(full, 11);
     const c = r.state.colony;
+    // No zombies in the home cell: the nightly visitors (06) would otherwise cost ammunition and bring in ears.
+    r.state.world.cells.Z[r.state.world.homeCell!] = 0;
     c.stock.ears = 200;
     c.stock.metal = 10;
     c.stock.parts = 3;
@@ -603,10 +605,11 @@ describe('interfaces for later sessions', () => {
     const r = rig();
     const { state } = r;
     const bp = (id: number, priority: 0 | 1 | 2) => ({ id, def: 'wall', tx: 130, ty: 130, rot: 0 as const, hp: 1, progress: 0, delivered: {}, level: 1, priority });
+    const first = state.build.structures.length; // (the headquarters and the first field are already there)
     state.build.structures.push(bp(1, 0), bp(2, 2));
     expect(distributeBuildWork(state, 50, () => 40)).toBe(0);
-    expect(state.build.structures[1]!.progress).toBe(1);
-    expect(state.build.structures[0]!.progress).toBeCloseTo(0.25, 9);
+    expect(state.build.structures[first + 1]!.progress).toBe(1);
+    expect(state.build.structures[first]!.progress).toBeCloseTo(0.25, 9);
     expect(distributeBuildWork(state, 100, () => 40)).toBeCloseTo(70, 9);
     r.add('research', { kno: 8 });
     r.add('defense');
@@ -633,7 +636,7 @@ describe('interfaces for later sessions', () => {
     old.version = 3;
     old.colony = { stock: {}, capacity: {}, survivors: [], candidates: [], foodPrice: 1, ledger: [], log: [] };
     const up = deserialize(JSON.stringify(old));
-    expect(up.version).toBe(4);
+    expect(up.version).toBe(STATE_VERSION);
     expect(up.colony.market.food).toBe(0);
     expect(up.colony.capacity.food).toBe(COLONY.economy.baseCapacity.food);
     expect(up.colony.stock.food).toBe(6);

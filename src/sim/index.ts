@@ -136,6 +136,7 @@ export function createSim(options: SimOptions = {}): Sim {
       let skip = Number(state.flags.skipMinutes ?? 0);
       if (skip > 0) {
         delete state.flags.skipMinutes;
+        state.flags.skipping = true; // (06: raids during the skip are fought in numbers)
         const skipCtx = makeCtx(BALANCE.time.realSecondsPerGameMinute, NO_INPUT);
         for (; skip > 0; skip--) {
           const s = advanceTime(state, skipCtx);
@@ -143,6 +144,7 @@ export function createSim(options: SimOptions = {}): Sim {
           if (s.hour) for (const sys of systems) sys.hour?.(state, skipCtx);
           if (s.day) for (const sys of systems) sys.day?.(state, skipCtx);
         }
+        delete state.flags.skipping;
       }
       prevEvents = events.flush(); // 8
     },

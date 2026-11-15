@@ -16,6 +16,9 @@ import { BALANCE } from '../../data/balance.ts';
 import { KILL, ZOMBIES, type ZombieDef } from '../../data/zombies.ts';
 import type { TacticalMap } from '../../gen/index.ts';
 import type { SimContext } from '../system.ts';
+import { BUILD } from '../../data/buildings.ts';
+import { chaseField, raidField, tileOf, type FlowField } from '../build/flowfield.ts';
+import { bodyDistance, damageStructure, defOf, GATE_THICK, moatFilled, overlayOf, structureAtTile, TILE, TILES, type Overlay } from '../build/structures.ts';
 import { cellTactical } from '../world/derive.ts';
 import type { TacticalArea } from './area.ts';
 import { heightAt, isWalkable, pushOut, segmentHitsStatic, supportAt, type Vec3 } from './collision.ts';
@@ -184,7 +187,7 @@ export function hitZombie(z: Zombie, o: Readonly<Vec3>, d: Readonly<Vec3>, len: 
 
 function alert(z: Zombie, gx: number, gz: number, seconds: number): void {
   if (z.state !== 'wander' && z.state !== 'alert') return;
-  if (z.dummy) return;
+  if (z.dummy || z.raid) return; // raiders keep coming
   z.state = 'alert';
   z.t = seconds;
   z.goal[0] = gx;
@@ -194,7 +197,8 @@ function alert(z: Zombie, gx: number, gz: number, seconds: number): void {
 
 const near: number[] = [];
 
-function kill(state: GameState, area: TacticalArea, ctx: SimContext, z: Zombie, headshot: boolean, knife: boolean): void {
+/** Put a zombie down. `by`: the player, or the id of the defender / structure that did it (06). */
+export function killZombie(state: GameState, area: TacticalArea, ctx: Pick<SimContext, 'emit'>, z: Zombie, headshot: boolean, knife: boolean, by: number | 'player' = 'player'): void {
   const t = state.tactical!;
   z.state = 'down';
   z.t = 0;
@@ -203,9 +207,11 @@ function kill(state: GameState, area: TacticalArea, ctx: SimContext, z: Zombie, 
   z.target = null;
   z.corpseId = state.nextId++;
   area.dynamic.remove(z.id);
-  state.player.stats.kills += 1;
-  if (headshot) state.player.stats.headshots += 1;
-  ctx.emit({ type: 'zombieKilled', id: z.id, kind: z.kind, by: 'player', headshot, pos: [z.pos[0], z.pos[1], z.pos[2]], knife });
+  if (by === 'player') {
+    state.player.stats.kills += 1;
+    if (headshot) state.player.stats.headshots += 1;
+  }
+  ctx.emit({ type: 'zombieKilled', id: z.id, kind: z.kind, by, headshot, pos: [z.pos[0], z.pos[1], z.pos[2]], knife });
   // Those who see it fall start searching.
   near.length = 0;
   area.dynamic.query(z.pos[0], z.pos[2], Z.corpseDist, near);
@@ -229,7 +235,7 @@ export function damageZombie(state: GameState, area: TacticalArea, ctx: SimConte
   const base = amount ?? def[part];
   z.hp -= base >= KILL ? KILL : base * mul;
   if (z.hp <= 0) {
-    kill(state, area, ctx, z, part === 'head' && amount === undefined, amount !== undefined);
+    killZombie(state, area, ctx, z, part === 'head' && amount === undefined, amount !== undefined);
     return true;
   }
   z.flinch = z.kind === 'brute' ? Z.flinchSeconds * 0.4 : Z.flinchSeconds;
@@ -356,7 +362,7 @@ function moveToward(state: GameState, area: TacticalArea, z: Zombie, tx: number,
     const turn = Z.turnRate * dt * (z.kind === 'runner' ? 1.6 : 1);
     z.yaw += Math.abs(diff) <= turn ? diff : Math.sign(diff) * turn;
   }
-  let step = Math.min(dist, speed * dt);
+  let step = Math.min(dist, speed * dt * (overlay && overlay.wire[tileOf(pos[0], pos[2])] ? BUILD.wireSlow : 1));
   if (z.flinch > 0) step = 0;
   if (step > 0) {
     if (z.detourT > 0) {
@@ -373,6 +379,7 @@ function moveToward(state: GameState, area: TacticalArea, z: Zombie, tx: number,
     xz[1] = pos[2] + dz * step;
     const height = isProne(z) ? 0.5 : def.height;
     pushOut(map, xz, def.radius, pos[1], height, Z.stepUp);
+    if (overlay) barrierPush(overlay, xz, def.radius);
     if (separate) {
       near.length = 0;
       area.dynamic.query(xz[0], xz[1], 1.2, near);
@@ -426,6 +433,129 @@ function moveToward(state: GameState, area: TacticalArea, z: Zombie, tx: number,
   }
   settle(map, z, dt);
   return dist - step;
+}
+
+/** The structure overlay of the home map for the step being simulated (null elsewhere). */
+let overlay: Overlay | null = null;
+/** Zombies working on each structure during this step (structure id -> count). */
+const attackers = new Map<number, number>();
+
+/** Keep a zombie out of the barriers that have no collision box: moats, gates, the space under towers. */
+function barrierPush(ov: Overlay, pos: [number, number], radius: number): void {
+  const tx0 = Math.floor((pos[0] - radius) / TILE), tx1 = Math.floor((pos[0] + radius) / TILE);
+  const ty0 = Math.floor((pos[1] - radius) / TILE), ty1 = Math.floor((pos[1] + radius) / TILE);
+  for (let ty = ty0; ty <= ty1; ty++) {
+    for (let tx = tx0; tx <= tx1; tx++) {
+      if (tx < 0 || ty < 0 || tx >= TILES || ty >= TILES) continue;
+      const code = ov.zblock[ty * TILES + tx]!;
+      if (!code) continue;
+      let x0 = tx * TILE, z0 = ty * TILE, x1 = x0 + TILE, z1 = z0 + TILE;
+      if (code === 2) {
+        z0 += TILE / 2 - GATE_THICK / 2;
+        z1 = z0 + GATE_THICK;
+      } else if (code === 3) {
+        x0 += TILE / 2 - GATE_THICK / 2;
+        x1 = x0 + GATE_THICK;
+      }
+      const qx = Math.min(x1, Math.max(x0, pos[0]));
+      const qz = Math.min(z1, Math.max(z0, pos[1]));
+      const dx = pos[0] - qx, dz = pos[1] - qz;
+      const d2 = dx * dx + dz * dz;
+      if (d2 >= radius * radius) continue;
+      if (d2 > 1e-10) {
+        const d = Math.sqrt(d2);
+        pos[0] = qx + (dx / d) * radius;
+        pos[1] = qz + (dz / d) * radius;
+      } else {
+        const l = pos[0] - x0, r = x1 - pos[0], t = pos[1] - z0, b = z1 - pos[1];
+        const m = Math.min(l, r, t, b);
+        if (m === l) pos[0] = x0 - radius;
+        else if (m === r) pos[0] = x1 + radius;
+        else if (m === t) pos[1] = z0 - radius;
+        else pos[1] = z1 + radius;
+      }
+    }
+  }
+}
+
+/** Stable per-zombie number in [0, 1). */
+function hash01(id: number, salt: number): number {
+  const v = Math.sin(id * 12.9898 + salt * 78.233) * 43758.5453;
+  return v - Math.floor(v);
+}
+
+/** Is the straight line from the zombie to (bx, bz) cut by a barrier, a wall or unwalkable ground? (first 60 m) */
+function lineBlocked(map: TacticalMap, ov: Overlay | null, ax: number, az: number, bx: number, bz: number): boolean {
+  const d = Math.hypot(bx - ax, bz - az);
+  const n = Math.min(30, Math.ceil(d / 2));
+  for (let i = 1; i < n; i++) {
+    const t = tileOf(ax + ((bx - ax) * i) / n, az + ((bz - az) * i) / n);
+    if (!map.walk[t] || (ov && (ov.zblock[t] || ov.sidx[t]) && !ov.wire[t])) return true;
+  }
+  return false;
+}
+
+/**
+ * Walk along a flow field: to the next tile, or — when a structure stands there — up to it and
+ * through it (walls, gates and buildings are broken down, moats are filled with bodies).
+ * Returns false when the field has nothing to say here (the caller walks straight instead).
+ */
+function followField(state: GameState, area: TacticalArea, ctx: SimContext, z: Zombie, field: FlowField, speed: number, dt: number, separate: boolean, goalTile: number): boolean {
+  const tile = tileOf(z.pos[0], z.pos[2]);
+  const next = field.next[tile]!;
+  if (next < 0) return false;
+  const def = ZOMBIES[z.kind];
+  const nx = next % TILES;
+  const ny = (next - nx) / TILES;
+  const cx = (nx + 0.5) * TILE;
+  const cz = (ny + 0.5) * TILE;
+  const ov = overlay;
+  const st = ov && next !== goalTile ? structureAtTile(state, ov, next) : undefined;
+  if (ov && st && !ov.wire[next]) {
+    const reach = bodyDistance(ov, st, next, z.pos[0], z.pos[2]);
+    if (reach > def.radius + 0.5) {
+      z.target = null;
+      moveToward(state, area, z, cx, cz, speed, dt, separate);
+      return true;
+    }
+    // At it.
+    z.target = st.id;
+    z.yaw = Math.atan2(-(cx - z.pos[0]), -(cz - z.pos[2]));
+    z.walk += dt * 0.6; // (arms keep flailing)
+    settle(area.map, z, dt);
+    const sdef = defOf(st);
+    if (sdef.kind === 'moat' || (sdef.kind === 'bridge' && sdef.hp <= 0)) {
+      if (sdef.unfillable || moatFilled(st)) return true;
+      z.moatT = (z.moatT ?? 0) + dt;
+      if (z.moatT > BUILD.raid.moatFallSeconds * (0.5 + hash01(z.id, 3))) {
+        // Pushed over the edge by the ones behind: one more body in the ditch.
+        st.corpsesInMoat = (st.corpsesInMoat ?? 0) + 1;
+        z.pos[0] = cx + (hash01(z.id, 5) - 0.5) * 2;
+        z.pos[2] = cz + (hash01(z.id, 6) - 0.5) * 2;
+        killZombie(state, area, ctx, z, false, false, st.id);
+        z.corpseId = -1; // lies in the ditch: no body to pick clean
+        if (moatFilled(st)) {
+          state.build.gridRev++;
+          ctx.emit({ type: 'moatBridged', id: st.id });
+        }
+      }
+      return true;
+    }
+    // Only so many can get at one stretch of wall at a time.
+    const busy = attackers.get(st.id) ?? 0;
+    if (z.flinch <= 0 && busy < BUILD.raid.attackersPerTile) {
+      attackers.set(st.id, busy + 1);
+      damageStructure(state, ctx.emit, st, def.wallDps * dt * (sdef.kind === 'building' ? BUILD.raid.buildingDamage : 1));
+    }
+    return true;
+  }
+  z.target = z.state === 'chase' ? 'player' : null;
+  z.moatT = 0;
+  // Spread out a little across the tile so that a column is not a single file.
+  const off = (hash01(z.id, 1) - 0.5) * 2.2;
+  const horizontal = ny === Math.floor(z.pos[2] / TILE);
+  moveToward(state, area, z, cx + (horizontal ? 0 : off), cz + (horizontal ? off : 0), speed, dt, separate);
+  return true;
 }
 
 /** Vertical: follow the ground and steps, fall off ledges. */
@@ -499,6 +629,7 @@ function pickWanderGoal(map: TacticalMap, z: Zombie, rng: RngState, radius: numb
 
 function toCorpse(state: GameState, z: Zombie): void {
   const t = state.tactical!;
+  if (z.corpseId < 0) return; // fell into a moat
   const C = BALANCE.combat;
   const until = addMinutes({ day: state.time.day, minute: state.time.minute }, C.corpse.hours * 60);
   t.corpses.push({
@@ -524,6 +655,13 @@ function updateOne(state: GameState, area: TacticalArea, ctx: SimContext, z: Zom
     return;
   }
 
+  if (overlay && overlay.wire[tileOf(z.pos[0], z.pos[2])]) {
+    // Barbed wire tears at whatever wades through it, and wears out doing so.
+    const wire = structureAtTile(state, overlay, tileOf(z.pos[0], z.pos[2]));
+    if (wire) damageStructure(state, ctx.emit, wire, BUILD.wireWear * dt);
+    z.hp -= BUILD.wireDps * dt;
+    if (z.hp <= 0) return killZombie(state, area, ctx, z, false, false, wire?.id ?? 0);
+  }
   const sees = sense ? seesPlayer(state, map, z) : false;
   const pdx = p.pos[0] - z.pos[0];
   const pdz = p.pos[2] - z.pos[2];
@@ -543,6 +681,15 @@ function updateOne(state: GameState, area: TacticalArea, ctx: SimContext, z: Zom
           z.corpseSeen = c.id;
           return alert(z, c.pos[0], c.pos[2], Z.alertSeconds);
         }
+      }
+      if (z.raid) {
+        // Raider: follow the field to the base; where it gives no direction, walk at the base centre.
+        if (!followField(state, area, ctx, z, raidField(state, map), speedOf(z, def, night), dt, near1, -1)) {
+          const [gx, gz] = map.spawn.home;
+          if (Math.hypot(gx - z.pos[0], gz - z.pos[2]) > 6) moveToward(state, area, z, gx, gz, speedOf(z, def, night), dt, near1);
+          else settle(map, z, dt);
+        }
+        return;
       }
       if (z.t > 0) {
         z.t -= dt;
@@ -621,7 +768,13 @@ function updateOne(state: GameState, area: TacticalArea, ctx: SimContext, z: Zom
           tx = n[0];
           tz = n[2];
         }
-      } else z.stair = -1;
+      } else {
+        z.stair = -1;
+        // No straight way (walls, moats, a dead end between buildings): go by the field towards the player.
+        if ((z.detours > 0 || overlay !== null) && pdist > 3 && lineBlocked(map, overlay, z.pos[0], z.pos[2], tx, tz)) {
+          if (followField(state, area, ctx, z, chaseField(state, map), speedOf(z, def, night), dt, near1, tileOf(p.pos[0], p.pos[2]))) return;
+        }
+      }
       moveToward(state, area, z, tx, tz, speedOf(z, def, night), dt, near1);
       return;
     }
@@ -783,6 +936,8 @@ export function updateZombies(state: GameState, area: TacticalArea, ctx: SimCont
   const p = state.player;
   const night = isNight(state.time.minute);
   const perch = perchOf(state, area.map);
+  overlay = area.map.params.isHome && !state.flags.range ? overlayOf(state, area.map.walk) : null;
+  attackers.clear();
   const zombies = t.zombies;
   for (let i = zombies.length - 1; i >= 0; i--) {
     const z = zombies[i]!;

@@ -1,6 +1,7 @@
 // Economy (spec §5): wages every morning, meals, the food market between the farmers and the
 // community, the neutral village, and ammunition made by the crafters.
 
+import { foodSaving } from '../build/structures.ts';
 import type { GameState, StaticGrid } from '../../core/types.ts';
 import { COLONY } from '../../data/colony.ts';
 import { cellsWithin } from '../world/grid.ts';
@@ -110,10 +111,11 @@ export function payWages(c: ColonyCtx): void {
 /** One of the three meals: farmers eat their own produce first, everyone else from the stores. */
 export function serveMeal(c: ColonyCtx): void {
   const colony = c.state.colony;
+  const saving = 1 - foodSaving(c.state); // a canteen wastes less (06)
   let missed = 0;
   for (const s of colony.survivors) {
     if (!isHome(s)) continue;
-    const need = mealPerDay(s) / 3;
+    const need = (mealPerDay(s) / 3) * saving;
     let got = 0;
     if (s.job === 'farming') {
       got = Math.min(need, colony.market.food);

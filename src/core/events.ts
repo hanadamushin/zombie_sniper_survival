@@ -19,6 +19,7 @@ export type GameEvent =
   | { type: 'shotFired'; pos: Vec3; dir: Vec3; weapon: string; scoped?: boolean }
   /** 04 added: surface (what was hit when no zombie), dir (flight direction), range (m flown), killed. */
   | { type: 'bulletHit'; zombie: EntityId | null; part: HitPart | null; pos: Vec3; surface?: HitSurface; dir?: Vec3; range?: number; killed?: boolean }
+  /** `by`: the player, a defender's id, or a structure's id (barbed wire, moat). */
   | { type: 'zombieKilled'; id: EntityId; kind: ZombieKind; by: EntityId | 'player'; headshot: boolean; pos: Vec3; knife?: boolean }
   | { type: 'earsCollected'; amount: number }
   | { type: 'playerHurt'; amount: number; hp: number; cause?: 'bite' | 'fall' | 'infection' }
@@ -39,6 +40,15 @@ export type GameEvent =
   | { type: 'moatBridged'; id: EntityId }
   | { type: 'hordeWarning'; arrivesDay: number; arrivesMinute: number; size: number; dir: number }
   | { type: 'hordeArrived'; size: number; dir: number }
+  // --- build / defense, added by 06 ---
+  | { type: 'blueprintPlaced'; id: EntityId; def: string }
+  | { type: 'structureRemoved'; id: EntityId; def: string }
+  | { type: 'raidStarted'; kind: 'night' | 'horde'; size: number; dir: number; away: boolean }
+  | { type: 'raidEnded'; kind: 'night' | 'horde'; killed: number; repelled: boolean; away: boolean }
+  | { type: 'defenderFired'; id: EntityId; pos: Vec3; target: Vec3; hit: boolean }
+  | { type: 'survivorHurt'; id: EntityId; hp: number }
+  | { type: 'outpostUpgraded'; id: EntityId; tier: number }
+  | { type: 'outpostSupplied'; id: EntityId; ammo: number }
   // --- colony (05) ---
   | { type: 'survivorHired'; id: EntityId }
   | { type: 'survivorDied'; id: EntityId; cause: string }

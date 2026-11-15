@@ -19,11 +19,17 @@ export type Command =
   | { type: 'placeBlueprint'; def: string; tx: number; ty: number; rot: 0 | 1 | 2 | 3 }
   | { type: 'cancelStructure'; id: EntityId }
   | { type: 'foundOutpost'; cell: CellId }
+  // --- added by 06 ---
+  | { type: 'setStructurePriority'; id: EntityId; priority: 0 | 1 | 2 }
+  | { type: 'upgradeOutpost'; id: EntityId }
+  /** Post a survivor to an outpost (null: call them back to the base). */
+  | { type: 'assignGarrison'; survivor: EntityId; outpost: EntityId | null }
   // --- research (07) ---
   | { type: 'startResearch'; id: string }
   | { type: 'setAllocation'; allocation: Record<TechCategory, number> }
   // --- world / tactical (02/03/04) ---
-  | { type: 'travel'; to: CellId }
+  /** `fast` (06): fast travel — both ends must be the base or an outpost. */
+  | { type: 'travel'; to: CellId; fast?: boolean }
   | { type: 'resupply' };
 
 export type CommandType = Command['type'];

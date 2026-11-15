@@ -101,8 +101,6 @@ export const COLONY = {
     /** Farmers one plot keeps fully busy; the others on it work at crowdedFactor. */
     workersPerPlot: 2,
     crowdedFactor: 0.3,
-    /** Plots without any farm building: the provisional field beside the headquarters. */
-    provisionalPlots: 1,
     /** Day of the year (0..364) on which the outbreak began; the game starts 90 days later, in early summer. */
     outbreakDayOfYear: 60,
     /** Yield factor per month, January first (winter 0.4). */
@@ -119,15 +117,8 @@ export const COLONY = {
   },
   /** Research points wait here for 07 (takeResearchPoints); construction points for 06. Caps keep them bounded. */
   buffers: { research: 600, build: 60, medical: 24 },
-  /** Work needed per blueprint until 06 supplies real numbers from data/buildings.ts. */
+  /** Work per blueprint for distributeBuildWork() callers that pass none (the game uses data/buildings.ts through sim/build/construction.ts). */
   defaultBuildWork: 40,
-  /** Structure ids (data/buildings.ts, 06) that the colony reads. */
-  facilities: { farm: 'farm', workshop: 'workshop', clinic: 'clinic', house: 'house' },
-  housing: {
-    /** People the bare headquarters shelters; each house adds bedsPerHouse. */
-    hqBeds: 4,
-    bedsPerHouse: 4,
-  },
 
   // --- §4.3 morale ---
   morale: {
@@ -218,22 +209,17 @@ export const COLONY = {
   /** The player searching a building: scavenging points per search point. */
   search: { points: 14, spread: [0.5, 1.5] },
 
-  // --- base layout until 06 builds things (metres from map.spawn.home; x east, z south) ---
+  // --- where people stand inside the base (metres from the centre of the headquarters; x east, z south).
+  // Work and sleep happen in the real buildings (06); these are the spots used while a building is missing.
   camp: {
-    hq: [0, -9],
-    fire: [7, 7],
-    beds: { origin: [-26, -14], cols: 6, dx: 2.4, dz: 3 },
-    field: { centre: [32, 0], half: 8 },
-    bench: [-6, 14],
-    desk: [11, -10],
-    clinic: [-11, 16],
-    depot: [18, 18],
-    yard: [-2, 26],
-    /** Guards stand on a ring of `posts` posts. Foragers roam between the two radii. */
-    guardRadius: 46,
-    posts: 8,
+    fire: [-6, 13],
+    bench: [-10, 9.5],
+    desk: [5, 8.5],
+    clinic: [10, 10],
+    yard: [0, 22],
+    /** Foragers roam between the two radii. */
     forage: [60, 105],
-    /** New arrivals walk in from here. */
+    /** New arrivals walk in from here (metres from the map centre). */
     gate: [20, 70],
     walkSpeed: 1.5,
     /** Minutes after which a worker picks another spot inside the work site. */

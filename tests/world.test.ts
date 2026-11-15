@@ -223,7 +223,10 @@ describe('travel', () => {
     expect(route.path.length).toBeGreaterThan(35);
     expect(route.minutes).toBeGreaterThanOrEqual((route.path.length - 1) * 180);
     for (const c of route.path) expect(grid.cells[c]).toBeTruthy();
-    expect(findRoute(grid, tokyo, sapporo)).toBeNull(); // no land bridge to Hokkaido
+    // Hokkaido is reached through the Seikan tunnel (06); islands without a crossing stay out of reach.
+    const north = findRoute(grid, tokyo, sapporo)!;
+    expect(north.minutes).toBeGreaterThan((north.path.length - 2) * 180 + 400);
+    expect(findRoute(grid, tokyo, grid.places.find((p) => p.name === '対馬')!.cell)).toBeNull();
     const mountain = grid.landIds.find((id) => grid.cells[id]!.land === 'mountain' && grid.cells[id - 1]?.land === 'forest')!;
     expect(legMinutes(grid, mountain - 1, mountain)).toBe(270);
     expect(legMinutes(grid, mountain, mountain - 1)).toBe(180);
@@ -253,7 +256,7 @@ describe('travel', () => {
     const { state, sim } = setup();
     const rejected: string[] = [];
     sim.events.on('commandRejected', (e) => rejected.push(e.reason));
-    const sado = grid.places.find((p) => p.name === '佐渡')!.cell;
+    const sado = grid.places.find((p) => p.name === '対馬')!.cell; // no crossing leads to Tsushima
     sim.dispatch({ type: 'travel', to: sado });
     sim.dispatch({ type: 'travel', to: 0 });
     run(sim, state, 1);

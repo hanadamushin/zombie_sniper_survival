@@ -19,7 +19,8 @@ import { updateSurvivorMotion } from './ai.ts';
 import { buyFromVillage, craftMinute, marketHour, payWages, serveMeal } from './economy.ts';
 import { depositCarried, resupply, updateEncounters } from './encounters.ts';
 import { expeditionsMinute, sendExpedition } from './expeditions.ts';
-import { distributeBuildWork, workMinute } from './jobs.ts';
+import { construct } from '../build/construction.ts';
+import { workMinute } from './jobs.ts';
 import { dailyMorale, healthHour, infectionMinute, unpaidMorale, updatePlayerDeath } from './morale.ts';
 import { ctxNow, ledgerOf, logEntry, type ColonyCtx } from './stock.ts';
 import { dismiss, expireCandidates, hire } from './survivors.ts';
@@ -43,7 +44,7 @@ export function colonyMinute(c: ColonyCtx): void {
   if (m % 60 === 0) {
     healthHour(c);
     marketHour(c);
-    if (colony.work.build > 0) colony.work.build = distributeBuildWork(state, colony.work.build);
+    if (colony.work.build > 0) colony.work.build = construct(c, colony.work.build); // 06: materials, work, repairs, moats
   }
   if (m === T.breakfast || m === T.lunch || m === T.dinner) serveMeal(c);
   if (m === T.payday) {

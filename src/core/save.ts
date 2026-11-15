@@ -88,6 +88,11 @@ const MIGRATIONS: Record<number, Migration> = {
     colony.foodPrice = initialColony().foodPrice;
     return { ...old, colony };
   },
+  // 4 -> 5 (06): raids and outposts. Older bases get their headquarters and first field when the build system next runs.
+  4: (old) => {
+    const build = { raid: null, pendingEars: 0, lastRaid: null, ...(old.build as Record<string, unknown>) };
+    return { ...old, build };
+  },
 };
 
 export class SaveError extends Error {}

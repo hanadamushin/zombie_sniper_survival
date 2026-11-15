@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import type { GridFile } from '../src/sim/world/grid.ts';
 import { CITIES, PREF_NAMES, REGION_NAMES, regionOfPref } from './data/cities.ts';
 import { HUBS, HUB_LINKS } from './data/hubs.ts';
+import { SEA_LINKS } from './data/sealinks.ts';
 import { LAKES, RIDGES } from './data/terrain.ts';
 import { countryRings } from './lib/topo.ts';
 
@@ -338,6 +339,18 @@ export function buildGrid(): GridBuild {
     links.push(ia < ib ? [ia, ib] : [ib, ia]);
   }
 
+  // ---- sea links (06): each end snapped to the nearest land cell ----
+  const nearestLand = (lat: number, lon: number): number => {
+    let best = -1;
+    let bestD = Infinity;
+    for (const i of landIds) {
+      const d = (((i % W) + 0.5) * CELL_KM - xKm(lon)) ** 2 + ((Math.floor(i / W) + 0.5) * CELL_KM - yKm(lat)) ** 2;
+      if (d < bestD) { bestD = d; best = i; }
+    }
+    return best;
+  };
+  const sea: GridFile['sea'] = SEA_LINKS.map((l) => [l.name, nearestLand(l.a[0], l.a[1]), nearestLand(l.b[0], l.b[1]), l.minutes]);
+
   const file: GridFile = {
     v: 1,
     w: W,
@@ -354,6 +367,7 @@ export function buildGrid(): GridBuild {
     prefRegion: PREF_NAMES.map((_, p) => regionOfPref(p)),
     hubs,
     links,
+    sea,
     places: [...placeOf.entries()].sort((a, b) => a[0] - b[0]).map(([cell, p]) => [p.name, cell]),
   };
   return { file, elev };

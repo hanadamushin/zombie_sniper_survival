@@ -13,6 +13,7 @@ import { DEATH_HOLD } from '../tactical/combat.ts';
 import { placePlayer } from '../tactical/player.ts';
 import { weaponOf } from '../tactical/weapon.ts';
 import { clearZombiesNear } from '../tactical/zombies.ts';
+import { moraleBonus } from '../build/structures.ts';
 import { housingBeds } from './jobs.ts';
 import { ctxNow, ledgerOf, logEntry, moveEars, moveStock, type ColonyCtx } from './stock.ts';
 import { isAlive, isHome, returnHidden } from './survivors.ts';
@@ -48,6 +49,7 @@ export function unpaidMorale(c: ColonyCtx): void {
 export function dailyMorale(c: ColonyCtx): void {
   const colony = c.state.colony;
   const beds = housingBeds(c.state);
+  const comforts = moraleBonus(c.state); // canteen, tavern, monument... (06)
   let bed = 0;
   let homeless = 0;
   for (const s of [...colony.survivors]) {
@@ -64,7 +66,7 @@ export function dailyMorale(c: ColonyCtx): void {
         changeMorale(s, M.homeless);
         homeless++;
       }
-      changeMorale(s, traitOf(s.trait).moralePerDay ?? 0);
+      changeMorale(s, (traitOf(s.trait).moralePerDay ?? 0) + comforts);
     }
     s.meals = 0;
     s.missed = 0;

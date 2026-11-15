@@ -7,7 +7,7 @@ import { COLONY } from '../data/colony.ts';
 import { TACTICAL } from '../data/tactical.ts';
 import { seedRng, type RngState } from './rng.ts';
 
-export const STATE_VERSION = 4;
+export const STATE_VERSION = 5;
 
 export type CellId = number; // gy * gridW + gx
 export type EntityId = number; // allocated from state.nextId (see allocId)
@@ -65,9 +65,11 @@ export interface WorldState {
   homeCell: CellId | null;
   outposts: Outpost[];
   expeditions: Expedition[];
-  travel: { from: CellId; to: CellId; path: CellId[]; progress: number } | null;
+  /** `fast` (06): between the base and outposts, one cell per game hour. */
+  travel: { from: CellId; to: CellId; path: CellId[]; progress: number; fast?: boolean } | null;
   hordeMeter: number;
-  pendingHorde: { arrivesDay: number; arrivesMinute: number; size: number; dir: number } | null;
+  /** A horde on its way (06). `dir` is the bearing it comes from (radians, 0 = north, clockwise); `warned` once the colony knows. */
+  pendingHorde: { arrivesDay: number; arrivesMinute: number; size: number; dir: number; warned?: boolean } | null;
 }
 
 // Static per-cell data is NOT part of GameState. It is loaded from public/data/grid.json
@@ -111,6 +113,15 @@ export interface StaticGrid {
   regionNames: string[];
   /** Named places (largest town of a cell) for map labels. */
   places: { name: string; cell: CellId }[];
+  /** Fixed crossings between landmasses (tunnels, bridges, ferries; 06). People use them, the dead do not. */
+  seaLinks?: SeaLink[];
+}
+export interface SeaLink {
+  name: string;
+  a: CellId;
+  b: CellId;
+  /** Game minutes to cross. */
+  minutes: number;
 }
 
 export interface PlayerState {
@@ -239,6 +250,10 @@ export interface Zombie {
   walk: number;
   /** Personal speed factor. */
   pace: number;
+  /** Raider (06): heads for the base along the flow field instead of wandering. */
+  raid?: boolean;
+  /** Seconds it has been pressing into a moat, and the structure it is working on. */
+  moatT?: number;
   /** Firing-range target: 1 stands still, 2 paces sideways; never attacks. `spot` is its lane. */
   dummy?: number;
   spot?: number;
@@ -352,6 +367,38 @@ export interface Survivor {
 export interface BuildState {
   structures: Structure[]; // walls, moats, gates, towers, buildings
   gridRev: number; // +1 whenever the walkability grid changes (flow-field recompute signal)
+  // --- added by 06 (save version 5) ---
+  /** The attack on the base that is under way, if any. */
+  raid: RaidState | null;
+  /** Zombies put down near the walls whose ears are picked up in the morning (spec §4.5). */
+  pendingEars: number;
+  /** What the last attack did (shown when the player comes back). */
+  lastRaid: RaidReport | null;
+}
+/** An attack on the home base (06). While the player is there the raiders are real zombies; otherwise it is resolved in numbers. */
+export interface RaidState {
+  kind: 'night' | 'horde';
+  /** Bearing the raiders come from (radians, 0 = north, clockwise). */
+  dir: number;
+  size: number;
+  /** Raiders that have not entered the map yet / that have been put down. */
+  toSpawn: number;
+  killed: number;
+  /** Absolute game minute it began, and seconds until the next wave. */
+  startedAbs: number;
+  waveT: number;
+}
+export interface RaidReport {
+  kind: 'night' | 'horde';
+  day: number;
+  minute: number;
+  size: number;
+  killed: number;
+  wallsLost: number;
+  dead: number;
+  /** Resolved in numbers because the player was away. */
+  away: boolean;
+  repelled: boolean;
 }
 export interface Structure {
   id: EntityId;
@@ -365,6 +412,11 @@ export interface Structure {
   corpsesInMoat?: number;
   level: number;
   priority: 0 | 1 | 2;
+  // --- added by 06 ---
+  /** Destroyed: rubble that stays until this absolute game minute (hp is 0, nothing collides). */
+  ruinUntil?: number;
+  /** Fractional wear that has not yet been reported as damage (keeps events rare). */
+  wear?: number;
 }
 
 export interface ResearchState {
@@ -382,6 +434,10 @@ export interface Outpost {
   ammo: number;
   garrison: EntityId[];
   defense: number;
+  // --- added by 06 ---
+  foundedDay?: number;
+  /** Ammunition on its way from the base: arrives on `day`. */
+  convoy?: { day: number; ammo: number } | null;
 }
 export interface Expedition {
   id: EntityId;
@@ -511,7 +567,7 @@ export function createInitialState(seed: number, difficulty: Difficulty): GameSt
     },
     tactical: null,
     colony: initialColony(),
-    build: { structures: [], gridRev: 0 },
+    build: { structures: [], gridRev: 0, raid: null, pendingEars: 0, lastRaid: null },
     research: {
       era: 0,
       done: [],

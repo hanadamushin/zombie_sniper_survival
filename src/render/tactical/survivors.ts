@@ -1,14 +1,14 @@
-// Survivors inside the base, people in hiding at search points, and the provisional camp.
+// Survivors inside the base and people in hiding at search points (the base itself: structures.ts).
 // Same technique as the zombies (render/tactical/zombies.ts): instanced boxes, one draw call for
-// all figures, one for the blob shadows, one for the camp props. To keep anyone from being shot
+// all figures, one for the blob shadows. To keep anyone from being shot
 // by mistake they look nothing like the dead: upright, brisk, in clean saturated work clothes,
 // each job with its own colour and something to carry.
 
 import * as THREE from 'three';
 import type { GameState, JobId, Survivor } from '../../core/types.ts';
-import { COLONY } from '../../data/colony.ts';
 import { RENDER } from '../../data/render.ts';
 import { mapOf } from '../../sim/tactical/area.ts';
+import { standHeight } from '../../sim/build/defense.ts';
 import { heightAt } from '../../sim/tactical/collision.ts';
 import type { FrameInfo, RenderContext, SubRenderer } from '../index.ts';
 
@@ -44,14 +44,8 @@ export function createSurvivorRenderer(): SubRenderer {
   blobs.frustumCulled = false;
   blobs.count = 0;
   blobs.renderOrder = 2;
-  const camp = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshLambertMaterial(), 96);
-  camp.frustumCulled = false;
-  camp.count = 0;
-  camp.setColorAt(0, color.set(0xffffff));
-
   let n = 0;
   let clock = 0;
-  let campKey = '';
   const looks = new Map<number, Look>();
 
   /** parent * T(p) * Rx(rx) * T(0, cy, cz) * S(s) */
@@ -127,46 +121,6 @@ export function createSurvivorRenderer(): SubRenderer {
     void H;
   };
 
-  let campN = 0;
-  const box = (x: number, y: number, z: number, sx: number, sy: number, sz: number, hex: number, ry = 0): void => {
-    a.makeRotationY(ry);
-    b.makeScale(sx, sy, sz);
-    out.multiplyMatrices(a, b).setPosition(x, y + sy / 2, z);
-    camp.setMatrixAt(campN, out);
-    camp.setColorAt(campN, color.set(hex));
-    campN++;
-  };
-
-  /** The provisional camp around the home position (purely visual; 06 replaces it with real buildings). */
-  const buildCamp = (hx: number, hz: number, y: number, beds: number): void => {
-    const C = COLONY.camp;
-    const K = R.camp;
-    campN = 0;
-    box(hx + C.hq[0], y, hz + C.hq[1], 8, 2.6, 5, K.tent); // headquarters tent
-    box(hx + C.hq[0], y + 2.6, hz + C.hq[1], 8.4, 0.5, 2.6, K.tentTrim);
-    box(hx + C.hq[0] + 4.6, y, hz + C.hq[1] + 3.2, 0.12, 5, 0.12, K.wood); // flag pole
-    box(hx + C.hq[0] + 5.1, y + 4.2, hz + C.hq[1] + 3.2, 1, 0.6, 0.05, K.cross);
-    box(hx + C.fire[0], y, hz + C.fire[1], 1.1, 0.25, 1.1, K.stone); // fire place
-    box(hx + C.fire[0], y + 0.25, hz + C.fire[1], 0.5, 0.45, 0.5, K.fire);
-    const f = C.field;
-    box(hx + f.centre[0], y - 0.02, hz + f.centre[1], f.half * 2, 0.08, f.half * 2, K.soil); // field
-    for (let i = 0; i < 7; i++) box(hx + f.centre[0], y + 0.06, hz + f.centre[1] - f.half + 1.3 + i * 2.2, f.half * 2 - 1, 0.28, 0.5, K.crop);
-    box(hx + C.bench[0], y, hz + C.bench[1], 2.6, 0.85, 1, K.wood); // work bench
-    box(hx + C.bench[0] + 0.6, y + 0.85, hz + C.bench[1], 0.5, 0.25, 0.4, K.stone);
-    box(hx + C.desk[0], y, hz + C.desk[1], 2, 0.75, 0.9, K.wood); // desk
-    box(hx + C.desk[0], y + 0.75, hz + C.desk[1], 0.9, 0.5, 0.06, K.cloth);
-    box(hx + C.clinic[0], y, hz + C.clinic[1], 5, 2.1, 4, 0xe6e6e0); // aid tent
-    box(hx + C.clinic[0], y + 1.1, hz + C.clinic[1] - 2.02, 0.9, 0.3, 0.04, K.cross);
-    box(hx + C.clinic[0], y + 0.8, hz + C.clinic[1] - 2.02, 0.3, 0.9, 0.04, K.cross);
-    for (let i = 0; i < 5; i++) box(hx + C.depot[0] + (i % 3) * 1.1, y + (i > 2 ? 0.8 : 0), hz + C.depot[1] + (i > 2 ? 0.3 : 0), 1, 0.8, 1, K.crate, i * 0.2); // depot crates
-    for (let i = 0; i < Math.min(60, Math.max(4, beds)); i++) {
-      box(hx + C.beds.origin[0] + (i % C.beds.cols) * C.beds.dx, y, hz + C.beds.origin[1] + Math.floor(i / C.beds.cols) * C.beds.dz, 0.8, 0.08, 2, K.cloth);
-    }
-    camp.count = campN;
-    camp.instanceMatrix.needsUpdate = true;
-    if (camp.instanceColor) camp.instanceColor.needsUpdate = true;
-  };
-
   const drawSurvivor = (s: Survivor, y: number, dt: number): void => {
     let look = looks.get(s.id);
     if (!look) looks.set(s.id, (look = { x: s.pos[0], z: s.pos[1], yaw: (s.id * 2.4) % 6.28, walk: 0 }));
@@ -187,11 +141,10 @@ export function createSurvivorRenderer(): SubRenderer {
   return {
     id: 'survivors',
     init(ctx: RenderContext) {
-      ctx.scene.add(mesh, blobs, camp);
+      ctx.scene.add(mesh, blobs);
     },
     reset() {
       looks.clear();
-      campKey = '';
     },
     update(state: GameState, frame: FrameInfo) {
       const map = mapOf(state);
@@ -202,8 +155,6 @@ export function createSurvivorRenderer(): SubRenderer {
       if (!map || !t || state.flags.range) {
         mesh.count = 0;
         blobs.count = 0;
-        camp.count = 0;
-        campKey = '';
         return;
       }
       const blob = (x: number, y: number, z: number, lying: boolean): void => {
@@ -212,21 +163,13 @@ export function createSurvivorRenderer(): SubRenderer {
         blobs.setMatrixAt(nb++, b);
       };
       if (map.params.isHome) {
-        const [hx, hz] = map.spawn.home;
-        const key = `${map.params.mapSeed}:${Math.ceil(state.colony.survivors.length / 6)}`;
-        if (key !== campKey) {
-          campKey = key;
-          buildCamp(hx, hz, heightAt(map, hx, hz), Math.ceil(state.colony.survivors.length / 6) * 6);
-        }
         for (const s of state.colony.survivors) {
           if (s.location.kind !== 'home' || s.status === 'dead' || nb >= R.max) continue;
-          const y = heightAt(map, s.pos[0], s.pos[1]);
+          // Guards who have reached their tower stand on its deck (06).
+          const y = s.task?.target != null && s.task.kind === 'work' ? standHeight(state, map, s.pos[0], s.pos[1]) : heightAt(map, s.pos[0], s.pos[1]);
           drawSurvivor(s, y, frame.realDt);
           blob(s.pos[0], y, s.pos[1], s.task?.kind === 'sleep' || s.task?.kind === 'rest');
         }
-      } else if (campKey) {
-        camp.count = 0;
-        campKey = '';
       }
       for (const h of t.hideouts ?? []) {
         if (h.met || nb >= R.max) continue;
@@ -242,7 +185,7 @@ export function createSurvivorRenderer(): SubRenderer {
       blobs.instanceMatrix.needsUpdate = true;
     },
     dispose() {
-      for (const m of [mesh, blobs, camp]) {
+      for (const m of [mesh, blobs]) {
         m.removeFromParent();
         m.geometry.dispose();
         (m.material as THREE.Material).dispose();

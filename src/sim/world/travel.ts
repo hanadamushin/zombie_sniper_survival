@@ -15,15 +15,22 @@ export interface Route {
 }
 
 /** Game minutes to walk from `from` into the adjacent cell `to`. */
-export function legMinutes(grid: StaticGrid, from: CellId, to: CellId): number {
+export function legMinutes(grid: StaticGrid, from: CellId, to: CellId, fast = false): number {
   const w = grid.gridW;
+  const f = fast ? T.fastMinutesPerCell / T.minutesPerCell : 1;
+  if (Math.abs((from % w) - (to % w)) > 1 || Math.abs(Math.floor(from / w) - Math.floor(to / w)) > 1) {
+    // Not neighbours: a sea crossing (06).
+    const link = grid.seaLinks?.find((l) => (l.a === from && l.b === to) || (l.a === to && l.b === from));
+    return (link?.minutes ?? T.minutesPerCell * 4) * f;
+  }
+  if (fast) return T.fastMinutesPerCell;
   const diagonal = from % w !== to % w && Math.floor(from / w) !== Math.floor(to / w);
   const mountain = grid.cells[to]?.land === 'mountain';
   return T.minutesPerCell * (diagonal ? T.diagonalFactor : 1) * (mountain ? T.mountainFactor : 1);
 }
 
-/** Cheapest route over land, or null when the destination is not connected by land. */
-export function findRoute(grid: StaticGrid, from: CellId, to: CellId): Route | null {
+/** Cheapest route over land and the fixed sea crossings, or null when the destination cannot be reached. `fast`: between outposts (06). */
+export function findRoute(grid: StaticGrid, from: CellId, to: CellId, fast = false): Route | null {
   if (!grid.cells[from] || !grid.cells[to]) return null;
   if (from === to) return { path: [from], minutes: 0 };
   const { gridW: w, gridH: h } = grid;
@@ -69,7 +76,10 @@ export function findRoute(grid: StaticGrid, from: CellId, to: CellId): Route | n
   };
   const tx = to % w;
   const ty = Math.floor(to / w);
-  const heuristic = (cell: number): number => Math.max(Math.abs((cell % w) - tx), Math.abs(Math.floor(cell / w) - ty)) * T.minutesPerCell;
+  // Sea crossings jump across the map, so the straight-line estimate is only admissible without them.
+  const links = grid.seaLinks ?? [];
+  const perCell = fast ? T.fastMinutesPerCell : T.minutesPerCell;
+  const heuristic = (cell: number): number => (links.length > 0 ? 0 : Math.max(Math.abs((cell % w) - tx), Math.abs(Math.floor(cell / w) - ty)) * perCell);
 
   cost[from] = 0;
   push(heuristic(from), from);
@@ -87,12 +97,22 @@ export function findRoute(grid: StaticGrid, from: CellId, to: CellId): Route | n
         if (x < 0 || y < 0 || x >= w || y >= h) continue;
         const next = y * w + x;
         if (!grid.cells[next]) continue;
-        const c = base + legMinutes(grid, cell, next);
+        const c = base + legMinutes(grid, cell, next, fast);
         if (c < cost[next]!) {
           cost[next] = c;
           prev[next] = cell;
           push(c + heuristic(next), next);
         }
+      }
+    }
+    for (const l of links) {
+      const next = l.a === cell ? l.b : l.b === cell ? l.a : -1;
+      if (next < 0) continue;
+      const c = base + legMinutes(grid, cell, next, fast);
+      if (c < cost[next]!) {
+        cost[next] = c;
+        prev[next] = cell;
+        push(c + heuristic(next), next);
       }
     }
   }
@@ -123,7 +143,7 @@ export function advanceTravel(state: GameState, grid: StaticGrid): { entered: Ce
   let budget = 1; // minutes
   while (budget > 0 && travel.progress < last) {
     const leg = Math.floor(travel.progress);
-    const minutes = legMinutes(grid, travel.path[leg]!, travel.path[leg + 1]!);
+    const minutes = legMinutes(grid, travel.path[leg]!, travel.path[leg + 1]!, travel.fast === true);
     const remaining = (leg + 1 - travel.progress) * minutes;
     if (remaining <= budget + 1e-9) {
       budget -= remaining;
@@ -149,7 +169,7 @@ export function travelMinutesLeft(state: GameState, grid: StaticGrid): number {
   let total = 0;
   for (let leg = Math.floor(travel.progress); leg < travel.path.length - 1; leg++) {
     const frac = leg === Math.floor(travel.progress) ? 1 - (travel.progress - leg) : 1;
-    total += frac * legMinutes(grid, travel.path[leg]!, travel.path[leg + 1]!);
+    total += frac * legMinutes(grid, travel.path[leg]!, travel.path[leg + 1]!, travel.fast === true);
   }
   return total;
 }

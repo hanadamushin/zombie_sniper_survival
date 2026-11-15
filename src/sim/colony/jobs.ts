@@ -11,6 +11,7 @@
 import type { GameState, JobId, ResourceId, Structure, Survivor } from '../../core/types.ts';
 import { COLONY, LOOT_TABLE } from '../../data/colony.ts';
 import { traitOf } from '../../data/traits.ts';
+import { bedsTotal, jobFacility, plotInfo } from '../build/structures.ts';
 import { moveStock, type ColonyCtx } from './stock.ts';
 import { isFit } from './survivors.ts';
 
@@ -37,10 +38,11 @@ export function builtCount(state: GameState, def: string): number {
   return n;
 }
 
-/** Equipment factor of a job: hand work without a workshop, everything else 1 until 06 adds buildings. */
+/** Equipment factor of a job: the best building for it (data/buildings.ts `job`); crafting without a workshop is hand work. */
 export function facilityFactor(state: GameState, job: JobId): number {
-  if (job === 'crafting') return builtCount(state, COLONY.facilities.workshop) > 0 ? 1 : COLONY.craft.handFactor;
-  return 1;
+  const f = jobFacility(state, job);
+  if (job === 'crafting') return f ?? COLONY.craft.handFactor;
+  return f ?? 1;
 }
 
 /** Output per hour of work (spec §4.2), without the facility factor. */
@@ -79,12 +81,14 @@ export function activityAt(s: Survivor, minute: number): Activity {
 
 // --- interfaces for 06 / 07 ---------------------------------------------------------------
 
+/** Farm plots (weighted by yield): the fields, ranches and greenhouses that stand (06). */
 export function farmPlots(state: GameState): number {
-  return COLONY.farm.provisionalPlots + builtCount(state, COLONY.facilities.farm);
+  return plotInfo(state).plots;
 }
 
+/** Beds: the headquarters and every finished dwelling (06). */
 export function housingBeds(state: GameState): number {
-  return COLONY.housing.hqBeds + COLONY.housing.bedsPerHouse * builtCount(state, COLONY.facilities.house);
+  return bedsTotal(state);
 }
 
 /** Survivors assigned to defence who are at home and fit; `onDuty` during their working hours. */
@@ -159,8 +163,11 @@ export function workMinute(c: ColonyCtx): void {
     // The best farmers get the plots; the rest crowd in at a fraction of their output.
     farmers.sort((a, b) => b.out - a.out || a.s.id - b.s.id);
     const F = COLONY.farm;
-    const full = farmPlots(state) * F.workersPerPlot;
-    const perPoint = (F.foodPerPlotDay / F.refPoints) * seasonFactor(c.day);
+    const plots = plotInfo(state);
+    const full = Math.round(plots.plots * F.workersPerPlot);
+    // Greenhouses do not care about the season.
+    const season = seasonFactor(c.day);
+    const perPoint = (F.foodPerPlotDay / F.refPoints) * (season + (1 - season) * plots.allSeason);
     let food = 0;
     for (let i = 0; i < farmers.length; i++) food += farmers[i]!.out * (i < full ? 1 : F.crowdedFactor) * perPoint;
     colony.market.food += food;

@@ -27,6 +27,8 @@ export interface GridFile {
   prefRegion: number[];
   hubs: { name: string; cell: number; intl?: string }[];
   links: [number, number][];
+  /** Sea crossings (06): [name, cell a, cell b, minutes]. */
+  sea?: [string, number, number, number][];
   places: [string, number][];
 }
 
@@ -74,6 +76,7 @@ export function parseGrid(file: GridFile): StaticGrid {
     prefNames: file.prefNames,
     regionNames: file.regionNames,
     places: file.places.map(([name, cell]) => ({ name, cell })),
+    seaLinks: (file.sea ?? []).map(([name, a, b, minutes]) => ({ name, a, b, minutes })),
   };
 }
 

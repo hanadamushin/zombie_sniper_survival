@@ -121,6 +121,8 @@ export const BALANCE = {
     },
     travel: {
       minutesPerCell: 180,
+      /** Fast travel between the base and outposts (spec §8): one cell = one game hour. */
+      fastMinutesPerCell: 60,
       mountainFactor: 1.5,
       diagonalFactor: 1.4,
       /** Game-time multiplier while travelling (the loop fast-forwards). */

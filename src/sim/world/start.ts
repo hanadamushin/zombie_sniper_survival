@@ -1,5 +1,6 @@
 // Start location candidates (docs/02_systems_spec.md §2.4) and placing the player on the map.
 
+import { foundBase } from '../build/blueprints.ts';
 import type { RngState } from '../../core/rng.ts';
 import { rand } from '../../core/rng.ts';
 import type { CellId, GameState, Land, StaticGrid } from '../../core/types.ts';
@@ -111,4 +112,5 @@ export function beginAt(state: GameState, grid: StaticGrid, cell: CellId): void 
   state.world.homeCell = cell;
   state.world.travel = null;
   reveal(state, grid, cell, R.intelRadius);
+  foundBase(state); // headquarters and the first field (06)
 }
