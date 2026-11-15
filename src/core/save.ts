@@ -48,6 +48,10 @@ export function packState(state: GameState): GameState {
     mode: state.mode === 'menu' ? 'command' : state.mode,
     // 04: after a load the zombies are placed again from the cell's Z (populated: false); bodies and their ears are gone.
     tactical: state.tactical ? { ...state.tactical, zombies: [], corpses: [], bullets: [], populated: false } : null,
+    // 06: raiders on the map are not saved either; they come in again with the next waves.
+    build: state.build.raid
+      ? { ...state.build, raid: { ...state.build.raid, toSpawn: state.build.raid.toSpawn + (state.tactical?.zombies ?? []).reduce((n, z) => n + (z.raid && z.state !== 'down' ? 1 : 0), 0) } }
+      : state.build,
   };
 }
 

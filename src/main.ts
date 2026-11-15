@@ -22,6 +22,8 @@ import { arrivalPos, generateSurvivor } from './sim/colony/survivors.ts';
 import { supportAt } from './sim/tactical/collision.ts';
 import { initWorld } from './sim/world/scenario.ts';
 import { beginAt, findStartCandidates } from './sim/world/start.ts';
+import { commandView } from './core/view.ts';
+import { buildNow } from './sim/build/blueprints.ts';
 import { createUi } from './ui/index.tsx';
 import { loadGrid, loadScenario } from './worldData.ts';
 
@@ -263,6 +265,11 @@ interface DebugApi {
   /** Colony shortcuts (05): put n generated survivors on the roll with a job; add to the stores. Returns the ids. */
   addSurvivors(n: number, job?: JobId): number[];
   give(res: ResourceId, amount: number): void;
+  /** Building shortcuts (06): put a finished structure down; schedule a horde of `size` from bearing `dir` (radians) arriving now. */
+  build(def: string, tx: number, ty: number, rot?: number): number;
+  horde(size: number, dir?: number): void;
+  /** Overhead camera of the command layer (core/view.ts). */
+  readonly view: typeof commandView;
   /** An empty input frame, for ticking the sim by hand. */
   readonly noInput: InputFrame;
 }
@@ -348,6 +355,15 @@ window.__game = {
       }
       return ids;
     },
+    build(def, tx, ty, rot = 0) {
+      return state ? buildNow(state, def, tx, ty, rot).id : -1;
+    },
+    horde(size, dir = 0) {
+      if (!state || state.world.homeCell === null) return;
+      state.world.cells.Z[state.world.homeCell] = Math.max(state.world.cells.Z[state.world.homeCell] ?? 0, size + 20);
+      state.world.pendingHorde = { arrivesDay: state.time.day, arrivesMinute: state.time.minute, size, dir, warned: true };
+    },
+    view: commandView,
     noInput: emptyInputFrame(),
     give(res, amount) {
       if (state) state.colony.stock[res] += amount;

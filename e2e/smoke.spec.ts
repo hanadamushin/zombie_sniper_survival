@@ -386,6 +386,8 @@ test('colony: meet someone, hire, assign jobs, days pass — food and materials 
     g.debug.addSurvivors(1, 'crafting');
     const s = g.state!;
     s.colony.stock.ears += 300;
+    // (06) Nobody is on watch in this test: keep the nightly visitors away so that the two days are about the economy.
+    s.world.cells.Z[s.world.homeCell!] = 0;
     for (let i = 0; i < 2 * 1440 * 4; i++) g.sim.tick(s, 0.25, { ...g.debug.noInput });
     return { survivors: s.colony.survivors.length };
   });

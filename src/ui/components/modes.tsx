@@ -16,7 +16,9 @@ import { t, type TextKey } from '../i18n/ja.ts';
 import type { UiActions } from '../store.ts';
 import { WorldMap } from '../world/WorldMap.tsx';
 import { slotLabel } from './TitleScreen.tsx';
+import { BuildGround, NO_TOOL, type BuildTool } from '../command/build.tsx';
 import { CommandPanel } from '../command/CommandPanel.tsx';
+import { outpostAt } from '../../sim/world/outposts.ts';
 import { logText } from '../command/format.ts';
 import { interactionAt, nearestHideout } from '../../sim/colony/encounters.ts';
 import { playerAtHome } from '../../sim/colony/morale.ts';
@@ -70,7 +72,9 @@ export function TacticalLayer({ state, grid }: ModeProps) {
   const windSpeed = Math.hypot(wind[0], wind[1]);
   const act = dead ? null : interactionAt(state);
   const someone = dead || act ? null : nearestHideout(state);
-  const canResupply = !dead && playerAtHome(state) && state.colony.stock.ammo >= 1 && (p.inv.ammo ?? 0) < BALANCE.player.maxAmmo;
+  const post = playerAtHome(state) || state.world.travel ? undefined : outpostAt(state, p.cell);
+  const supply = playerAtHome(state) ? state.colony.stock.ammo : (post?.ammo ?? 0);
+  const canResupply = !dead && supply >= 1 && (p.inv.ammo ?? 0) < BALANCE.player.maxAmmo;
   const busy = w.reloadT > 0 ? t('hud.reloading') : w.boltT > 0 ? t('hud.bolt') : w.mag === 0 ? t((p.inv.ammo ?? 0) > 0 ? 'hud.empty' : 'hud.noAmmo') : '';
   return (
     <div class={`mode-layer tactical${scoped ? ' scoped' : ''}`} data-testid="mode-tactical">
@@ -127,7 +131,7 @@ export function TacticalLayer({ state, grid }: ModeProps) {
         <span data-testid="hud-zoom">{t('hud.zoom', { x: w.zoom.toFixed(1) })}</span>
         {windSpeed > 0.05 && <span>{t('hud.wind', { v: windSpeed.toFixed(1), deg: Math.round(headingDeg(Math.atan2(-wind[0], -wind[1]))) })}</span>}
         <span class="ears" data-testid="hud-ears" data-ears={p.inv.ears ?? 0}>{t('hud.ears', { n: p.inv.ears ?? 0 })}</span>
-        {canResupply && <span class="resupply" data-testid="hud-resupply">{t('hud.resupply', { n: Math.floor(state.colony.stock.ammo) })}</span>}
+        {canResupply && <span class="resupply" data-testid="hud-resupply">{t('hud.resupply', { n: Math.floor(supply) })}</span>}
         <span class="mag-size sr-only">{def.magSize}</span>
       </div>
       {dead && (
@@ -150,9 +154,12 @@ export function AreaLoading() {
 }
 
 export function CommandLayer(props: ModeProps) {
+  // The build tool is shared by the palette in the panel and the sheet over the 3D view (06).
+  const [tool, setTool] = useState<BuildTool>(NO_TOOL);
   return (
     <div class="mode-layer command" data-testid="mode-command">
-      <CommandPanel {...props} />
+      <BuildGround state={props.state} actions={props.actions} tool={tool} setTool={setTool} />
+      <CommandPanel {...props} tool={tool} setTool={setTool} />
     </div>
   );
 }
@@ -163,7 +170,7 @@ export function DefeatOverlay({ state, actions }: ModeProps) {
     <div class="mode-layer menu defeat" data-testid="defeat">
       <div class="panel menu-panel">
         <h2>{t('hud.defeat')}</h2>
-        <p>{t('hud.defeatLead')}</p>
+        <p data-testid="defeat-lead">{t(state.build.structures.some((b) => b.def === 'hq' && b.ruinUntil !== undefined) ? 'hud.defeatHq' : 'hud.defeatLead')}</p>
         <p class="status">{t('hud.defeatDays', { day: state.time.day })}</p>
         <button class="primary" onClick={() => actions.quitToTitle()}>{t('menu.toTitle')}</button>
       </div>

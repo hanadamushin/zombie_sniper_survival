@@ -16,6 +16,7 @@ import { dangerOf } from '../../sim/world/derive.ts';
 import { t, type TextKey } from '../i18n/ja.ts';
 import type { UiActions } from '../store.ts';
 import { cellName, formatDuration } from '../world/info.ts';
+import { BuildTab, type BuildTool } from './build.tsx';
 import { logText, logTime, num, statusText, tk } from './format.ts';
 
 interface Props {
@@ -23,9 +24,13 @@ interface Props {
   actions: UiActions;
   grid: StaticGrid | null;
 }
+interface PanelProps extends Props {
+  tool: BuildTool;
+  setTool(next: BuildTool): void;
+}
 
-type Tab = 'people' | 'hire' | 'economy' | 'expedition' | 'log';
-const TABS: readonly Tab[] = ['people', 'hire', 'economy', 'expedition', 'log'];
+type Tab = 'people' | 'build' | 'hire' | 'economy' | 'expedition' | 'log';
+const TABS: readonly Tab[] = ['people', 'build', 'hire', 'economy', 'expedition', 'log'];
 const JOBS: readonly JobId[] = ['idle', 'farming', 'defense', 'scavenging', 'construction', 'research', 'crafting', 'medical'];
 
 function Stats({ s }: { s: Survivor }) {
@@ -315,13 +320,18 @@ export function LogList({ state, grid, limit }: { state: GameState; grid: Static
   );
 }
 
-export function CommandPanel(props: Props) {
+export function CommandPanel(props: PanelProps) {
   const { state } = props;
-  const [tab, setTab] = useState<Tab>('people');
+  const [tab, setTabRaw] = useState<Tab>('people');
+  // Leaving the build tab puts the tool away (the mouse goes back to looking around).
+  const setTab = (next: Tab): void => {
+    if (next !== 'build' && (props.tool.def || props.tool.remove)) props.setTool({ ...props.tool, def: null, remove: false });
+    setTabRaw(next);
+  };
   const colony = state.colony;
-  const count: Partial<Record<Tab, number>> = { people: colony.survivors.length, hire: colony.candidates.length, expedition: state.world.expeditions.length };
+  const count: Partial<Record<Tab, number>> = { build: state.build.structures.filter((b) => b.progress < 1).length || undefined, people: colony.survivors.length, hire: colony.candidates.length, expedition: state.world.expeditions.length };
   return (
-    <div class="panel command-panel" data-testid="command-panel">
+    <div class="panel command-panel" data-testid="command-panel" data-tab={tab}>
       <div class="stock" data-testid="stock">
         {RESOURCE_IDS.map((r) => (
           <span key={r} data-res={r} data-amount={colony.stock[r]} title={r === 'ears' ? '' : `/ ${colony.capacity[r]}`}>
@@ -339,6 +349,7 @@ export function CommandPanel(props: Props) {
       </div>
       <div class="tab-body">
         {tab === 'people' && <People {...props} />}
+        {tab === 'build' && <BuildTab state={state} actions={props.actions} tool={props.tool} setTool={props.setTool} />}
         {tab === 'hire' && <Hire {...props} />}
         {tab === 'economy' && <Economy {...props} />}
         {tab === 'expedition' && <Expeditions {...props} />}

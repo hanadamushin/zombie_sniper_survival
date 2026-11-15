@@ -7,7 +7,7 @@ import { SEA } from './palette.ts';
 
 export interface MapMarker {
   cell: CellId;
-  kind: 'player' | 'home' | 'target' | 'candidate' | 'source';
+  kind: 'player' | 'home' | 'target' | 'candidate' | 'source' | 'outpost';
   label?: string;
   active?: boolean;
 }
@@ -43,7 +43,7 @@ interface View {
 
 const MAX_SCALE = 48;
 const MAJOR = new Set(['札幌', '仙台', '東京', '新潟', '名古屋', '金沢', '大阪', '広島', '高知', '福岡', '鹿児島', '那覇']);
-const MARKER_COLOR: Record<MapMarker['kind'], string> = { player: '#ffffff', home: '#c9a24a', target: '#7fd4ff', candidate: '#ffffff', source: '#ff5a4a' };
+const MARKER_COLOR: Record<MapMarker['kind'], string> = { player: '#ffffff', home: '#c9a24a', target: '#7fd4ff', candidate: '#ffffff', source: '#ff5a4a', outpost: '#8fd48a' };
 
 export function MapCanvas(props: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -127,6 +127,20 @@ export function MapCanvas(props: Props) {
 
     const cx = (cell: CellId): number => ox + ((cell % grid.gridW) + 0.5) * scale;
     const cy = (cell: CellId): number => oy + (Math.floor(cell / grid.gridW) + 0.5) * scale;
+
+    // Sea crossings (06): dashed lines between their two ends.
+    if (grid.seaLinks && grid.seaLinks.length > 0) {
+      ctx.setLineDash([4, 4]);
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = 'rgba(190, 225, 255, 0.75)';
+      ctx.beginPath();
+      for (const l of grid.seaLinks) {
+        ctx.moveTo(cx(l.a), cy(l.a));
+        ctx.lineTo(cx(l.b), cy(l.b));
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
 
     if (path && path.length > 1) {
       ctx.lineJoin = 'round';

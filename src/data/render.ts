@@ -7,9 +7,8 @@ export const RENDER = {
     far: 1500,
     /** How fast the eye follows steps / stairs vertically (1/s). */
     stepRate: 16,
-    /** Command layer: overhead camera height and backward offset (m). */
-    commandHeight: 120,
-    commandBack: 70,
+    /** Command layer: how steeply the overhead camera looks down (radians). Distance and heading: core/view.ts. */
+    commandPitch: 1.04,
   },
   /** Visibility 800 m + fog (docs/04_architecture.md §8). */
   /** 04 moved the start of the fog from 150 m to 260 m: targets at 300 m+ must keep their silhouette. */
@@ -149,8 +148,43 @@ export const RENDER = {
     hidden: { top: 0xf0e060, prop: 0xffffff },
     blobOpacity: 0.3,
     max: 80,
-    /** Provisional camp until 06 builds things: tent, fire, field, benches, bedding. */
-    camp: { tent: 0x6a7a52, tentTrim: 0x4a5638, fire: 0xd8662a, stone: 0x77746c, soil: 0x5a4028, crop: 0x5f9a3a, wood: 0x8a6a48, cloth: 0x9aa0b8, cross: 0xc03030, crate: 0x7a6238 },
+  },
+
+  // --- structures (06): every material reads differently at a glance ---
+  structures: {
+    /** Instances (boxes) of the solid and of the translucent mesh. 2,000 wall tiles need about 10,000. */
+    max: 26000,
+    ghostMax: 3000,
+    look: {
+      wood: { body: 0x8a6a48, dark: 0x5e4630, light: 0xa5825a },
+      earth: { body: 0x7a6a4a, dark: 0x5a4c34, light: 0x8f7d58 },
+      steel: { body: 0x7d8a96, dark: 0x4a535c, light: 0xa34a2a },
+      concrete: { body: 0xb8b6ae, dark: 0x8a8880, light: 0xd2d0c8 },
+      cloth: { body: 0x7f8f62, dark: 0x58653f, light: 0xd9d6c4 },
+      brick: { body: 0x9a5a44, dark: 0x5c3a30, light: 0xc9b8a0 },
+      glass: { body: 0xa8d4d8, dark: 0x5a7a80, light: 0xe6f4f4 },
+      soil: { body: 0x5a4028, dark: 0x3e2c1c, light: 0x5f9a3a },
+      wire: { body: 0x8a8f94, dark: 0x4a4038, light: 0xb0b6bc },
+      pit: { body: 0x2a2219, dark: 0x16110c, light: 0x86744e },
+      water: { body: 0x2f5f7a, dark: 0x1e4258, light: 0x86744e },
+    },
+    rubble: 0x4e4a44,
+    fire: 0xd8662a,
+    stone: 0x77746c,
+    flag: 0xc03030,
+    crate: 0x7a6238,
+    body: 0x6f7a66,
+    /** Blueprint ghost, and the placement cursor when the spot is fine / not. */
+    ghost: 0x6fb6ff,
+    ok: 0x58d27a,
+    bad: 0xe0503a,
+    ghostOpacity: 0.38,
+    gridColor: 0xffffff,
+    gridOpacity: 0.16,
+    /** Half-size of the cursor grid in tiles. */
+    gridTiles: 12,
+    tracer: 0xffe9a8,
+    tracerSeconds: 0.12,
   },
 
   // --- hit effects (04): dust / debris / blood puffs ---

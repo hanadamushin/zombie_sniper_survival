@@ -17,6 +17,7 @@ import { generateSurvivor } from '../src/sim/colony/survivors.ts';
 import { createSim, type Sim } from '../src/sim/index.ts';
 import { areaOf } from '../src/sim/tactical/area.ts';
 import { addZombie } from '../src/sim/tactical/zombies.ts';
+import { activeCap } from '../src/sim/world/derive.ts';
 import { cellDistance, parseGrid, type GridFile } from '../src/sim/world/grid.ts';
 import { foundError, outpostAt, outpostPrefab, outpostsDay } from '../src/sim/world/outposts.ts';
 import { createInfectionCells } from '../src/sim/world/infection.ts';
@@ -410,6 +411,7 @@ describe('raids', () => {
     ring(state, 'palisade', 8);
     for (const [x, y] of [[HQX - 7, HQY - 7], [HQX + 7, HQY - 7], [HQX + 7, HQY + 7], [HQX - 7, HQY + 7]] as const) buildNow(state, 'tower', x, y);
     for (let i = 0; i < 4; i++) r.add('defense', { wage: 0 }); // (no wages at 06:00 to muddy the ear count)
+    for (let i = 0; i < 8; i++) r.add('farming'); // a full-sized settlement draws the full share
     state.colony.stock.ammo = 300;
     state.colony.stock.food = 50;
     state.world.cells.Z[state.world.homeCell!] = 300;
@@ -419,6 +421,7 @@ describe('raids', () => {
     const size = state.build.raid!.size;
     expect(state.build.raid!.kind).toBe('night');
     expect(size).toBeGreaterThanOrEqual(8);
+    expect(size).toBe(Math.round(activeCap(300) * BUILD.raid.nightShare));
     const ears0 = state.colony.stock.ears;
     r.run(600, () => state.build.raid === null);
     expect(state.build.raid).toBeNull();

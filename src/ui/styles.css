@@ -306,3 +306,24 @@ button.primary small { color: var(--muted); font-size: 12px; }
 .toast[data-kind='death'] { color: #e0826a; }
 .weapon-box .resupply { color: var(--accent); }
 .defeat .panel { text-align: center; }
+
+/* --- 06: building, raids, outposts --- */
+.build-ground { position: absolute; inset: 0; pointer-events: auto; touch-action: none; cursor: grab; }
+.build-ground[data-tool]:not([data-tool='']) { cursor: crosshair; }
+.command-panel { position: relative; }
+.build-tab .spacer { flex: 1 1 8px; }
+.build-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+.build-item { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 5px 8px; text-align: left; border-radius: 6px; font-size: 12px; }
+.build-item small { color: var(--muted); font-size: 11px; }
+.build-item.active { border-color: var(--accent); background: rgba(201, 162, 74, 0.22); }
+.build-item:disabled { opacity: 0.45; }
+.build-info { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin: 8px 0 2px; padding: 6px 8px; border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 6px; }
+.hud-group.alert { background: rgba(150, 40, 24, 0.85); border-radius: 6px; padding: 2px 10px; font-weight: 600; }
+.hud-group.alert.calm { background: rgba(40, 60, 80, 0.8); font-weight: normal; }
+.map-info .outpost { margin: 6px 0; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.14); display: flex; flex-direction: column; gap: 4px; }
+.map-info .outpost select { background: #1b2026; color: inherit; border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 4px; padding: 3px 4px; font: inherit; max-width: 100%; pointer-events: auto; }
+.map-info .outpost .who { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+/* While building, the panel stays low so that the base is in view. */
+.command-panel[data-tab='build'] { max-height: min(38vh, 300px); }
+.command-panel[data-tab='build'] .help { display: none; }
+@media (min-width: 900px) { .command-panel[data-tab='build'] .help { display: block; } }

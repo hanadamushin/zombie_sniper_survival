@@ -28,7 +28,7 @@ export function itemsText(items: string): string {
     .join('、');
 }
 
-const PREFIX: Record<string, string> = { land: 'land.', job: 'job.', trait: 'trait.', weapon: 'xweapon.', cause: 'cause.', reason: 'reason.' };
+const PREFIX: Record<string, string> = { land: 'land.', job: 'job.', trait: 'trait.', weapon: 'xweapon.', cause: 'cause.', reason: 'reason.', def: 'bld.', dir: 'dir.' };
 
 export function logText(entry: LogEntry, grid: StaticGrid | null): string {
   const params: Record<string, string | number> = {};

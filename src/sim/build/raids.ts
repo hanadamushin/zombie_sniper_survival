@@ -104,7 +104,7 @@ export function raidMinute(state: GameState, ctx: Ctx): void {
   // The nightly approach.
   if (minute === R.nightHour * 60 && !state.build.raid) {
     const z = Math.max(0, world.cells.Z[home] ?? 0);
-    const size = Math.min(z, Math.max(R.nightMin, Math.round(activeCap(z) * R.nightShare)));
+    const size = Math.min(z, Math.max(R.nightMin, Math.round(activeCap(z) * R.nightShare * Math.min(1, population(state) / R.nightFullPop))));
     // They come for people: an empty base draws nobody.
     if (size > 0 && (playerPresent(state) || population(state) > 1)) startRaid(state, ctx, 'night', size, rand(stream(state, 'build.raid')) * Math.PI * 2);
   }
@@ -194,12 +194,12 @@ export function raidStep(state: GameState, ctx: SimContext, area: TacticalArea):
     }
   }
 
-  const fallen = raid.size - raid.toSpawn - alive.length;
+  const fallen = raid.size - raid.toSpawn - raiders(state).length;
   raid.killed = Math.max(raid.killed, fallen);
   const mark = marks.get(raid)!;
   const lost = (): [number, number] => [Math.max(0, ruinCount(state) - mark.ruins), Math.max(0, state.colony.memorial.length - mark.dead)];
   if (state.flags.defeat) return endRaid(state, ctx, raid, raid.killed, false, false, ...lost());
-  if (raid.toSpawn <= 0 && alive.length === 0) return endRaid(state, ctx, raid, raid.killed, true, false, ...lost());
+  if (raid.toSpawn <= 0 && raiders(state).length === 0) return endRaid(state, ctx, raid, raid.killed, true, false, ...lost());
   // Dawn: what is left of a night's visitors loses interest.
   const hour = state.time.minute / 60;
   if (raid.kind === 'night' && hour >= R.dawnHour && hour < R.nightHour) {

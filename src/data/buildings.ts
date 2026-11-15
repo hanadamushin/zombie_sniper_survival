@@ -121,7 +121,11 @@ const DEFS: BuildingDef[] = [
 export const BUILDINGS: Readonly<Record<string, BuildingDef>> = Object.fromEntries(DEFS.map((d) => [d.id, d]));
 export const BUILDING_LIST: readonly BuildingDef[] = DEFS;
 
-/** How defenders fight, by what they hold (spec §4.5). A rifle downs a walker every 8 s or so. */
+/**
+ * How defenders fight, by what they hold (spec §4.5). A good rifleman on a tower downs a walker every
+ * 8-10 s, an average one on the ground every 15 s; brutes take a dozen hits. Ten of them cannot stop
+ * a horde of 150 on their own — that is what the player's rifle is for.
+ */
 export interface DefenderWeapon {
   id: string;
   /** Reach (m), seconds between shots, chance to hit, damage per hit, chance that a hit is a head shot (kills all but brutes). */
@@ -135,9 +139,9 @@ export interface DefenderWeapon {
   tech?: string;
 }
 export const DEFENDER_WEAPONS: readonly DefenderWeapon[] = [
-  { id: 'rifleArmor', range: 70, interval: 4, hit: 0.5, damage: 55, headshot: 0.3, ammo: 1, tech: 'W4' },
-  { id: 'pistol', range: 22, interval: 2.5, hit: 0.4, damage: 40, headshot: 0.15, ammo: 1, tech: 'W4' },
-  { id: 'bow', range: 35, interval: 5, hit: 0.45, damage: 60, headshot: 0.2, ammo: 0, tech: 'W3' },
+  { id: 'rifleArmor', range: 60, interval: 4, hit: 0.4, damage: 55, headshot: 0.2, ammo: 1, tech: 'W4' },
+  { id: 'pistol', range: 22, interval: 2.5, hit: 0.35, damage: 40, headshot: 0.12, ammo: 1, tech: 'W4' },
+  { id: 'bow', range: 30, interval: 6, hit: 0.4, damage: 60, headshot: 0.15, ammo: 0, tech: 'W3' },
   { id: 'melee', range: 2.6, interval: 1.6, hit: 0.55, damage: 34, headshot: 0.1, ammo: 0 },
 ];
 
@@ -192,9 +196,10 @@ export const BUILD = {
     /** Nightly approach: starts at this hour, the survivors of it give up at dawn. */
     nightHour: 22,
     dawnHour: 4,
-    /** Share of the cell's active cap that comes. */
+    /** Share of the cell's active cap that comes — in full once the base holds nightFullPop people (they come for people). */
     nightShare: 0.3,
-    nightMin: 3,
+    nightFullPop: 12,
+    nightMin: 2,
     /** Horde threshold = base + perHead * population (player included). */
     hordeBase: 60,
     hordePerHead: 4,
