@@ -83,7 +83,7 @@ export function createRenderer(canvas: HTMLCanvasElement, events: EventBus): Ren
   let avgMs = 16;
   let slow = 0;
   let fast = 0;
-  let wait: number = Q.upFrames;
+  let wait: number = Q.upSeconds;
   let sinceRaise = Infinity;
   const setScale = (next: number): void => {
     scale = Math.min(1, Math.max(Q.min, next));
@@ -91,22 +91,23 @@ export function createRenderer(canvas: HTMLCanvasElement, events: EventBus): Ren
   };
   const adapt = (realDt: number): void => {
     if (!auto || realDt <= 0) return;
-    const ms = Math.min(100, realDt * 1000);
-    avgMs += (ms - avgMs) / Q.window;
-    sinceRaise += realDt;
+    const dt = Math.min(0.25, realDt);
+    avgMs += (dt * 1000 - avgMs) * Math.min(1, dt / Q.smooth);
+    sinceRaise += dt;
     if (avgMs > Q.slowMs) {
       fast = 0;
-      if (++slow >= Q.window && scale > Q.min) {
+      slow += dt;
+      if (slow >= Q.downSeconds && scale > Q.min) {
         // A raise that did not hold: wait longer before trying again.
-        if (sinceRaise < Q.failSeconds) wait = Math.min(Q.upFrames * Q.maxBackoff, wait * 2);
-        setScale(scale - Q.step);
+        if (sinceRaise < Q.failSeconds) wait = Math.min(Q.upSeconds * Q.maxBackoff, wait * 2);
+        setScale(scale - Q.step * (avgMs > Q.slowMs * 2 ? 2 : 1));
         slow = 0;
-        avgMs = Q.slowMs - 1;
       }
     } else {
       slow = 0;
       if (avgMs < Q.fastMs && scale < 1) {
-        if (++fast >= wait) {
+        fast += dt;
+        if (fast >= wait) {
           setScale(scale + Q.step);
           fast = 0;
           sinceRaise = 0;

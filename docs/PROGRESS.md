@@ -139,3 +139,54 @@
   - データ: `src/data/tactical.ts` の `TACTICAL`（区域の寸法、プレイヤー移動、区分ごとの地形・植生・街区）、`RENDER.celestial` / `ground` / `buildings` / `flora`
   - コマンド・イベントの追加なし（区域の切り替えは `travelStarted` / `travelArrived` ではなく状態から判定している）
   - `Renderer.view`（`setFov` / `fov`）、`window.__game.map` / `.renderer` / `.debug`、npm script `tactical:preview`
+
+## 04 狙撃・ゾンビ戦闘 — 2026-11-15
+- 完了したこと:
+  - **弾道**（`sim/tactical/ballistics.ts`）: 発射体（初速 800、重力、速度減衰 0.6/km）、1 ステップ 4 サブステップの中点法、線分判定（ゾンビの頭＝球・胴／脚＝カプセル、静的世界は `raycastWorld`）、貫通 2 体（2 体目 60%）、ゼロイン 100〜400m（発射角をゲームと同じ積分で数値的に解く）、風（難易度「高」か `flags.wind` のときだけ）
+  - **ライフル**（`weapon.ts`、定義は `data/weapons.ts`）: スコープ遷移 0.25 秒、倍率 4〜12、揺れ（§3.3 の式。呼吸の 8 の字＋微細動）、息止め（6 秒・切れると 3 秒 ×1.6）、反動、ボルト 1.2 秒、弾倉 5、リロード 2.8 秒、空撃ち、腰だめの散布
+  - **スコープ描画**（`render/tactical/scope.ts`）: 全画面三角形 1 枚。円形マスク、周辺減光、視点を振ったときに寄る影、第一焦点面のミルドット（1 目盛り = 1 mil を FOV から厳密に換算）
+  - **ゾンビ**（`zombies.ts`、数値は `data/zombies.ts` と `BALANCE.zombie`）: 4 種、徘徊 → 警戒 → 追跡 → 攻撃 → 倒れる。視認（距離・視野・遮蔽・姿勢・樹冠）、仲間が倒れるのを見る／死体に出くわすと警戒、追跡開始で周囲を呼ぶ、部位判定、脚で転倒して這行化、壁沿いの回り込み、外階段を登る、遠方は 1/2・1/4 の頻度で更新。出現は `min(active, セルの Z, 150)`、補充はマップ端から 20 秒に 1 体
+  - **耳・ナイフ・被ダメージ**（`combat.ts`, `health.ts`）: 死体（10 ゲーム時間、上限 200）、E 長押し 0.8 秒で耳 +2、ナイフ（背後から未発見なら一撃）、噛みつき・感染（10%、48 時間）・落下ダメージ・死亡と仮の復帰
+  - **描画**: ゾンビと死体は箱の InstancedMesh（生者 1・死体 1）＋接地の丸い影、着弾の土煙／破片／血煙（Points）。解像度の自動調整
+  - **HUD**: 弾倉/所持弾、ボルト・装填の表示、姿勢、体力、息ゲージ（スコープ中）、ゼロイン、倍率、耳、未回収の死体の方向と距離、E の進行ゲージ、被弾の赤み、死亡表示
+  - **射撃場**: `?range=1`（または `window.__game.debug.openRange()`）。100〜600m に静止標的（後ろに板、横に距離 ÷100 本の杭）と歩行標的、100m 列に走行・肥大・這行。世界データ不要。倒した標的は 4 秒で戻る
+  - テスト 29 件追加（`tests/combat.test.ts`）: 落下量と飛翔時間が解析値と一致、各ゼロイン距離で照準点に着弾、貫通、見越し射撃、部位ダメージ、ボルト・弾倉・リロード、揺れの式、反動、ナイフ、耳、落下、視認、樹冠、追跡・噛みつき、警戒、階段／鉄塔、回り込み、囲まれて死亡と復帰、150 体の負荷、開始セル、Z の減算が 1 回だけ、補充と Z=0、ロード後の再配置、感染死、都市セル。e2e に射撃場（スコープ → 300m ヘッドショット → 耳回収 → 150 体の計測）と本拠セルでの 1 発を追加
+- **手触りの確認結果**（射撃場をスクリーンショットで目視＋ヘッドレスで集計。実機のマウスでは誰も撃っていない）:
+  - 100m ゼロのまま 400m の頭を狙うと、着弾は 3 つ目の点のすぐ上（2.8 mil 下）に土煙が出る。目盛りでの見越しは成立している
+  - 照準を頭の中心に置いてタイミングを選ばずに撃ったときの命中率: 伏せ 200m 100% / 300m 98% / 400m 68%、伏せ＋息止めは 400m・600m ともほぼ 100%（＝外すのは測距・見越し・照準の誤り）、しゃがみ 200m 28%（息止めで 73%）・400m 7%、立ち 100m で頭 27%・胴 95%、立ち 200m 胴 37%。「伏せ＋息止めなら狙えば当たる／立ちは近距離のみ」になっている
+  - 着弾までの間は 400m で 0.57 秒。反動は約 0.4 秒で戻るので、着弾（血煙・土煙）はレティクルが戻ってから見える
+  - **未確認**: 揺れ・反動・マウス感度の体感、歩行速度と回収の退屈さ。数値は `BALANCE.combat` と `data/weapons.ts` にまとめてあるので 09 で実機調整してほしい
+- **性能の実測**（GPU なし・SwiftShader。fps ではなく 3 指標で判定）:
+  - 射撃場に **150 体**（1280×720、等倍）: ドローコール 7、三角形 15.0 万、メインスレッド（sim＋描画発行）1.35 ms/フレーム。ゾンビ関連の追加はドローコール 3〜5（生者・死体・影・エフェクト・スコープ）、三角形は 1 体 72
+  - シミュレーション単体: 150 体で 0.06〜0.08 ms/ステップ（ブラウザ内計測）。都市セル（78 体）で 0.04 ms/ステップ（Node）
+  - 5 区分の再計測（ゾンビ込み、等倍）: urban 14 / 17.7 万 / 1.36 ms、suburb 28 / 17.5 万 / 0.83 ms、rural 37 / 18.6 万 / 0.96 ms、forest 39 / 37.2 万 / 0.97 ms、mountain 28 / 20.8 万 / 1.43 ms（ドローコール / 三角形 / メインスレッド）。予算（150 未満・50 万未満・4 ms 未満）の内側
+  - 解像度の自動調整はソフトウェア描画では数秒で下限 0.5 まで下がる（＝働いている）。**スケール変更時の描画バッファ再確保は SwiftShader だと 100ms 以上かかる**ので、計測中は `setAutoResolution(false)` にしている。実 GPU での確認は依然として未実施
+- 未完了・既知の問題:
+  - **死亡は仮実装**: 4 秒後に区域の開始位置で復帰、耳 0・弾 40・感染解除、周囲 60m のゾンビを消す。05 が「3 日後に司令部」へ置き換える（`combat.ts` の `revive`）
+  - **セーブ時に zombies / corpses / bullets は保存しない**。ロード後はセルの Z から配置し直す（`tactical.populated` を false にして保存）。未回収の死体と耳はロードで消える
+  - 開始時の所持弾 100 発は仕様 §5 の「初期 弾薬 100」をプレイヤーの所持に置いたもの（コロニーの備蓄は 0 のまま）。`resupply` コマンドは未実装。05 で備蓄と所持の配分を決めること
+  - ゾンビの移動は直進＋壁沿いの回り込み。凹んだ地形や密集した建物では遠回りしたり、しばらく引っかかることがある（フローフィールドは 06）。ゾンビ同士は押し合うだけで、屋上から落ちてもダメージはない
+  - はしご・鉄塔の上は噛まれないが、下に集まった個体は降りるまで離れない（追跡は視線が切れて 8 秒で解ける）。伏せると屋上の縁で視線が切れやすい
+  - 射撃場の標的は `dummy` 付き（動かない・襲わない）。耳は取れるが射撃場の状態はセーブされない
+  - 弾の軌跡（トレーサー）と銃口の演出はない。音は 08（イベントは発火済み）
+  - HUD は 10Hz 更新なので、息ゲージと回収ゲージの動きはやや粗い
+- 仕様からの変更点（更新した docs）:
+  - `02_systems_spec.md` §2.3（同時出現数は `min(active, Z, 150)`、初期配置）、§2.4（開始セルは Z ≥ 40）、§3.2（倍率の基準、解析式と落下表、ゼロイン、レティクル、反動・腰だめ・所持弾）、§3.3（揺れの形、追従、目安の命中率）、§3.4（姿勢・樹冠・警戒・呼び寄せ・攻撃・階段）、§3.5（仮の復帰、落下ダメージ）、§3.6
+  - **倍率の基準を「縦視野 40° = 1 倍」にした**（`BALANCE.combat.scope.referenceFov`）。腰だめの 70° を基準にすると 12 倍でも 400m の頭が 720p で 3px しかなく、精密射撃にならないため。12 倍で 1 mil ≒ 12px（720p）
+  - **フォグの開始を 150m → 260m**（`RENDER.fog.near`）。300m 以遠の標的のシルエットが霞みすぎていた
+  - 都市セルの同時出現は式どおりだと 78 前後（Z 10 万）。上限 120 に達するのは Z が 1 億のときだけ
+  - `STATE_VERSION` 3（`player.aim` と所持弾を補うマイグレーション）
+  - 画面中央の点（`.crosshair`）は削除（非スコープ時は照準点なし）
+- 次のセッションへの注意:
+  - **05 向け**: `playerDied{cause}` → `combat.ts` の `revive` を置き換える。弾の補給は `resupply` コマンド（`sim/tactical/index.ts` の `commands` に口だけある）。耳は `player.inv.ears`、回収時に `earsCollected{amount}`。本拠セルには中央 150m より外にゾンビが出る（視認 40m なので拠点には基本来ない。襲来は 06）
+  - **06 向け**: ゾンビの移動は `zombies.ts` の `moveToward`（目標点へ直進）。フローフィールドは `updateOne` の `chase` / 新しい状態から目標点を差し替えれば載る。壁への攻撃値は `ZOMBIES[kind].wallDps`。`Zombie.target` は今は `'player' | null` だけ使っている。ゾンビの追加は `addZombie`
+  - **07 向け**: `data/weapons.ts` の `WEAPON_MODS` に `{ tech, patch }` を足すと `weaponOf(state)` に反映される（大口径 = `damageMul`、半自動 = `boltTime: 0`、光学 = `zoomMax`、貫通 = `pierce`）。風は `state.flags.wind = true`
+  - **08 向け**: 音・演出用のイベントは `shotFired{scoped}`, `dryFire`, `reloadStarted`, `reloadDone`, `bulletHit{part, surface, range, killed}`, `zombieKilled{headshot, knife}`, `zombieAlerted`, `knifeSwing`, `earsCollected`, `playerHurt{cause}`, `playerInfected`, `playerDied`, `playerRevived`
+  - 1 秒 = ゲーム内 1 分。死体の期限 10 ゲーム時間は実時間 10 分、感染 48 時間は 48 分
+  - デバッグ: `debug.setInput({ scope: true, fire: true, ... })`（ヘッドレスではポインタロックが取れないので入力を上書きする口）、`debug.spawnZombies(n, 半径, 種類)`、`debug.openRange(noSway)`、`renderer.resolutionScale()` / `setAutoResolution(false)`、URL `?range=1` `?res=fixed`
+- 追加した共有型・コマンド・イベント:
+  - 型: `PlayerState.aim`（`AimState`、`defaultAim()`）、`InputFrame.interactHeld`、`TacticalState.populated / spawnT / step / rangeT`、`Zombie` の作業用フィールドと `dummy / spot`、`Corpse.kind / yaw / headshot / crippled`、`Bullet.dist / drag / gravity / weapon / pierceFactor / maxRange / lastHit`
+  - データ: `data/weapons.ts`（`WEAPONS`, `WEAPON_MODS`）、`data/zombies.ts`（`ZOMBIES`, `KILL`）、`BALANCE.player`（拡張）/ `combat` / `zombie` / `range`、`BALANCE.world.start.minCellZ`、`RENDER.resolution / scope / zombies / effects`
+  - イベント: `dryFire`, `reloadStarted`, `reloadDone`, `knifeSwing`, `playerInfected`, `playerRevived`, `zombieAlerted`。既存イベントへのフィールド追加は `04_architecture.md` §6
+  - フラグ: `state.flags.range`（射撃場）、`flags.noSway`、`flags.wind`
+  - コマンドの追加なし

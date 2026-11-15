@@ -61,7 +61,7 @@ void main() {
   float dy = length(vec2(q.x, a.y - n.y));
   ret = max(ret, 1.0 - smoothstep(uLine.y - px, uLine.y + px, min(dx, dy)));
   // half-mil ticks once there is room for them
-  float room = smoothstep(6.0, 9.0, uPxPerMil);
+  float room = smoothstep(8.5, 10.5, uPxPerMil);
   vec2 h = clamp(floor(a) + 0.5, 0.5, uDots - 0.5);
   float tick = max(band(a.x - h.x, uLine.x, px) * step(a.y, 0.16), band(a.y - h.y, uLine.x, px) * step(a.x, 0.16));
   ret = max(ret, tick * room);
@@ -122,7 +122,7 @@ export function createScopeRenderer(): SubRenderer {
       uniforms.uRes.value.copy(size);
       uniforms.uPxPerMil.value = pxPerMil;
       uniforms.uAmount.value = amount;
-      uniforms.uRadius.value = S.radius * size.y;
+      uniforms.uRadius.value = S.radius * Math.min(size.x, size.y); // fits narrow (portrait) screens too
       uniforms.uEdge.value = Math.max(1.5, S.edge * size.y);
       uniforms.uLine.value.set(
         Math.max(S.lineMil, (S.lineMinPx * size.y) / 720 / pxPerMil),

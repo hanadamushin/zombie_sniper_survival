@@ -15,7 +15,9 @@ import { createInput } from './input/index.ts';
 import { createRenderer } from './render/index.ts';
 import { worldBuildMs } from './render/tactical/index.ts';
 import { createSim } from './sim/index.ts';
-import { areaPending, ensureArea, mapOf } from './sim/tactical/area.ts';
+import { areaOf, areaPending, ensureArea, mapOf } from './sim/tactical/area.ts';
+import { addZombie } from './sim/tactical/zombies.ts';
+import type { InputFrame, ZombieKind } from './core/types.ts';
 import { supportAt } from './sim/tactical/collision.ts';
 import { initWorld } from './sim/world/scenario.ts';
 import { beginAt, findStartCandidates } from './sim/world/start.ts';
@@ -99,8 +101,17 @@ function cancelIntro(): void {
   ui.setIntro(null);
 }
 
+/** Firing range (04, debug): no world, no saves. `?range=1` opens it at boot. */
+function openRange(): void {
+  const next = createInitialState(1, 1);
+  next.flags.range = true;
+  pending = null;
+  ui.setIntro(null);
+  start(next);
+}
+
 async function saveSlot(slot: SlotId): Promise<boolean> {
-  if (!state) return false;
+  if (!state || state.flags.range) return false;
   try {
     await saveGame(store, slot, state, Date.now());
     return true;
@@ -163,6 +174,9 @@ sim.events.on('speedChanged', () => ui.sync(state));
 // Loop
 // ---------------------------------------------------------------------------------------------
 
+/** Debug / e2e: controls merged over the real input (headless browsers have no pointer lock). */
+let debugInput: Partial<InputFrame> | null = null;
+const ONE_SHOT = ['lookDX', 'lookDY', 'reload', 'stance', 'zoomDelta', 'zeroDelta', 'knife', 'interact'] as const;
 let last = performance.now();
 let uiTimer = 0;
 let fps = 60;
@@ -189,12 +203,15 @@ function runFrame(now: number): void {
   const s = state;
   if (!s) return; // title screen: nothing to simulate or draw
 
-  const inputFrame = input.poll();
+  const inputFrame = debugInput ? { ...input.poll(), ...debugInput } : input.poll();
   sim.applyCommands(s); // commands must work while paused too
   const alpha = stepper.advance(realDt, effectiveSpeed(s), (first) => {
     if (areaPending(s, grid)) return; // wait for the loading frames below
     sim.tick(s, FIXED, first ? inputFrame : continuationFrame(inputFrame));
-    if (first) input.consume();
+    if (first) {
+      input.consume();
+      if (debugInput) for (const k of ONE_SHOT) delete debugInput[k];
+    }
   });
   if (state !== s) return; // a listener ended the session during the tick
 
@@ -220,6 +237,12 @@ function runFrame(now: number): void {
 }
 requestAnimationFrame(frame);
 
+{
+  const params = new URLSearchParams(location.search);
+  if (params.get('res') === 'fixed') renderer.setAutoResolution(false);
+  if (params.get('range') === '1') openRange();
+}
+
 // Debug / e2e handle (read-only use; mutate through dispatch). `debug` bypasses the rules on
 // purpose: it exists for screenshots and perf checks, never call it from game code.
 interface DebugApi {
@@ -230,6 +253,12 @@ interface DebugApi {
   setClock(hour: number): void;
   /** Last frame's draw calls / triangles, cumulative main-thread ms and frame count, and how long the last world build took. */
   renderInfo(): { calls: number; triangles: number; cpuMs: number; frames: number; buildMs: number };
+  /** Hold these controls from now on (one-shot fields apply once); null releases them. */
+  setInput(input: Partial<InputFrame> | null): void;
+  /** Open the firing range (flat map, targets at 100..600 m). `noSway` holds the rifle perfectly still. */
+  openRange(noSway?: boolean): void;
+  /** Add n zombies in a ring of the given radius around the player (perf checks, screenshots). Returns how many were added. */
+  spawnZombies(n: number, radius?: number, kind?: ZombieKind): number;
 }
 declare global {
   interface Window {
@@ -278,6 +307,27 @@ window.__game = {
       if (!state) return;
       state.time.minute = Math.floor(hour * 60) % 1440;
       state.time.sub = 0;
+    },
+    setInput(next) {
+      debugInput = next ? { ...debugInput, ...next } : null;
+    },
+    openRange(noSway = false) {
+      openRange();
+      if (state && noSway) state.flags.noSway = true;
+    },
+    spawnZombies(n, radius = 60, kind) {
+      const area = state ? areaOf(state) : null;
+      if (!state || !area) return 0;
+      const kinds: ZombieKind[] = ['walker', 'walker', 'walker', 'runner', 'walker', 'brute', 'walker', 'crawler'];
+      let added = 0;
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2;
+        const r = radius * (0.6 + 0.4 * ((i * 7919) % 13) / 13);
+        const x = Math.min(1016, Math.max(8, state.player.pos[0] + Math.cos(a) * r));
+        const z = Math.min(1016, Math.max(8, state.player.pos[2] + Math.sin(a) * r));
+        if (addZombie(state, area, kind ?? kinds[i % kinds.length]!, x, z, a)) added++;
+      }
+      return added;
     },
     renderInfo: () => ({ calls: renderer.ctx.renderer.info.render.calls, triangles: renderer.ctx.renderer.info.render.triangles, cpuMs, frames, buildMs: worldBuildMs() }),
   },

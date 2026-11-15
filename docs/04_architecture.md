@@ -182,6 +182,7 @@ export interface PlayerState {
   scoped: boolean;
   inv: Partial<Record<ResourceId, number>>;   // 所持（耳・弾・医薬品など）
   stats: { kills: number; headshots: number; shots: number; earsCollected: number };
+  aim: AimState;   // 04 が追加（STATE_VERSION 3）: scopeT, 揺れ, 反動, off（視界のずれ [yaw, pitch]）, 息, ナイフ・耳回収・落下・死亡のタイマ
 }
 
 export interface TacticalState {
@@ -192,7 +193,10 @@ export interface TacticalState {
   reserve: number;                    // このセッションで補充可能な残数の目安
   wind: [number, number];
   lootSpots: { id: number; pos: [number, number]; taken: boolean }[];
+  populated?: boolean; spawnT?: number; step?: number; rangeT?: number[];   // 04 が追加（初期配置済みか、補充タイマ、ステップ数、射撃場）
 }
+// 04 は Zombie（移動・知覚の作業用フィールド、dummy）、Corpse（kind, yaw, headshot, crippled）、
+// Bullet（dist, drag, gravity, weapon, pierceFactor, maxRange, lastHit）にもフィールドを足した。定義は core/types.ts
 export interface Zombie { id: EntityId; kind: ZombieKind; pos: [number,number,number]; yaw: number;
   hp: number; state: 'wander'|'alert'|'chase'|'attack'|'down'; target: EntityId | 'player' | null;
   crippled: boolean; t: number; }
@@ -267,7 +271,8 @@ xoshiro128**。状態はプレーンオブジェクトで、関数に渡して�
 ```ts
 export interface InputFrame { moveX: number; moveZ: number; lookDX: number; lookDY: number;
   fire: boolean; scope: boolean; holdBreath: boolean; sprint: boolean; reload: boolean;
-  stance: 'stand'|'crouch'|'prone'|null; zoomDelta: number; zeroDelta: number; knife: boolean; interact: boolean; }
+  stance: 'stand'|'crouch'|'prone'|null; zoomDelta: number; zeroDelta: number; knife: boolean; interact: boolean;
+  interactHeld: boolean; }   // interactHeld: E を押している間 true（04 が追加。耳の回収は長押し）
 ```
 
 **イベント**（sim → render/ui/audio、および sim 内の他システム）: 判別共用体 `GameEvent`。
@@ -278,6 +283,7 @@ export interface InputFrame { moveX: number; moveZ: number; lookDX: number; look
 
 基盤が追加したイベント: `speedChanged{speed}`, `modeChanged{mode, prev}`, `commandRejected{command, reason}`。
 02 が追加したイベント: `travelStarted{from, to, minutes}`, `cellEntered{cell, from}`, `travelArrived{cell}`, `travelEncounter{cell, danger}`（枠のみ）, `infectionStepped{day, homeInflow}`。
+04 が追加したイベント: `dryFire`, `reloadStarted{seconds}`, `reloadDone{mag}`, `knifeSwing{hit, killed}`, `playerInfected{untilDay, untilMinute}`, `playerRevived`, `zombieAlerted{id, chase}`。`bulletHit` に `surface`（ゾンビ以外に当たったときの種類）・`dir`・`range`・`killed`、`zombieKilled` に `knife`、`playerHurt` / `playerDied` に `cause`、`shotFired` に `scoped` を追加。
 `dayStarted` は 00:00 に、同じ tick の `hourStarted{hour:0}` より先に発火する。
 
 イベントは tick 中にバッファされ、tick 末に購読者へ配信（`sim.events.on(type, fn)` / `onAny`）。sim 内システムが他システムのイベントを見る場合は「次の tick で処理」と決め、`ctx.prevEvents`（直前の tick で出たイベント）を読む。
@@ -307,6 +313,10 @@ export interface InputFrame { moveX: number; moveZ: number; lookDX: number; look
   - `segmentHitsStatic(map, a, b)`（視線・弾の線分）
   - `supportAt(map, x, z, feetY)`（立てる高さ: 地形か、足元から 0.5m 以内の箱の上面）、`pushOut(map, [x, z], radius, feetY, height)`（壁と幹からの押し戻し）、`ladderAt`
   - `createSpatialHash()` — 動的オブジェクト用の 16m ハッシュ（`set / remove / query / querySegment`）。現在の区域のものは `areaOf(state).dynamic`
+- 戦術ステップの順序（`sim/tactical/index.ts`）: プレイヤー → 武器（`weapon.ts`: スコープ・揺れ・引き金）→ 弾（`ballistics.ts`）→ ゾンビ（`zombies.ts`: 補充・知覚・状態機械・移動）→ 近接と事後（`combat.ts`: ナイフ・耳・落下・死亡と仮復帰）。毎分 `expireCorpses` と感染の期限判定。プレイヤーへのダメージは `health.ts` の `hurtPlayer`
+- ゾンビの当たり判定の形は `hitShapes(z)`（頭の球・胴と脚のカプセル）。描画（`render/tactical/zombies.ts`）も同じ寸法から箱を置く。ゾンビの追加は `addZombie(state, area, kind, x, z, yaw)`（空間ハッシュと id 索引を同時に更新する。`tactical.zombies` へ直接 push してもよいが索引は次のステップで作り直される）
+- 武器の定義は `data/weapons.ts`。`WEAPON_MODS`（技術 id → 差分）を足すと `weaponOf(state)` が研究済みの差分を重ねた定義を返す（07 用）。ゾンビの種類別の数値は `data/zombies.ts`
+- 射撃場: `state.flags.range = true` の状態は世界データなしで動く（`sim/tactical/range.ts` の固定マップ、`ensureArea` が分岐）。`?range=1` または `window.__game.debug.openRange()`。`flags.noSway` で揺れを 0 にできる
 - プレイヤー: `sim/tactical/player.ts` の `updatePlayer(player, map, input, dt, lookScale)`。視線レイは `viewRay(player)`、方位は `headingDeg(yaw)`
 - ナビ/建築グリッド: 4m タイル 256×256（`map.walk`: 建物・階段・大岩・急斜面が 0）。フローフィールドは拠点（司令部）を目標に Dijkstra。`BuildState.gridRev` 変更時のみ再計算（1回 < 5ms を目標）
 - 弾の当たり判定: 弾の線分 vs
@@ -321,9 +331,11 @@ export interface InputFrame { moveX: number; moveZ: number; lookDX: number; look
 - ゾンビ: 部位ごとの `InstancedMesh`（胴・頭・腕×2・脚×2）。歩行アニメは CPU で行列計算（最大150体）
 - 生存者も同方式（色違い）。本拠セルにいるときのみ描画
 - 建物・樹木・草: InstancedMesh ＋ 距離カリング。影はプレイヤー周辺のみ（または無し＋接地ブロブ）
-- 視程 800m ＋フォグ。夜はフォグ色と環境光で表現。空は地平線でフォグ色に溶けるドーム（太陽・月・星はドームのシェーダ内、1 ドローコール）
+- 視程 800m ＋フォグ（260〜800m。04 が 150m から変更）。夜はフォグ色と環境光で表現。空は地平線でフォグ色に溶けるドーム（太陽・月・星はドームのシェーダ内、1 ドローコール）
 - 戦術ワールド（`render/tactical/`）: 地形 1（1m/texel のプロシージャル地面テクスチャ）＋外周の粗い地形 1、建物・階段・鉄塔・はしごは箱の InstancedMesh 1（窓はフラグメントシェーダ）、切妻屋根 1、岩 1、草むら 1（カメラから 150m 以内のみ）、樹木は 2 種 × 4×4 チャンク（視錐台・距離カリング）。実測 15〜40 ドローコール
-- カメラは `renderer.view`（`render/tactical/camera.ts`）。スコープは `renderer.view.setFov(度)` で絞り、`setFov(null)` で戻す
+- カメラは `renderer.view`（`render/tactical/camera.ts`）。戦術モードの FOV は `sim/tactical/weapon.ts` の `viewFovDeg(player)`（スコープの遷移と倍率）に従い、向きは `yaw/pitch + player.aim.off`（揺れと反動）。`setFov(度)` は強制上書き、`setFov(null)` で戻す
+- ゾンビと死体（04）: 箱の InstancedMesh を生者用・死体用に 1 つずつ（1 体 6 箱。死体は一覧が変わったときだけ書き直す）＋接地の丸い影 1。着弾の土煙・血煙は Points 1。スコープは全画面三角形 1。合計 5 ドローコール
+- 解像度の自動調整（04）: `RENDER.resolution`。フレーム時間の平均（0.5 秒で平滑化）が 1 秒間 20ms を超えると描画スケールを 0.125 下げ（40ms 超なら 0.25、下限 0.5）、17.5ms 未満が 3 秒続けば戻す。戻して 4 秒以内に再び下がったら次の試行までの待ちを倍にする。`renderer.setAutoResolution(false)` / `?res=fixed` で無効
 - スコープ: カメラ FOV を倍率に応じて絞る＋円形マスクのオーバーレイ（レティクルは CSS/SVG ではなく専用の全画面クアッドで描き、mil 目盛りを FOV と正確に対応させる）。レンダーターゲット二重描画はしない
 - 他セルの出来事（遠征・駐屯地・感染）は一切描画しない（数値のみ）
 

@@ -112,7 +112,7 @@ export function updateWeapon(state: GameState, ctx: SimContext): void {
   // --- zoom / zero ---
   if (input.zoomDelta !== 0) w.zoom = Math.min(def.zoomMax, Math.max(def.zoomMin, w.zoom * Math.pow(def.zoomStep, input.zoomDelta)));
   w.zoom = Math.min(def.zoomMax, Math.max(def.zoomMin, w.zoom));
-  if (input.zeroDelta !== 0) w.zeroIdx = Math.min(def.zeroes.length - 1, Math.max(0, w.zeroIdx + Math.sign(input.zeroDelta)));
+  if (input.zeroDelta !== 0) w.zeroIdx = Math.min(def.zeroes.length - 1, Math.max(0, w.zeroIdx + Math.round(input.zeroDelta)));
 
   // --- timers ---
   if (w.boltT > 0) w.boltT = Math.max(0, w.boltT - dt);

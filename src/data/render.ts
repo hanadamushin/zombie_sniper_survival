@@ -12,14 +12,16 @@ export const RENDER = {
     commandBack: 70,
   },
   /** Visibility 800 m + fog (docs/04_architecture.md §8). */
-  fog: { near: 150, far: 800 },
+  /** 04 moved the start of the fog from 150 m to 260 m: targets at 300 m+ must keep their silhouette. */
+  fog: { near: 260, far: 800 },
   maxPixelRatio: 2,
   /**
-   * Automatic resolution (04): when the moving average of the frame time exceeds `slowMs` the
-   * render scale drops by `step` (down to `min`); when frames stay under `fastMs` for `upFrames`
-   * it is raised again. A raise that fails within `failSeconds` doubles the wait before the next try.
+   * Automatic resolution (04): when the average frame time (smoothed over `smooth` seconds) stays
+   * above `slowMs` for `downSeconds`, the render scale drops by `step` (two steps when it is over
+   * twice the limit), down to `min`. When frames stay under `fastMs` for `upSeconds` it is raised
+   * again; a raise that fails within `failSeconds` doubles the wait before the next try.
    */
-  resolution: { slowMs: 20, fastMs: 17.5, step: 0.125, min: 0.5, window: 30, upFrames: 150, failSeconds: 4, maxBackoff: 16 },
+  resolution: { slowMs: 20, fastMs: 17.5, step: 0.125, min: 0.5, smooth: 0.5, downSeconds: 1, upSeconds: 3, failSeconds: 4, maxBackoff: 16 },
   /** Anisotropic filtering of the ground texture (keeps roads sharp at grazing angles). */
   groundAnisotropy: 4,
   /** Operation area edge length (m). */
@@ -108,8 +110,8 @@ export const RENDER = {
     /** Line half-width and dot radius in mil, with minimums in pixels. */
     lineMil: 0.035,
     lineMinPx: 0.75,
-    dotMil: 0.11,
-    dotMinPx: 1.6,
+    dotMil: 0.13,
+    dotMinPx: 1.7,
     /** Dots along each arm, where the thick posts start (mil). */
     dots: 8,
     postFrom: 10,
@@ -135,7 +137,5 @@ export const RENDER = {
     stone: 0xa9a7a0,
     wood: 0x8a6a48,
     blood: 0x6a1410,
-    /** Tracer: a short bright streak following the bullet (helps reading the trajectory). */
-    tracer: 0xffe9b0,
   },
 } as const;

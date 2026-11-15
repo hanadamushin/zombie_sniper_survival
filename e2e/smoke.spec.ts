@@ -207,6 +207,7 @@ test('every land class renders within the draw-call budget', async ({ page }) =>
     // compilation) pass, then sample frame times for 4 s.
     const stats = await page.evaluate(async () => {
       const g = window.__game!;
+      g.renderer.setAutoResolution(false); // measure at full resolution, without buffer reallocations in the sample
       g.debug.setClock(12);
       const v = g.map!.vantages.reduce((a, b) => (b.pos[1] > a.pos[1] ? b : a));
       g.debug.teleport(v.pos[0], v.pos[2], Math.atan2(-(512 - v.pos[0]), -(512 - v.pos[2])), -0.1);
@@ -239,5 +240,97 @@ test('every land class renders within the draw-call budget', async ({ page }) =>
   }
   // Numbers for docs/PROGRESS.md (software rendering in CI; see the note there).
   console.log(report.join('\n'));
+  expect(errors).toEqual([]);
+});
+
+// ---------------------------------------------------------------------------------------------
+// 04: sniping
+// ---------------------------------------------------------------------------------------------
+
+test('firing range: scope, a zeroed head shot at 300 m, ears, and 150 zombies within budget', async ({ page }) => {
+  test.setTimeout(180_000);
+  const errors = trackErrors(page);
+  await page.goto('/?range=1');
+  await page.waitForFunction(() => (window.__game?.state?.tactical?.zombies.length ?? 0) >= 12);
+  await expect(page.getByTestId('hud-ammo')).toHaveAttribute('data-mag', '5');
+
+  // Scope up, prone, zero 300 m, full zoom. The debug input stands in for the mouse (no pointer lock headless).
+  await page.evaluate(() => {
+    const g = window.__game!;
+    g.state!.flags.noSway = true;
+    g.debug.setInput({ scope: true, stance: 'prone', zoomDelta: 30, zeroDelta: 2 });
+  });
+  await page.waitForFunction(() => window.__game!.state!.player.aim.scopeT === 1 && window.__game!.state!.player.eye < 0.31);
+  await expect(page.getByTestId('hud-zero')).toHaveAttribute('data-zero', '300');
+  expect(await page.evaluate(() => window.__game!.renderer.view.fov())).toBeCloseTo((2 * Math.atan(Math.tan((20 * Math.PI) / 180) / 12) * 180) / Math.PI, 3);
+
+  // Put the reticle on the head of the 300 m target and fire: with the zero set, no hold-over is needed.
+  const before = await page.evaluate(() => {
+    const s = window.__game!.state!;
+    const p = s.player;
+    const z = s.tactical!.zombies.find((t) => t.dummy === 1 && t.kind === 'walker' && Math.abs(p.pos[2] - t.pos[2] - 300) < 1)!;
+    const dx = z.pos[0] - p.pos[0];
+    const dz = z.pos[2] - p.pos[2];
+    p.yaw = Math.atan2(-dx, -dz);
+    p.pitch = Math.atan2(1.75 - 0.125 - (p.pos[1] + p.eye), Math.hypot(dx, dz));
+    window.__game!.debug.setInput({ fire: true });
+    return { id: z.id, kills: p.stats.kills };
+  });
+  await page.waitForFunction((k) => window.__game!.state!.player.stats.kills > k, before.kills, { timeout: 20_000 });
+  const after = await page.evaluate(() => ({ ...window.__game!.state!.player.stats, mag: window.__game!.state!.player.weapon.mag }));
+  expect(after.headshots).toBe(1);
+  expect(after.shots).toBe(1);
+  expect(after.mag).toBe(4);
+  await page.evaluate(() => window.__game!.debug.setInput(null));
+
+  // Walk up to the body (teleport) and hold E.
+  await page.waitForFunction(() => window.__game!.state!.tactical!.corpses.length === 1, null, { timeout: 20_000 });
+  await expect(page.getByTestId('hud-earhint')).toBeVisible();
+  await page.evaluate(() => {
+    const g = window.__game!;
+    const c = g.state!.tactical!.corpses[0]!;
+    g.debug.teleport(c.pos[0] + 1, c.pos[2] + 1);
+    g.debug.setInput({ interactHeld: true });
+  });
+  await expect(page.getByTestId('hud-ears')).toHaveAttribute('data-ears', '2', { timeout: 20_000 });
+  await page.evaluate(() => window.__game!.debug.setInput(null));
+
+  // 150 zombies on screen: draw calls, triangles and main-thread time (no GPU here; see docs/PROGRESS.md).
+  const stats = await page.evaluate(async () => {
+    const g = window.__game!;
+    const auto = g.renderer.resolutionScale(); // what the automatic resolution settled on so far (software rendering)
+    g.renderer.setAutoResolution(false);
+    g.debug.teleport(512, 700, 0, 0);
+    const have = g.state!.tactical!.zombies.length;
+    g.debug.spawnZombies(150 - have, 70);
+    for (const z of g.state!.tactical!.zombies) if (!z.dummy) z.dummy = 1; // keep them on their feet for the measurement
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    const a = g.debug.renderInfo();
+    await new Promise((resolve) => setTimeout(resolve, 4000));
+    const b = g.debug.renderInfo();
+    return { zombies: g.state!.tactical!.zombies.length, calls: b.calls, triangles: b.triangles, cpu: (b.cpuMs - a.cpuMs) / Math.max(1, b.frames - a.frames), scale: auto };
+  });
+  console.log(`range, ${stats.zombies} zombies: ${stats.calls} draw calls, ${stats.triangles} triangles, main thread ${stats.cpu.toFixed(2)} ms/frame at full resolution (automatic scale had reached ${stats.scale})`);
+  expect(stats.zombies).toBe(150);
+  expect(stats.calls).toBeLessThan(150);
+  expect(stats.triangles).toBeLessThan(500_000);
+  expect(stats.cpu).toBeLessThan(4);
+  expect(errors).toEqual([]);
+});
+
+test('home cell: zombies are out there, one shot fired from the start position', async ({ page }) => {
+  test.setTimeout(120_000);
+  const errors = trackErrors(page);
+  await page.goto('/?seed=12&scenario=0');
+  await startNewGame(page);
+  await page.waitForFunction(() => (window.__game?.state?.tactical?.zombies.length ?? 0) >= 10, null, { timeout: 60_000 });
+  const z0 = await page.evaluate(() => window.__game!.state!.world.cells.Z[window.__game!.state!.player.cell]!);
+  expect(z0).toBeGreaterThanOrEqual(40);
+  await page.evaluate(() => window.__game!.debug.setInput({ scope: true }));
+  await page.waitForFunction(() => window.__game!.state!.player.aim.scopeT === 1);
+  await page.evaluate(() => window.__game!.debug.setInput({ fire: true }));
+  await page.waitForFunction(() => window.__game!.state!.player.stats.shots === 1);
+  await expect(page.getByTestId('hud-ammo')).toHaveAttribute('data-mag', '4');
+  await expect(page.getByTestId('hud-ammo')).toHaveAttribute('data-ammo', '100');
   expect(errors).toEqual([]);
 });
