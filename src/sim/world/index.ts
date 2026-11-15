@@ -10,6 +10,8 @@ import { BALANCE } from '../../data/balance.ts';
 import type { System } from '../system.ts';
 import { dangerOf, removeZombies } from './derive.ts';
 import { stepInfection, type InfectionExtras } from './infection.ts';
+import { ctxNow } from '../colony/stock.ts';
+import { assignGarrison, foundOutpost, isStation, outpostsDay, upgradeOutpost } from './outposts.ts';
 import { advanceTravel, findRoute } from './travel.ts';
 
 /** Prey weight added by the player's settlements (spec §2.2: population x 2 counts as H). */
@@ -23,7 +25,8 @@ export function settlementAttraction(state: GameState): InfectionExtras {
     attraction.push({ cell: home, weight: (atHome + 1) * perColonist }); // +1: the player
   }
   for (const outpost of state.world.outposts) attraction.push({ cell: outpost.cell, weight: outpost.garrison.length * perColonist });
-  return { attraction, watch: home !== null ? [home] : [] };
+  // Watched cells: the home base first, then every outpost in order (their inflow is the day's attack on them).
+  return { attraction, watch: home !== null ? [home, ...state.world.outposts.map((o) => o.cell)] : [] };
 }
 
 function worldReady(state: GameState, grid: StaticGrid | null): grid is StaticGrid {
@@ -37,10 +40,26 @@ export const worldSystem: System = {
       const reject = (reason: string): void => ctx.emit({ type: 'commandRejected', command: 'travel', reason });
       if (!worldReady(state, ctx.grid)) return reject('noMap');
       if (state.world.travel) return reject('alreadyTravelling');
-      const route = findRoute(ctx.grid, state.player.cell, cmd.to);
+      // Fast travel (06): only between the base and outposts.
+      const fast = cmd.fast === true;
+      if (fast && !(isStation(state, state.player.cell) && isStation(state, cmd.to))) return reject('notStation');
+      const route = findRoute(ctx.grid, state.player.cell, cmd.to, fast);
       if (!route || route.path.length < 2) return reject('noRoute');
       state.world.travel = { from: state.player.cell, to: cmd.to, path: route.path, progress: 0 };
+      if (fast) state.world.travel.fast = true;
       ctx.emit({ type: 'travelStarted', from: state.player.cell, to: cmd.to, minutes: route.minutes });
+    },
+    foundOutpost(state, cmd, ctx) {
+      const reason = foundOutpost(ctxNow(state, ctx.grid, ctx.emit), cmd.cell);
+      if (reason) ctx.emit({ type: 'commandRejected', command: cmd.type, reason });
+    },
+    upgradeOutpost(state, cmd, ctx) {
+      const reason = upgradeOutpost(ctxNow(state, ctx.grid, ctx.emit), cmd.id);
+      if (reason) ctx.emit({ type: 'commandRejected', command: cmd.type, reason });
+    },
+    assignGarrison(state, cmd, ctx) {
+      const reason = assignGarrison(ctxNow(state, ctx.grid, ctx.emit), cmd.survivor, cmd.outpost);
+      if (reason) ctx.emit({ type: 'commandRejected', command: cmd.type, reason });
     },
   },
 
@@ -68,5 +87,6 @@ export const worldSystem: System = {
     const inflow = stats.inflow[0] ?? 0;
     state.world.hordeMeter += inflow;
     ctx.emit({ type: 'infectionStepped', day: state.time.day, homeInflow: inflow });
+    outpostsDay(ctxNow(state, ctx.grid, ctx.emit), stats.inflow.slice(1));
   },
 };

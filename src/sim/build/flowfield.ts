@@ -36,8 +36,6 @@ const entryTile = new Int32Array(N * 9);
 const entryNext = new Int32Array(N * 9);
 const stepCost = new Int32Array(N);
 const goalMark = new Uint8Array(N);
-const DX = [-1, 1, 0, 0, -1, 1, -1, 1];
-const DY = [0, 0, -1, 1, -1, -1, 1, 1];
 
 /**
  * Dijkstra from `goals` outwards. `cost[t]` is the price of entering tile t in plain steps
@@ -55,57 +53,69 @@ export function computeField(cost: Float32Array, goals: readonly { tile: number;
     const c = cost[i]!;
     stepCost[i] = c === Infinity ? -1 : Math.max(1, Math.round(c * 10));
   }
+  // Dial's algorithm: buckets[d & MASK] is a linked list of tiles whose tentative distance is d.
+  const H = heads, ET = entryTile, EN = entryNext, SC = stepCost, GM = goalMark;
   let entries = 0;
   let pending = 0;
-  const push = (tile: number, d: number): void => {
-    const b = d & MASK;
-    entryTile[entries] = tile;
-    entryNext[entries] = heads[b]!;
-    heads[b] = entries++;
-    pending++;
-  };
-  let lo = UNREACHED;
+  let lo = -1;
   for (const g of goals) {
     if (g.tile < 0 || g.tile >= N) continue;
-    const d = Math.round(g.bias * 10);
+    const d = Math.max(0, Math.round(g.bias * 10)) | 0;
     if (d < dist[g.tile]!) {
       dist[g.tile] = d;
-      goalMark[g.tile] = 1;
-      push(g.tile, d);
-      if (d < lo) lo = d;
+      GM[g.tile] = 1;
+      const b = d & MASK;
+      ET[entries] = g.tile;
+      EN[entries] = H[b]!;
+      H[b] = entries++;
+      pending++;
+      if (lo < 0 || d < lo) lo = d;
     }
   }
-  for (let d = lo; pending > 0; d++) {
+  const W = TILES;
+  for (let d = lo | 0; pending > 0; d = (d + 1) | 0) {
     const b = d & MASK;
-    let e = heads[b]!;
+    let e = H[b]!;
     if (e < 0) continue;
-    heads[b] = -1;
+    H[b] = -1;
     while (e >= 0) {
-      const cur = entryTile[e]!;
-      e = entryNext[e]!;
+      const cur = ET[e]!;
+      e = EN[e]!;
       pending--;
       if (dist[cur] !== d) continue; // stale entry
-      const enter = goalMark[cur] ? 10 : stepCost[cur]!;
-      const cx = cur % TILES;
-      const cy = (cur - cx) / TILES;
-      for (let k = 0; k < 8; k++) {
-        const nx = cx + DX[k]!;
-        const ny = cy + DY[k]!;
-        if (nx < 0 || ny < 0 || nx >= TILES || ny >= TILES) continue;
-        const n = ny * TILES + nx;
-        if (stepCost[n]! < 0 && !goalMark[n]) continue; // nobody can stand there, so nobody starts from there
-        let nd: number;
-        if (k < 4) nd = d + enter;
-        else {
-          // Diagonal: only across open ground on all four tiles involved.
-          if (enter !== 10 || stepCost[n] !== 10 || stepCost[cy * TILES + nx] !== 10 || stepCost[ny * TILES + cx] !== 10) continue;
-          nd = d + 14;
-        }
-        if (nd < dist[n]!) {
-          dist[n] = nd;
-          next[n] = cur;
-          push(n, nd);
-        }
+      const enter = GM[cur] ? 10 : SC[cur]!;
+      const cx = cur % W;
+      const cy = (cur - cx) / W;
+      const nd = (d + enter) | 0;
+      // Orthogonal neighbours.
+      for (let k = 0; k < 4; k++) {
+        const n = k === 0 ? (cx > 0 ? cur - 1 : -1) : k === 1 ? (cx < W - 1 ? cur + 1 : -1) : k === 2 ? (cy > 0 ? cur - W : -1) : cy < W - 1 ? cur + W : -1;
+        if (n < 0 || nd >= dist[n]!) continue;
+        if (SC[n]! < 0 && !GM[n]) continue; // nobody can stand there, so nobody starts from there
+        dist[n] = nd;
+        next[n] = cur;
+        const nb = nd & MASK;
+        ET[entries] = n;
+        EN[entries] = H[nb]!;
+        H[nb] = entries++;
+        pending++;
+      }
+      // Diagonal: only across open ground on all four tiles involved.
+      if (enter !== 10) continue;
+      const dd = (d + 14) | 0;
+      for (let k = 0; k < 4; k++) {
+        const sx = k & 1 ? 1 : -1;
+        const sy = k & 2 ? W : -W;
+        if ((sx < 0 ? cx === 0 : cx === W - 1) || (sy < 0 ? cy === 0 : cy === W - 1)) continue;
+        const n = cur + sx + sy;
+        if (dd >= dist[n]! || SC[n] !== 10 || SC[cur + sx] !== 10 || SC[cur + sy] !== 10) continue;
+        dist[n] = dd;
+        next[n] = cur;
+        const nb = dd & MASK;
+        ET[entries] = n;
+        EN[entries] = H[nb]!;
+        H[nb] = entries++;
+        pending++;
       }
     }
   }

@@ -180,13 +180,12 @@ export function structureAtTile(state: GameState, ov: Overlay, tile: number): St
 // ---------------------------------------------------------------------------------------------
 
 interface Synced {
-  build: GameState['build'];
+  owner: object | null;
   rev: number;
   baseSolids: number;
   baseLadders: number;
 }
 const synced = new WeakMap<TacticalMap, Synced>();
-
 
 /** Which of the four neighbours (W, E, N, S) of a wall-like tile are wall-like too. */
 export function wallLinks(state: GameState, ov: Overlay, tx: number, ty: number): [boolean, boolean, boolean, boolean] {
@@ -256,28 +255,40 @@ function addSolids(_state: GameState, ov: Overlay, map: TacticalMap, st: Structu
 }
 
 /**
- * Put the collision boxes and ladders of the standing structures into the home map (after the
- * generated ones) so that the player, bullets and zombies meet them through the ordinary
- * collision functions. Cheap when nothing changed.
+ * Replace the extra collision boxes and ladders of a generated map (everything after the ones it
+ * was generated with) by what `fill` adds, unless (owner, rev) is what is already in place.
+ * This is how the player, bullets and zombies meet built things through the ordinary collision
+ * functions. `owner` null clears the extras.
  */
-export function syncMap(state: GameState, map: TacticalMap): void {
+export function syncSolids(map: TacticalMap, owner: object | null, rev: number, fill: (solids: Solid[], ladders: Ladder[]) => void): void {
   let rec = synced.get(map);
-  if (!rec) synced.set(map, (rec = { build: state.build, rev: -1, baseSolids: map.solids.length, baseLadders: map.ladders.length }));
-  if (rec.build === state.build && rec.rev === state.build.gridRev) return;
-  rec.build = state.build;
-  rec.rev = state.build.gridRev;
+  if (!rec) {
+    if (owner === null) return;
+    synced.set(map, (rec = { owner: null, rev: -1, baseSolids: map.solids.length, baseLadders: map.ladders.length }));
+  }
+  if (rec.owner === owner && rec.rev === rev) return;
+  rec.owner = owner;
+  rec.rev = rev;
   const hash = map.hash;
   for (const list of hash.solids) while (list.length > 0 && list[list.length - 1]! >= rec.baseSolids) list.pop();
   map.solids.length = rec.baseSolids;
   map.ladders.length = rec.baseLadders;
-  const ov = overlayOf(state, map.walk);
-  for (const st of state.build.structures) if (isBuilt(st)) addSolids(state, ov, map, st, map.solids, map.ladders);
+  if (owner === null) return;
+  fill(map.solids, map.ladders);
   const cs = hash.cell;
   const clamp = (v: number): number => Math.min(hash.n - 1, Math.max(0, Math.floor(v / cs)));
   for (let i = rec.baseSolids; i < map.solids.length; i++) {
     const s = map.solids[i]!;
     for (let cz = clamp(s.z0); cz <= clamp(s.z1); cz++) for (let cx = clamp(s.x0); cx <= clamp(s.x1); cx++) hash.solids[cz * hash.n + cx]!.push(i);
   }
+}
+
+/** The home map gets the boxes and ladders of the standing structures. Cheap when nothing changed. */
+export function syncMap(state: GameState, map: TacticalMap): void {
+  syncSolids(map, state.build, state.build.gridRev, (solids, ladders) => {
+    const ov = overlayOf(state, map.walk);
+    for (const st of state.build.structures) if (isBuilt(st)) addSolids(state, ov, map, st, solids, ladders);
+  });
 }
 
 /** Thickness of a gate's leaves (m): what zombies press against. */

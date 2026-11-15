@@ -290,11 +290,16 @@ export function breachRoute(state: GameState, dir: number): { route: Structure[]
   const field = raidField(state, areaOf(state)?.map.params.isHome ? areaOf(state)!.map : null);
   const ov = overlayOf(state, areaOf(state)?.map.params.isHome ? areaOf(state)!.map.walk : null);
   const [cx, cz] = baseCentre(state);
-  const r = R.spawnDist[0];
+  const r: number = R.spawnDist[0];
   const clamp = (v: number): number => Math.min(TACTICAL.size - 6, Math.max(6, v));
-  let tile = tileOf(clamp(cx + Math.sin(dir) * r), clamp(cz - Math.cos(dir) * r));
+  // Start where the column enters; if that very spot is no ground to stand on, a little nearer.
+  let tile = -1;
+  for (let back = 0; back < r - 20 && tile < 0; back += TILE) {
+    const t = tileOf(clamp(cx + Math.sin(dir) * (r - back)), clamp(cz - Math.cos(dir) * (r - back)));
+    if (field.dist[t] !== FIELD_UNREACHED) tile = t;
+  }
   const route: Structure[] = [];
-  if (field.dist[tile] === FIELD_UNREACHED) return { route, reachable: false };
+  if (tile < 0) return { route, reachable: false };
   for (let guard = 0; guard < TILES * 4; guard++) {
     const next = field.next[tile]!;
     if (next < 0) break;

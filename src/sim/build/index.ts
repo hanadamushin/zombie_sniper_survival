@@ -20,11 +20,30 @@ import { areaOf } from '../tactical/area.ts';
 import { cancelStructure, foundBase, placeBlueprint, setPriority } from './blueprints.ts';
 import { updateDefenders } from './defense.ts';
 import { playerPresent, raidAbandoned, raidMinute, raidStep } from './raids.ts';
-import { defOf, hasTech, isBuilt, maxHp, syncMap } from './structures.ts';
+import { heightAt } from '../tactical/collision.ts';
+import { outpostAt, outpostPrefab } from '../world/outposts.ts';
+import { defOf, hasTech, isBuilt, maxHp, syncMap, syncSolids } from './structures.ts';
 
 function homeMap(state: GameState) {
   const area = areaOf(state);
   return area && area.map.params.isHome && !state.flags.range ? area : null;
+}
+
+/** In an outpost cell the compound's fence, tents and crates collide too. */
+function syncOutpost(state: GameState): void {
+  const area = areaOf(state);
+  if (!area || state.flags.range) return;
+  const o = outpostAt(state, state.tactical!.cell);
+  if (!o) return syncSolids(area.map, null, 0, () => {});
+  syncSolids(area.map, o, o.tier, (solids) => {
+    const prefab = outpostPrefab(area.map, o.tier);
+    if (!prefab) return;
+    for (const b of prefab.boxes) {
+      if (!b.solid) continue;
+      const y = heightAt(area.map, (b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
+      solids.push({ x0: b.x0, z0: b.z0, x1: b.x1, z1: b.z1, y0: y - 2, y1: y + b.h, kind: 'prop', ref: -1 });
+    }
+  });
 }
 
 /** Things that happen to structures with time. */
@@ -69,6 +88,7 @@ export const buildSystem: System = {
   step(state, ctx) {
     const area = homeMap(state);
     if (area) syncMap(state, area.map);
+    else syncOutpost(state);
     if (state.build.raid) {
       if (area && playerPresent(state)) raidStep(state, ctx, area);
       else raidAbandoned(state, ctx);
