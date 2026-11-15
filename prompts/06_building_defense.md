@@ -91,3 +91,14 @@
 - 04 のゾンビは凹んだ地形や密集した建物で引っかかることがある。本拠以外のセルでも、追跡中のゾンビ向けに「プレイヤー位置を目標にしたフローフィールド」を低頻度（プレイヤーが 8m 以上動いたら、最短 1 秒間隔）で作り直して使うと解消できる。本拠用と同じ実装を流用できる範囲で入れる
 - 本拠セルでは通常のゾンビは中央から 150m より外に出現し、視認距離 40m なので拠点へは来ない。拠点を襲うのは襲来（E）だけ、という前提で設計する
 - 駐屯地・本拠での `resupply` は 05 が本拠ぶんを実装済みのはず。駐屯地ぶんを同じコマンドに足す
+
+### 05 の結果を受けて
+
+- 建築 output の受け口は `sim/colony/jobs.ts` の `distributeBuildWork(state, points, workOf?)`。今は `sim/colony/index.ts` が毎時、一律の必要作業量（`COLONY.defaultBuildWork`）で設計図へ配っている。`buildings.ts` の工数を渡すように差し替え、資材搬入（`Structure.delivered`）を足す
+- **備蓄を変えるときは必ず `sim/colony/stock.ts` の `moveStock` / `moveEars` を通す**（台帳と備蓄の一致をテストしている。`colony.stock` へ直接書くと落ちる）
+- 建物の効果は `COLONY.facilities` の def id（`farm` / `workshop` / `clinic` / `house`）を `builtCount` で数える形で 05 が読んでいる。id を合わせるか表を直す。容量は `colony.capacity` を増やす
+- 05 の仮の野営地（`COLONY.camp` の座標と `render/tactical/survivors.ts` の `buildCamp`）は見た目だけで、衝突も建築グリッドの占有もない。実物の建物に置き換える
+- 襲来時の口: `sim/colony/ai.ts` の `setAlarm(state, on)`（防衛担当は持ち場、ほかは司令部へ。移動だけで、作業量は止めていない）。防衛担当の一覧は `defenders(state)`。生存者には当たり判定も被害もまだ無い。死亡させるときは `morale.ts` の `killSurvivor`、撃退の士気は `changeMorale`
+- 生存者の経路は `ai.ts` の `findPath`（`map.walk` だけを見る）。壁・堀・門を置いたら通行判定を差し替える
+- プレイヤーの死後は `flags.skipMinutes` で 3 日ぶんの minute / hour / day フックが 1 tick 内に回る。襲来の判定が hour フックにあるなら、その間に来た襲来をどう扱うか決める
+- 性能の判定は「sim 1 ステップ＋ `renderer.draw` 1 回」を直接測る（05 の e2e の `sample()`）。フレーム平均はソフトウェア描画の fps に引きずられる

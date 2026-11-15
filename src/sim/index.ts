@@ -23,6 +23,7 @@
 import { CommandQueue, type Command, type CommandType } from '../core/commands.ts';
 import { EventBus, type GameEvent } from '../core/events.ts';
 import type { GameState, InputFrame, StaticGrid } from '../core/types.ts';
+import { BALANCE } from '../data/balance.ts';
 import { buildSystem } from './build/index.ts';
 import { colonySystem } from './colony/index.ts';
 import { researchSystem } from './research/index.ts';
@@ -130,6 +131,19 @@ export function createSim(options: SimOptions = {}): Sim {
       if (b.minute) for (const s of systems) s.minute?.(state, ctx); // 5
       if (b.hour) for (const s of systems) s.hour?.(state, ctx); // 6
       if (b.day) for (const s of systems) s.day?.(state, ctx); // 7
+      // Time skip (05: the three days after the player's death). flags.skipMinutes game minutes
+      // pass at once: the clock and the minute / hour / day hooks run, the per-step hooks do not.
+      let skip = Number(state.flags.skipMinutes ?? 0);
+      if (skip > 0) {
+        delete state.flags.skipMinutes;
+        const skipCtx = makeCtx(BALANCE.time.realSecondsPerGameMinute, NO_INPUT);
+        for (; skip > 0; skip--) {
+          const s = advanceTime(state, skipCtx);
+          if (s.minute) for (const sys of systems) sys.minute?.(state, skipCtx);
+          if (s.hour) for (const sys of systems) sys.hour?.(state, skipCtx);
+          if (s.day) for (const sys of systems) sys.day?.(state, skipCtx);
+        }
+      }
       prevEvents = events.flush(); // 8
     },
   };

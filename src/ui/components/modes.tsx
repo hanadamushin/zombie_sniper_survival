@@ -16,6 +16,10 @@ import { t, type TextKey } from '../i18n/ja.ts';
 import type { UiActions } from '../store.ts';
 import { WorldMap } from '../world/WorldMap.tsx';
 import { slotLabel } from './TitleScreen.tsx';
+import { CommandPanel } from '../command/CommandPanel.tsx';
+import { logText } from '../command/format.ts';
+import { interactionAt, nearestHideout } from '../../sim/colony/encounters.ts';
+import { playerAtHome } from '../../sim/colony/morale.ts';
 
 interface ModeProps {
   state: GameState;
@@ -40,7 +44,16 @@ function nearestEars(state: GameState): { dist: number; turn: number } | null {
   return best;
 }
 
-export function TacticalLayer({ state }: ModeProps) {
+/** The latest log line, shown for a few game minutes on the tactical HUD. */
+function Toast({ state, grid }: { state: GameState; grid: StaticGrid | null }) {
+  const last = state.colony.log[state.colony.log.length - 1];
+  if (!last) return null;
+  const age = state.time.day * 1440 + state.time.minute - (last.day * 1440 + last.minute);
+  if (age < 0 || age > 8) return null;
+  return <div class="toast" data-testid="hud-toast" data-kind={last.kind}>{logText(last, grid)}</div>;
+}
+
+export function TacticalLayer({ state, grid }: ModeProps) {
   const p = state.player;
   const aim = p.aim;
   const w = p.weapon;
@@ -55,6 +68,9 @@ export function TacticalLayer({ state }: ModeProps) {
   const reach = corpseInReach(state);
   const wind = windOf(state);
   const windSpeed = Math.hypot(wind[0], wind[1]);
+  const act = dead ? null : interactionAt(state);
+  const someone = dead || act ? null : nearestHideout(state);
+  const canResupply = !dead && playerAtHome(state) && state.colony.stock.ammo >= 1 && (p.inv.ammo ?? 0) < BALANCE.player.maxAmmo;
   const busy = w.reloadT > 0 ? t('hud.reloading') : w.boltT > 0 ? t('hud.bolt') : w.mag === 0 ? t((p.inv.ammo ?? 0) > 0 ? 'hud.empty' : 'hud.noAmmo') : '';
   return (
     <div class={`mode-layer tactical${scoped ? ' scoped' : ''}`} data-testid="mode-tactical">
@@ -74,6 +90,18 @@ export function TacticalLayer({ state }: ModeProps) {
           <span class="bar"><span style={{ width: `${Math.round((aim.interactT / BALANCE.combat.ears.seconds) * 100)}%` }} /></span>
         </div>
       )}
+      {act && !reach && (
+        <div class="interact" data-testid="hud-act" data-kind={act.kind}>
+          <span>{t(act.kind === 'talk' ? 'hud.talk' : 'hud.search')}</span>
+        </div>
+      )}
+      {someone && !ears && (
+        <div class="ear-hint" data-testid="hud-someone">
+          <span class="arrow" style={{ transform: `rotate(${(-someone.turn).toFixed(2)}rad)` }}>▲</span>
+          <span>{t('hud.someone', { m: Math.round(someone.dist) })}</span>
+        </div>
+      )}
+      <Toast state={state} grid={grid} />
       {ears && !reach && !dead && (
         <div class="ear-hint" data-testid="hud-earhint">
           <span class="arrow" style={{ transform: `rotate(${(-ears.turn).toFixed(2)}rad)` }}>▲</span>
@@ -99,6 +127,7 @@ export function TacticalLayer({ state }: ModeProps) {
         <span data-testid="hud-zoom">{t('hud.zoom', { x: w.zoom.toFixed(1) })}</span>
         {windSpeed > 0.05 && <span>{t('hud.wind', { v: windSpeed.toFixed(1), deg: Math.round(headingDeg(Math.atan2(-wind[0], -wind[1]))) })}</span>}
         <span class="ears" data-testid="hud-ears" data-ears={p.inv.ears ?? 0}>{t('hud.ears', { n: p.inv.ears ?? 0 })}</span>
+        {canResupply && <span class="resupply" data-testid="hud-resupply">{t('hud.resupply', { n: Math.floor(state.colony.stock.ammo) })}</span>}
         <span class="mag-size sr-only">{def.magSize}</span>
       </div>
       {dead && (
@@ -120,10 +149,24 @@ export function AreaLoading() {
   );
 }
 
-export function CommandLayer(_props: ModeProps) {
+export function CommandLayer(props: ModeProps) {
   return (
     <div class="mode-layer command" data-testid="mode-command">
-      <div class="panel placeholder">{t('command.placeholder')}</div>
+      <CommandPanel {...props} />
+    </div>
+  );
+}
+
+/** The game is lost (the player died with nobody left in the colony). */
+export function DefeatOverlay({ state, actions }: ModeProps) {
+  return (
+    <div class="mode-layer menu defeat" data-testid="defeat">
+      <div class="panel menu-panel">
+        <h2>{t('hud.defeat')}</h2>
+        <p>{t('hud.defeatLead')}</p>
+        <p class="status">{t('hud.defeatDays', { day: state.time.day })}</p>
+        <button class="primary" onClick={() => actions.quitToTitle()}>{t('menu.toTitle')}</button>
+      </div>
     </div>
   );
 }

@@ -99,6 +99,7 @@ export function createInput(deps: InputDeps): Input {
       case 'toggleWorld': toggleMode('world'); return;
       case 'menu': toggleMode('menu'); return;
       case 'pause': togglePause(); return;
+      case 'resupply': dispatch({ type: 'resupply' }); return;
       case 'speed1':
       case 'speed2':
       case 'speed3': dispatch({ type: 'setSpeed', speed: SPEED_KEYS[action] }); return;

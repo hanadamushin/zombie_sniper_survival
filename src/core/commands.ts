@@ -14,6 +14,7 @@ export type Command =
   | { type: 'dismiss'; survivor: EntityId }
   | { type: 'buyFood'; amount: number; source: string }
   | { type: 'sendExpedition'; members: EntityId[]; target: CellId; weapon: string }
+  | { type: 'setPolicy'; autoBuyFood: boolean }
   // --- build / defense (06) ---
   | { type: 'placeBlueprint'; def: string; tx: number; ty: number; rot: 0 | 1 | 2 | 3 }
   | { type: 'cancelStructure'; id: EntityId }

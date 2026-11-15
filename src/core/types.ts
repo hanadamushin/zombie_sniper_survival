@@ -3,10 +3,11 @@
 // Fields may be ADDED by later sessions; renames/removals must be recorded in docs/PROGRESS.md.
 
 import { BALANCE } from '../data/balance.ts';
+import { COLONY } from '../data/colony.ts';
 import { TACTICAL } from '../data/tactical.ts';
 import { seedRng, type RngState } from './rng.ts';
 
-export const STATE_VERSION = 3;
+export const STATE_VERSION = 4;
 
 export type CellId = number; // gy * gridW + gx
 export type EntityId = number; // allocated from state.nextId (see allocId)
@@ -193,6 +194,8 @@ export interface TacticalState {
   step?: number;
   /** Firing range only: seconds each target lane has been empty (04). */
   rangeT?: number[];
+  /** People hiding at search points of this area (05). `met` once the player has talked to them. */
+  hideouts?: { spot: number; pos: [number, number]; met: boolean }[];
 }
 export interface Zombie {
   id: EntityId;
@@ -276,8 +279,45 @@ export interface ColonyState {
   survivors: Survivor[];
   candidates: Survivor[]; // hireable
   foodPrice: number;
-  ledger: { day: number; income: number; wages: number; food: number; other: number }[]; // last 30 days
-  log: { day: number; minute: number; kind: string; text: string }[]; // last 200 entries
+  ledger: LedgerDay[]; // last 30 days, today's entry last
+  log: LogEntry[]; // last 200 entries
+  // --- added by 05 (save version 4) ---
+  /** Produce the farmers have on sale; the community buys from here at foodPrice. */
+  market: { food: number };
+  /** Work that waits for its consumer: construction points (06), research points (07), ammunition batch and medical points. */
+  work: { build: number; research: number; craft: number; medical: number };
+  policy: { autoBuyFood: boolean };
+  /** Food bought from the village today. */
+  villageBought: number;
+  /** Absolute game minute the colony has been simulated up to (-1: not started). */
+  lastMinute: number;
+  /** The dead. */
+  memorial: { name: string; day: number; cause: string }[];
+  /** Day on which the hideouts of a cell were last set up (cell id -> day). */
+  metCells: Record<string, number>;
+}
+/**
+ * One day of the ledger. Ears: income - wages - food - other = change of the ear stock.
+ * `flow` holds [in, out] per other resource (out includes what was lost to full stores).
+ */
+export interface LedgerDay {
+  day: number;
+  income: number;
+  wages: number;
+  food: number;
+  other: number;
+  flow?: Partial<Record<ResourceId, [number, number]>>;
+}
+/**
+ * `text` is a key of ui/i18n/ja.ts (the sim never formats Japanese); `params` fill its placeholders.
+ * The UI translates a few parameter names: cell, land, job, trait, weapon, cause, items ("food:3|metal:1").
+ */
+export interface LogEntry {
+  day: number;
+  minute: number;
+  kind: string;
+  text: string;
+  params?: Record<string, string | number>;
 }
 export interface Survivor {
   id: EntityId;
@@ -299,6 +339,14 @@ export interface Survivor {
   task: { kind: string; target: EntityId | null; t: number } | null;
   unpaidDays: number;
   lowMoraleDays: number;
+  // --- added by 05 (save version 4) ---
+  /** Meals eaten / missed today. */
+  meals: number;
+  missed: number;
+  infectedUntil: { day: number; minute: number } | null;
+  /** Candidates only: where they were found and the day they stop waiting. */
+  fromCell?: CellId;
+  waitsUntilDay?: number;
 }
 
 export interface BuildState {
@@ -388,6 +436,27 @@ function zeroResources(): Record<ResourceId, number> {
   return { ears: 0, food: 0, ammo: 0, wood: 0, metal: 0, cement: 0, parts: 0, medicine: 0, fuel: 0 };
 }
 
+/** The colony of a fresh game (also used by the save migration to version 4). */
+export function initialColony(): ColonyState {
+  const E = COLONY.economy;
+  return {
+    stock: { ...zeroResources(), ...E.initialStock },
+    capacity: { ...E.baseCapacity },
+    survivors: [],
+    candidates: [],
+    foodPrice: E.foodBasePrice,
+    ledger: [],
+    log: [],
+    market: { food: 0 },
+    work: { build: 0, research: 0, craft: 0, medical: 0 },
+    policy: { autoBuyFood: false },
+    villageBought: 0,
+    lastMinute: -1,
+    memorial: [],
+    metCells: {},
+  };
+}
+
 /** Allocate a unique entity id. */
 export function allocId(state: GameState): EntityId {
   return state.nextId++;
@@ -441,15 +510,7 @@ export function createInitialState(seed: number, difficulty: Difficulty): GameSt
       aim: defaultAim(),
     },
     tactical: null,
-    colony: {
-      stock: zeroResources(),
-      capacity: zeroResources(),
-      survivors: [],
-      candidates: [],
-      foodPrice: 1,
-      ledger: [],
-      log: [],
-    },
+    colony: initialColony(),
     build: { structures: [], gridRev: 0 },
     research: {
       era: 0,

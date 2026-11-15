@@ -127,11 +127,10 @@ function updateFall(state: GameState, area: TacticalArea, ctx: SimContext): void
   if (drop > P.fallSafe) hurtPlayer(state, ctx, Math.round((drop - P.fallSafe) * P.fallDamagePerM), 'fall');
 }
 
-/**
- * Provisional revival: back at the base (or the road where the area was entered) with full health,
- * the carried ears gone and the ammunition reset. 05 replaces this with "three days later at the
- * headquarters, if anyone is left".
- */
+/** deadT stays at this value once the death screen is over, until the colony has revived the player (or the game is lost). */
+export const DEATH_HOLD = 1e-3;
+
+/** Firing range only: back on the firing line with full health and ammunition. */
 function revive(state: GameState, area: TacticalArea, ctx: SimContext): void {
   const p = state.player;
   const map = area.map;
@@ -166,8 +165,10 @@ export function updateCombat(state: GameState, area: TacticalArea, ctx: SimConte
   if (aim.hurtT > 0) aim.hurtT = Math.max(0, aim.hurtT - ctx.dt);
   if (isDead(state)) {
     aim.interactT = 0;
-    aim.deadT -= ctx.dt;
-    if (aim.deadT <= 0) {
+    // The firing range revives on the spot. In the game the colony decides what happens next
+    // (sim/colony/morale.ts updatePlayerDeath): the timer is held just above zero until it has.
+    aim.deadT = Math.max(DEATH_HOLD, aim.deadT - ctx.dt);
+    if (aim.deadT <= DEATH_HOLD && state.flags.range) {
       aim.deadT = 0;
       revive(state, area, ctx);
     }

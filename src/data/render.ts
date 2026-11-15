@@ -130,6 +130,29 @@ export const RENDER = {
     blobOpacity: 0.34,
   },
 
+  // --- survivors (05): clean, saturated work clothes so that nobody is mistaken for a zombie ---
+  survivors: {
+    skin: [0xe0b08c, 0xd9a47e, 0xe8bc98],
+    legs: [0x2b3a55, 0x3a3f4a, 0x4a4032],
+    /** Jacket colour and the colour of what they carry / wear, per job. */
+    job: {
+      idle: { top: 0x6f8fb0, prop: 0x6f8fb0 },
+      farming: { top: 0x3f9a4a, prop: 0xe6cf6a },
+      defense: { top: 0x2f4f9a, prop: 0x1c1c1c },
+      scavenging: { top: 0xe07a1f, prop: 0x5a4a32 },
+      construction: { top: 0xb0862a, prop: 0xf2d21c },
+      research: { top: 0xe8e8ee, prop: 0x3a6ad0 },
+      crafting: { top: 0x8a5a3a, prop: 0x9a9aa2 },
+      medical: { top: 0xf2f2f2, prop: 0xd02020 },
+    },
+    /** People in hiding who have not been met yet. */
+    hidden: { top: 0xf0e060, prop: 0xffffff },
+    blobOpacity: 0.3,
+    max: 80,
+    /** Provisional camp until 06 builds things: tent, fire, field, benches, bedding. */
+    camp: { tent: 0x6a7a52, tentTrim: 0x4a5638, fire: 0xd8662a, stone: 0x77746c, soil: 0x5a4028, crop: 0x5f9a3a, wood: 0x8a6a48, cloth: 0x9aa0b8, cross: 0xc03030, crate: 0x7a6238 },
+  },
+
   // --- hit effects (04): dust / debris / blood puffs ---
   effects: {
     max: 384,

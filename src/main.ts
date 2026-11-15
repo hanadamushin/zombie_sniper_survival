@@ -9,7 +9,7 @@ import { createStepper } from './core/loop.ts';
 import { AUTO_SLOT, createDefaultSaveStore, listSaves, loadGame, saveGame, type SlotId } from './core/save.ts';
 import { effectiveSpeed } from './core/time.ts';
 import { stream } from './core/rng.ts';
-import { continuationFrame, createInitialState, type CellId, type Difficulty, type GameState, type StaticGrid } from './core/types.ts';
+import { continuationFrame, createInitialState, emptyInputFrame, type CellId, type Difficulty, type GameState, type StaticGrid } from './core/types.ts';
 import { BALANCE } from './data/balance.ts';
 import { createInput } from './input/index.ts';
 import { createRenderer } from './render/index.ts';
@@ -17,7 +17,8 @@ import { worldBuildMs } from './render/tactical/index.ts';
 import { createSim } from './sim/index.ts';
 import { areaOf, areaPending, ensureArea, mapOf } from './sim/tactical/area.ts';
 import { addZombie } from './sim/tactical/zombies.ts';
-import type { InputFrame, ZombieKind } from './core/types.ts';
+import type { InputFrame, JobId, ResourceId, ZombieKind } from './core/types.ts';
+import { arrivalPos, generateSurvivor } from './sim/colony/survivors.ts';
 import { supportAt } from './sim/tactical/collision.ts';
 import { initWorld } from './sim/world/scenario.ts';
 import { beginAt, findStartCandidates } from './sim/world/start.ts';
@@ -259,6 +260,11 @@ interface DebugApi {
   openRange(noSway?: boolean): void;
   /** Add n zombies in a ring of the given radius around the player (perf checks, screenshots). Returns how many were added. */
   spawnZombies(n: number, radius?: number, kind?: ZombieKind): number;
+  /** Colony shortcuts (05): put n generated survivors on the roll with a job; add to the stores. Returns the ids. */
+  addSurvivors(n: number, job?: JobId): number[];
+  give(res: ResourceId, amount: number): void;
+  /** An empty input frame, for ticking the sim by hand. */
+  readonly noInput: InputFrame;
 }
 declare global {
   interface Window {
@@ -328,6 +334,23 @@ window.__game = {
         if (addZombie(state, area, kind ?? kinds[i % kinds.length]!, x, z, a)) added++;
       }
       return added;
+    },
+    addSurvivors(n, job = 'idle') {
+      if (!state || !grid) return [];
+      const land = grid.cells[state.player.cell]?.land ?? 'rural';
+      const ids: number[] = [];
+      for (let i = 0; i < n; i++) {
+        const s = generateSurvivor(state, land, stream(state, 'debug.people'));
+        s.job = job;
+        s.pos = arrivalPos(state);
+        state.colony.survivors.push(s);
+        ids.push(s.id);
+      }
+      return ids;
+    },
+    noInput: emptyInputFrame(),
+    give(res, amount) {
+      if (state) state.colony.stock[res] += amount;
     },
     renderInfo: () => ({ calls: renderer.ctx.renderer.info.render.calls, triangles: renderer.ctx.renderer.info.render.triangles, cpuMs, frames, buildMs: worldBuildMs() }),
   },

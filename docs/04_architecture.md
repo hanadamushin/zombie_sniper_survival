@@ -251,6 +251,21 @@ export interface Expedition { id: EntityId; members: EntityId[]; target: CellId;
   weapon: string; departDay: number; departMinute: number; returnDay: number; returnMinute: number; resolved: boolean; }
 ```
 
+05 が追加（STATE_VERSION 4）:
+- `ColonyState.market{food}`（農家の売り物）、`work{build, research, craft, medical}`（消費待ちの作業ポイント）、`policy{autoBuyFood}`、`villageBought`、`lastMinute`（共同体が処理済みの絶対分）、`memorial[]`、`metCells`
+- `ledger[]` は `LedgerDay`（`flow?: 資源 → [入, 出]` を追加）、`log[]` は `LogEntry`（`text` は `ui/i18n/ja.ts` のキー、`params` が埋め込み値。sim は日本語を組み立てない）
+- `Survivor.meals / missed / infectedUntil`、候補のみ `fromCell / waitsUntilDay`。死者は `survivors` から外して `memorial` へ（`status: 'dead'` の要素は残らない）
+- `TacticalState.hideouts[]`（探索ポイントに潜む人）
+- `flags.skipMinutes`（`sim/index.ts` がその分数だけ minute / hour / day フックを回して時間を飛ばす）、`flags.defeat`
+
+### 共同体（`sim/colony/`、05）
+
+- 時計: 共同体は `colony.lastMinute` を持ち、`minute` フックで現在時刻まで **1 分ずつ追いつく**。速度・ステップ幅・プレイヤーの所在に結果が依存しない。1 分の処理順は `colonyMinute`（日次 → 納品 → 毎時 → 食事 → 賃金 → 作業 → 製造 → 遠征 → 感染）
+- 備蓄の変更は必ず `stock.ts` の `moveEars` / `moveStock` を通す（台帳と一致させるため）。ログは `logEntry`
+- 他セッション向けの口（`jobs.ts`）: `distributeBuildWork(state, points, workOf?)`、`takeResearchPoints(state)`、`defenders(state)`、`farmPlots` / `housingBeds` / `facilityFactor`（`COLONY.facilities` の def id を `BuildState` から数える）
+- 拠点内の移動は `ai.ts`（見た目のみ。プレイヤーが本拠セルにいる間だけ動く）。仮の配置は `COLONY.camp`
+- プレイヤーの死: `tactical/combat.ts` は `deadT` を `DEATH_HOLD` で止めるだけ。`colony/morale.ts` の `updatePlayerDeath` が復帰か敗北を決める
+
 ### 乱数（`core/rng.ts`）
 
 xoshiro128**。状態はプレーンオブジェクトで、関数に渡して使う: `rand(r)`, `randRange`, `randInt(r, lo, hi)`（両端含む）, `chance`, `pick`, `gauss`。
@@ -284,6 +299,7 @@ export interface InputFrame { moveX: number; moveZ: number; lookDX: number; look
 基盤が追加したイベント: `speedChanged{speed}`, `modeChanged{mode, prev}`, `commandRejected{command, reason}`。
 02 が追加したイベント: `travelStarted{from, to, minutes}`, `cellEntered{cell, from}`, `travelArrived{cell}`, `travelEncounter{cell, danger}`（枠のみ）, `infectionStepped{day, homeInflow}`。
 04 が追加したイベント: `dryFire`, `reloadStarted{seconds}`, `reloadDone{mag}`, `knifeSwing{hit, killed}`, `playerInfected{untilDay, untilMinute}`, `playerRevived`, `zombieAlerted{id, chase}`。`bulletHit` に `surface`（ゾンビ以外に当たったときの種類）・`dir`・`range`・`killed`、`zombieKilled` に `knife`、`playerHurt` / `playerDied` に `cause`、`shotFired` に `scoped` を追加。
+05 が追加: コマンド `setPolicy{autoBuyFood}`（`resupply` は colony システムが担当）。イベント `candidateFound{id, cell, by}`, `spotSearched{spot, items}`, `expeditionSent`, `earsDeposited{amount}`, `resupplied{ammo}`, `foodBought{amount, cost, source}`, `colonyLog{kind, text}`。`defeat{reason:'noColony'}` と `playerRevived` は共同体が発火。
 `dayStarted` は 00:00 に、同じ tick の `hourStarted{hour:0}` より先に発火する。
 
 イベントは tick 中にバッファされ、tick 末に購読者へ配信（`sim.events.on(type, fn)` / `onAny`）。sim 内システムが他システムのイベントを見る場合は「次の tick で処理」と決め、`ctx.prevEvents`（直前の tick で出たイベント）を読む。
@@ -329,7 +345,7 @@ export interface InputFrame { moveX: number; moveZ: number; lookDX: number; look
 
 - 目標: 内蔵GPUのノートPCで 60fps（最低 30fps）。ドローコール < 150
 - ゾンビ: 部位ごとの `InstancedMesh`（胴・頭・腕×2・脚×2）。歩行アニメは CPU で行列計算（最大150体）
-- 生存者も同方式（色違い）。本拠セルにいるときのみ描画
+- 生存者も同方式（`render/tactical/survivors.ts`: 1 人 7 箱、仕事ごとの上着の色と持ち物。人物 1 ＋ 影 1 ＋ 仮の野営地 1 ドローコール）。本拠セルにいるときのみ描画。探索ポイントの潜伏者も同じメッシュ
 - 建物・樹木・草: InstancedMesh ＋ 距離カリング。影はプレイヤー周辺のみ（または無し＋接地ブロブ）
 - 視程 800m ＋フォグ（260〜800m。04 が 150m から変更）。夜はフォグ色と環境光で表現。空は地平線でフォグ色に溶けるドーム（太陽・月・星はドームのシェーダ内、1 ドローコール）
 - 戦術ワールド（`render/tactical/`）: 地形 1（1m/texel のプロシージャル地面テクスチャ）＋外周の粗い地形 1、建物・階段・鉄塔・はしごは箱の InstancedMesh 1（窓はフラグメントシェーダ）、切妻屋根 1、岩 1、草むら 1（カメラから 150m 以内のみ）、樹木は 2 種 × 4×4 チャンク（視錐台・距離カリング）。実測 15〜40 ドローコール

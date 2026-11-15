@@ -20,9 +20,7 @@ const NO_CONTROLS = Object.freeze(emptyInputFrame());
 
 export const tacticalSystem: System = {
   id: 'tactical',
-  commands: {
-    // resupply: (state, cmd, ctx) => { ... },   (05: colony stock -> player)
-  },
+  // `resupply` (stock -> carried ammunition) is handled by the colony system (sim/colony/encounters.ts).
   step(state, ctx) {
     const area = ensureArea(state, ctx.grid);
     if (!area) return;

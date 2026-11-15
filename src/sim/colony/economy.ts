@@ -1,0 +1,165 @@
+// Economy (spec §5): wages every morning, meals, the food market between the farmers and the
+// community, the neutral village, and ammunition made by the crafters.
+
+import type { GameState, StaticGrid } from '../../core/types.ts';
+import { COLONY } from '../../data/colony.ts';
+import { cellsWithin } from '../world/grid.ts';
+import { facilityFactor, mealPerDay } from './jobs.ts';
+import { logEntry, moveEars, moveStock, type ColonyCtx } from './stock.ts';
+import { isAlive, isHome, statSum } from './survivors.ts';
+
+const E = COLONY.economy;
+
+/** Food the people at home eat per day. */
+export function foodNeedPerDay(state: GameState): number {
+  let need = 0;
+  for (const s of state.colony.survivors) if (isHome(s)) need += mealPerDay(s);
+  return need;
+}
+
+/** Days the food in stock lasts (the target when nobody eats). */
+export function foodDays(state: GameState): number {
+  const need = foodNeedPerDay(state);
+  return need > 0 ? state.colony.stock.food / need : E.targetFoodDays;
+}
+
+/** Price of one food in ears (spec §5). */
+export function foodPriceFor(days: number): number {
+  return E.foodBasePrice * Math.min(E.priceMax, Math.max(E.priceMin, E.priceTop - E.pricePerDay * days));
+}
+
+/** Every hour: new price, the community buys from its farmers, surplus produce rots. */
+export function marketHour(c: ColonyCtx): void {
+  const { state } = c;
+  const colony = state.colony;
+  colony.foodPrice = foodPriceFor(foodDays(state));
+  const want = E.targetFoodDays * foodNeedPerDay(state) - colony.stock.food;
+  const room = colony.capacity.food - colony.stock.food;
+  const qty = Math.min(want, room, colony.market.food, colony.stock.ears / colony.foodPrice);
+  if (qty > 1e-6) {
+    const paid = moveEars(c, 'food', qty * colony.foodPrice);
+    const bought = paid / colony.foodPrice;
+    colony.market.food -= bought;
+    moveStock(c, 'food', bought);
+    c.emit({ type: 'foodBought', amount: bought, cost: paid, source: 'farmers' });
+  }
+  const farmersN = colony.survivors.filter((s) => s.job === 'farming' && isHome(s)).length;
+  colony.market.food = Math.min(colony.market.food, E.marketBase + E.marketPerFarmer * farmersN);
+  if (colony.policy.autoBuyFood && foodDays(state) < E.autoBuyBelowDays && foodNeedPerDay(state) > 0) {
+    const short = foodNeedPerDay(state) * E.autoBuyBelowDays - colony.stock.food;
+    buyFromVillage(c, Math.ceil(short), true);
+  }
+}
+
+/** True when a farming village is within reach of the home cell. */
+export function villageNear(state: GameState, grid: StaticGrid | null): boolean {
+  const home = state.world.homeCell;
+  if (!grid || home === null) return false;
+  const cells = state.world.cells;
+  for (const id of cellsWithin(grid, home, E.villageRadius)) {
+    if (grid.cells[id]?.land !== 'rural') continue;
+    if ((cells.H[id] ?? 0) + (cells.S[id] ?? 0) >= E.villageMinPeople) return true;
+  }
+  return false;
+}
+
+export function villagePrice(): number {
+  return E.foodBasePrice * E.villageFactor;
+}
+
+/** Buy food from the village (spec §5). Returns a rejection reason, or null when something was bought. */
+export function buyFromVillage(c: ColonyCtx, amount: number, quiet = false): string | null {
+  const colony = c.state.colony;
+  if (!villageNear(c.state, c.grid)) return 'noVillage';
+  const price = villagePrice();
+  const left = E.villageDailyCap - colony.villageBought;
+  const qty = Math.min(amount, left, colony.capacity.food - colony.stock.food, Math.floor((colony.stock.ears / price) * 10) / 10);
+  if (left <= 0) return 'dailyCap';
+  if (!(qty > 0)) return colony.stock.ears < price ? 'noEars' : 'noRoom';
+  const paid = moveEars(c, 'food', qty * price);
+  moveStock(c, 'food', qty);
+  colony.villageBought += qty;
+  if (!quiet || colony.villageBought === qty) logEntry(c, 'economy', 'log.villageFood', { n: Math.round(qty * 10) / 10, cost: Math.round(paid * 10) / 10 });
+  c.emit({ type: 'foodBought', amount: qty, cost: paid, source: 'village' });
+  return null;
+}
+
+/**
+ * Morning wages (spec §5). Farmers live off their sales. When the ears run short, the most able
+ * go unpaid first: the others are paid in ascending order of ability.
+ */
+export function payWages(c: ColonyCtx): void {
+  const colony = c.state.colony;
+  const due = colony.survivors.filter((s) => isAlive(s) && s.job !== 'farming').sort((a, b) => statSum(a) - statSum(b) || a.id - b.id);
+  let total = 0;
+  const unpaid: string[] = [];
+  for (const s of due) {
+    if (colony.stock.ears >= s.wage) {
+      total += moveEars(c, 'wages', s.wage);
+      s.unpaidDays = 0;
+    } else {
+      s.unpaidDays += 1;
+      unpaid.push(s.name);
+    }
+  }
+  for (const s of colony.survivors) if (s.job === 'farming') s.unpaidDays = 0;
+  if (unpaid.length > 0) logEntry(c, 'economy', 'log.unpaid', { n: unpaid.length, names: unpaid.slice(0, 3).join('、'), ears: Math.floor(colony.stock.ears) });
+  if (due.length > 0) c.emit({ type: 'wagesPaid', total, unpaid: unpaid.length });
+}
+
+/** One of the three meals: farmers eat their own produce first, everyone else from the stores. */
+export function serveMeal(c: ColonyCtx): void {
+  const colony = c.state.colony;
+  let missed = 0;
+  for (const s of colony.survivors) {
+    if (!isHome(s)) continue;
+    const need = mealPerDay(s) / 3;
+    let got = 0;
+    if (s.job === 'farming') {
+      got = Math.min(need, colony.market.food);
+      colony.market.food -= got;
+    }
+    if (got < need - 1e-9) {
+      if (colony.stock.food >= need - got - 1e-9) got += moveStock(c, 'food', -(need - got));
+      else {
+        // Not a full meal for this one: what was taken from the produce goes back.
+        if (s.job === 'farming') colony.market.food += got;
+        got = 0;
+      }
+    }
+    if (got >= need - 1e-6) s.meals += 1;
+    else {
+      s.missed += 1;
+      missed++;
+    }
+  }
+  if (missed > 0) logEntry(c, 'economy', 'log.noFood', { n: missed });
+}
+
+/** Crafting points become ammunition, one batch at a time, while the materials last. */
+export function craftMinute(c: ColonyCtx): void {
+  const colony = c.state.colony;
+  const K = COLONY.craft;
+  while (colony.work.craft >= K.work) {
+    if (colony.stock.metal < K.metal || colony.stock.parts < K.parts) {
+      // Idle hands: the crafters cannot bank more than one batch of work.
+      if (colony.work.craft > K.work) {
+        colony.work.craft = K.work;
+        if (c.state.flags.craftIdleDay !== c.day) {
+          c.state.flags.craftIdleDay = c.day;
+          logEntry(c, 'economy', 'log.noMaterials', {});
+        }
+      }
+      return;
+    }
+    colony.work.craft -= K.work;
+    moveStock(c, 'metal', -K.metal);
+    moveStock(c, 'parts', -K.parts);
+    moveStock(c, 'ammo', K.ammo);
+  }
+}
+
+/** Whether hand-made ammunition is the best the colony can do right now (UI hint). */
+export function craftingByHand(state: GameState): boolean {
+  return facilityFactor(state, 'crafting') < 1;
+}

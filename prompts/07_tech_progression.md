@@ -62,3 +62,11 @@
 
 - 建国条件の「3地方以上」は `grid.cells[cell].region`（`StaticGrid.regionNames` の添字、8地方）で数える。06 が海を渡る経路を入れている前提なので、PROGRESS.md で確認し、無ければ先にそれを入れる
 - 「感染予測表示」は `sim/world/infection.ts` の `stepInfection` を世界セルのコピーに対して数日ぶん回せば作れる（1日 約1ms）。乱数は予測用に `fork` した系列を使い、本番の `world.infection` 系列を進めないこと
+
+### 05 の結果を受けて
+
+- 研究 output は `sim/colony/jobs.ts` の `takeResearchPoints(state)`（呼ぶと 0 に戻る。毎時呼ぶ。上限 600 で頭打ち）
+- 05 の数値は `data/colony.ts` の `COLONY`（賃金・作業量・食事・農地・工作・遠征）。作業量は `jobs.ts` の `outputPerHour` / `facilityFactor`、賃金は `survivors.ts` の `wageOf` と `economy.ts` の `payWages`、遠征は `expeditions.ts` の `returnChance`
+- 遠征の武器は `EXPEDITION_WEAPONS[].tech` に研究ノード id を入れると解禁制になる（今は全部選べる）。医療の仕事も最初から割り振れる
+- 備蓄の増減は `stock.ts` の `moveStock` / `moveEars` を通す（交易の収入など）
+- 基盤テスト「ハンドラのないコマンドは警告」は `startResearch` を使っている。実装したら別の未実装コマンドに替える

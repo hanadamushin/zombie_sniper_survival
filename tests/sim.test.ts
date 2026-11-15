@@ -74,14 +74,14 @@ describe('sim.tick', () => {
     const warn = vi.fn();
     const sim = createSim({ warn });
     const state = createInitialState(1, 1);
-    const cmd: Command = { type: 'assignJob', survivor: 1, job: 'farming' };
+    const cmd: Command = { type: 'startResearch', id: 'x' };
     sim.dispatch(cmd);
     sim.dispatch(cmd);
     sim.tick(state, FIXED, input);
     sim.dispatch(cmd);
     sim.tick(state, FIXED, input);
     expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn.mock.calls[0]?.[0]).toContain('assignJob');
+    expect(warn.mock.calls[0]?.[0]).toContain('startResearch');
   });
 
   it('rejects two systems claiming the same command', () => {

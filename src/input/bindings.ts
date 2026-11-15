@@ -13,6 +13,7 @@ export const KEYS = {
   zeroDown: ['PageDown'],
   knife: ['KeyV'],
   interact: ['KeyE'],
+  resupply: ['KeyB'],
   toggleCommand: ['Tab'],
   toggleWorld: ['KeyM'],
   pause: ['Space'],

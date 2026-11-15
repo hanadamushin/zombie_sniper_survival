@@ -257,3 +257,52 @@ button.primary small { color: var(--muted); font-size: 12px; }
   .weapon-box { max-width: calc(100% - 130px); font-size: 12px; }
   .hint { display: none; }
 }
+
+/* --- command layer panels (05; function first, 08 restyles) --- */
+.mode-layer.command { padding: 48px 8px 8px; }
+.command-panel { width: min(100%, 980px); max-width: none; box-sizing: border-box; max-height: min(64vh, 620px); display: flex; flex-direction: column; gap: 8px; font-size: 13px; pointer-events: auto; }
+.command-panel select, .command-panel input, .command-panel label { pointer-events: auto; }
+.command-panel .stock { display: flex; flex-wrap: wrap; gap: 4px 12px; font-variant-numeric: tabular-nums; }
+.command-panel .stock span { white-space: nowrap; }
+.command-panel .stock small, .command-panel .note, .command-panel .empty { color: var(--muted); }
+.command-panel .tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.command-panel .tab-body { overflow: auto; min-height: 120px; }
+.command-panel p { margin: 4px 0; }
+.rows { display: flex; flex-direction: column; gap: 6px; }
+.row-card { display: grid; grid-template-columns: minmax(130px, 1.4fr) minmax(150px, 1.2fr) 86px 90px minmax(110px, 1fr) auto auto; gap: 4px 10px; align-items: center; padding: 6px 8px; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 6px; }
+.row-card[data-status='injured'], .row-card[data-status='infected'] { border-color: #a8553a; }
+.row-card[data-status='away'] { opacity: 0.7; }
+.row-card .trait { color: var(--accent); font-size: 12px; white-space: nowrap; }
+.row-card .stats, .row-card .wage, .row-card .status { color: var(--muted); font-size: 12px; }
+.row-card .morale { position: relative; height: 16px; background: rgba(255, 255, 255, 0.1); border-radius: 3px; overflow: hidden; }
+.row-card .morale > span { position: absolute; inset: 0 auto 0 0; background: #4f8a54; }
+.row-card .morale[data-low='true'] > span { background: #b0483a; }
+.row-card .morale em { position: relative; font-style: normal; font-size: 11px; padding-left: 4px; line-height: 16px; }
+.command-panel select { background: #1b2026; color: inherit; border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 4px; padding: 3px 4px; font: inherit; max-width: 100%; }
+.command-panel .actions { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin: 6px 0; }
+.command-panel .label { color: var(--muted); }
+.command-panel .check { display: inline-flex; gap: 4px; align-items: center; }
+.command-panel .members { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 4px 0 8px; }
+.command-panel .members .check.on { color: var(--accent); }
+.command-panel .field { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; margin: 4px 0; }
+.command-panel .field select { flex: 1 1 220px; min-width: 0; }
+.command-panel .table-wrap { overflow-x: auto; }
+.command-panel table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+.command-panel th, .command-panel td { padding: 2px 8px; text-align: right; white-space: nowrap; }
+.command-panel th { color: var(--muted); font-weight: normal; }
+.command-panel td.neg { color: #e0826a; }
+.command-panel td.pos { color: #8fca8a; }
+.log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.log time { color: var(--muted); font-size: 11px; margin-right: 4px; }
+.log li[data-kind='death'] { color: #e0826a; }
+.log li[data-kind='expedition'] { color: #cfd8a0; }
+.log li[data-kind='morale'], .log li[data-kind='health'] { color: #e0c070; }
+@media (max-width: 720px) {
+  .row-card { grid-template-columns: 1fr 1fr; }
+  .row-card .who { grid-column: 1 / -1; }
+  .command-panel { max-height: 70vh; }
+}
+.toast { position: absolute; left: 50%; top: 96px; transform: translateX(-50%); max-width: min(92%, 560px); padding: 5px 12px; border-radius: 6px; background: rgba(10, 14, 18, 0.72); font-size: 13px; text-align: center; }
+.toast[data-kind='death'] { color: #e0826a; }
+.weapon-box .resupply { color: var(--accent); }
+.defeat .panel { text-align: center; }

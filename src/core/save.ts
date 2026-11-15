@@ -3,7 +3,7 @@
 // the (de)serialisation half is pure and unit-tested against an in-memory store.
 
 import { BALANCE } from '../data/balance.ts';
-import { defaultAim, STATE_VERSION, type GameState } from './types.ts';
+import { defaultAim, initialColony, STATE_VERSION, type GameState } from './types.ts';
 
 export const AUTO_SLOT = 'auto';
 export type SlotId = string; // 'auto' | 'slot1' | 'slot2' | 'slot3'
@@ -79,6 +79,14 @@ const MIGRATIONS: Record<number, Migration> = {
     inv.ears ??= 0;
     player.inv = inv;
     return { ...old, player };
+  },
+  // 3 -> 4 (05): the colony gets its market, work buffers, policy and stores; no survivors existed before.
+  3: (old) => {
+    const colony = { ...initialColony(), ...(old.colony as Record<string, unknown>) };
+    colony.capacity = initialColony().capacity;
+    colony.stock = initialColony().stock;
+    colony.foodPrice = initialColony().foodPrice;
+    return { ...old, colony };
   },
 };
 

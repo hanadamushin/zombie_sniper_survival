@@ -190,3 +190,55 @@
   - イベント: `dryFire`, `reloadStarted`, `reloadDone`, `knifeSwing`, `playerInfected`, `playerRevived`, `zombieAlerted`。既存イベントへのフィールド追加は `04_architecture.md` §6
   - フラグ: `state.flags.range`（射撃場）、`flags.noSway`、`flags.wind`
   - コマンドの追加なし
+
+## 05 生存者・経済 — 2026-11-15
+- 完了したこと:
+  - **生存者**（`sim/colony/survivors.ts`、数値は `data/colony.ts`・`data/traits.ts`・`data/names.ts`）: 4 ステータス（3d4−2、土地の偏り）、賃金式、特性 13 種、日本人名。`hire` / `dismiss`、契約金（賃金 × 5。備蓄で足りなければ所持の耳から）
+  - **雇用候補**: 区域ごとに探索ポイントへ潜伏者を配置（セルの H から最大 3 か所）。HUD に「人の気配 Nm」、近づいて E で会話 → 候補リスト。調達隊も連れ帰る。見つけた人数ぶん `world.cells.H` を減らし、待ちくたびれ・解雇・離反で H に戻す
+  - **探索**: 探索ポイントで E → 物資を所持品へ、セルの loot を消費（プレイヤーの探索はどのプロンプトにも無かったので最小限で入れた）
+  - **仕事**（`jobs.ts`）: 8 種、作業量式、1 日の予定、分単位の成果加算。農業（仮の畑 1 区画・季節係数）、調達（在宅時は本拠セルを漁る）、工作（手作業 50% の弾薬）、医療、建築・研究・防衛は受け口
+  - **行動 AI**（`ai.ts`）: 予定 → 行動 → 場所 → 歩行。直線が通らなければ 4m グリッドの幅優先探索。プレイヤーが本拠セルにいる間だけ動く
+  - **経済**（`economy.ts`, `stock.ts`）: 備蓄と容量、06:00 の賃金（不足時は能力の高い順に未払い）、食事 3 回、食料市場（価格式）、農村からの購入と自動購入方針、台帳 30 日、ログ 200 件
+  - **士気・健康**（`morale.ts`）: 食事・賃金・住居・仲間の死、3 日で離反（物資を持ち去る）、負傷・感染の経過と治療、餓死。プレイヤーの感染治療（医薬品 1 ＋ 医療 8 ポイント、本拠セルで）
+  - **プレイヤーの死**: 共同体がいれば所持品を失って 3 日後に司令部（`flags.skipMinutes` で時間を飛ばす）、いなければ敗北画面
+  - **弾と耳の流れ**: 本拠セルで耳・物資は自動納品、`resupply`（B キー／経済タブ）で備蓄 → 所持（上限 150）
+  - **遠征**（`expeditions.ts`）: 編成（2〜6 人）、`findRoute` による所要時間、帰還判定、収穫、loot 消費、`removeZombies`、耳、連れ帰り、読み物ログ（誰が何を見つけ、誰が戻らなかったか）
+  - **描画**（`render/tactical/survivors.ts`）: 箱の InstancedMesh（人物・影・仮の野営地で 3 ドローコール）。仕事ごとの上着の色と持ち物（麦わら帽・ヘルメット・長物・背嚢・赤十字…）、歩く／働く／座って食べる／寝る。潜伏者は黄色で手を振る
+  - **UI**（`ui/command/`）: 指揮層パネル（生存者一覧と仕事のドロップダウン、雇用候補、経済と台帳、遠征の編成と進行、ログ）。戦術 HUD に会話・探索・補給の案内と直近ログのトースト、敗北画面
+  - テスト 25 件追加（`tests/colony.test.ts`）: 賃金・作業量・帰還率の境界値、29 日回して台帳と備蓄が全資源で一致、未払い → 士気低下 → 離反、飢餓、**x1 / x10 / x30 / 5 分刻み / プレイヤー在宅（全システム）で 1 日の成果が一致**、武器別の帰還率を各 600 人で統計確認、遠征の時間経過とログ、連れ帰りが H を超えない、不正な命令の拒否、遭遇 → 雇用 → 解雇、納品と補給、治療、死亡と復帰・敗北、06/07 向けの口、セーブ往復と v3 からの移行。e2e 2 件追加
+  - 受け入れ基準は e2e とスクリーンショットで確認（潜伏者に E → 候補 → 雇用 → 農業に割り振り → 2 日後に食料・木材が増え賃金が引かれている → 遠征の出発 → ログ、幅 360px、敗北画面）
+- **性能の実測**（GPU なし・SwiftShader）:
+  - 共同体の更新（生存者 60 人、Node）: step 0.005 ms、分境界の tick で 0.022 ms（基準 1 ms 未満）
+  - 本拠の野営地に 58 人（1280×720）: 戦術視点 28 ドローコール / 25.2 万三角形 / sim 1 ステップ 0.018 ms ＋ 描画発行 0.36 ms。指揮視点（60 行のパネル表示中）38 / 34.0 万 / 0.018 ＋ 0.26 ms
+  - **計測方法の注意**: 従来の「メインスレッド ms/フレーム」（`renderInfo().cpuMs / frames`）は、ソフトウェア描画で 1〜2fps まで落ちると 1 フレームに sim 6 ステップと UI 同期がまとまるため、フレームレートに引きずられる（同じ場面で 1.3〜4.0 ms とぶれた）。05 の e2e は sim 1 ステップと `renderer.draw` 1 回を直接測って判定し、フレーム平均は参考値として出している（上の場面で 1.6 ms / 2.0 ms）
+  - 指揮パネルは 60 行 × 仕事 8 択を 10Hz で作り直すと 1 回 6〜8 ms かかったので、行を署名文字列でメモ化した（`SurvivorRow`）
+- 未完了・既知の問題:
+  - **バランスは未調整**。目安: 平均的な生存者の賃金 4 耳/日、農家 1 人で約 4 食料/日（3〜4 人を養える）、仮の畑は農家 2 人まで。6 人雇うと賃金だけで 1 日 20 耳前後（ゾンビ 10 体）。野宿（5 人目以降）は差し引き士気 −1/日で、住居（06）ができるまでじわじわ下がる
+  - 生存者に当たり判定はない（弾もゾンビも素通り。ゾンビは生存者を襲わない）。襲来での被害は 06
+  - 仮の野営地（テント・畑・作業台）は見た目だけで衝突も建築グリッドの占有もない。06 が実物に置き換えるときは `COLONY.camp` の座標と `render/tactical/survivors.ts` の `buildCamp` を消す
+  - 遠征中の生存者は食事をしない（携行食の扱いなし）。自動で遠征に出す方針はない（毎回プレイヤーが編成）
+  - 弓・拳銃・小銃は最初から選べる（`EXPEDITION_WEAPONS[].tech` を 07 が埋めれば研究で解禁になる）。拳銃・小銃は弾薬の備蓄が要る
+  - 潜伏者は 2 日ごとに同じセルへ再配置されるので、H が多いセルでは事実上いくらでも勧誘できる（歯止めは耳）
+  - 3 日間の時間飛ばしは 1 tick の中で 4,320 分ぶんのフックを回す（数十 ms）。その間に襲来（06）が起きる場合の扱いは 06 で決めること
+  - ログ文は `ui/i18n/ja.ts` のキー＋パラメータで保存している。キーを消すと古いセーブのログがキー名のまま表示される
+- 仕様からの変更点（更新した docs）:
+  - `02_systems_spec.md`: §3.5（死亡・敗北・治療）、§4.6 実装メモ（予定、健康係数、農地の人数、在宅調達、住居、負傷、候補、探索、遠征の細目）、§5 実装メモ（弾と耳の流れ、食料市場、農村、容量、台帳）
+  - `04_architecture.md`: §5 に 05 の追加フィールドと「共同体」の節、§6 にコマンド・イベント、§8 に生存者の描画
+  - `STATE_VERSION` 4（v3 → v4: 共同体の初期化。v3 以前に生存者はいない）
+  - `Survivor.status: 'dead'` の要素は配列に残さない（`colony.memorial` に記録）。`ColonyState.log[].text` は表示文ではなく i18n キーになった
+  - `sim/index.ts` に時間飛ばし（`flags.skipMinutes`）を追加。`resupply` の担当は tactical ではなく colony
+  - 基盤のテスト「ハンドラのないコマンドは警告」は `assignJob` が実装されたので `startResearch` に差し替えた（07 が実装したらまた替えること）
+- 次のセッションへの注意:
+  - **06 向け**: 建築 output は毎時 `distributeBuildWork(state, colony.work.build)` で設計図（`progress < 1`、`priority` の高い順）へ配っている。必要作業量は第 3 引数（今は一律 `COLONY.defaultBuildWork = 40`）。`sim/colony/index.ts` の呼び出しに `buildings.ts` の値を渡すよう直すこと。資材の消費（`Structure.delivered`）は未実装で、備蓄から取るときは `stock.ts` の `moveStock` を使う（直接 `colony.stock` を書くと台帳テストが落ちる）。防衛担当は `defenders(state)`（`onDuty` と `power`）。建物の効果は `COLONY.facilities` の def id（`farm` / `workshop` / `clinic` / `house`）を `builtCount` で数えているので、id を合わせるか表を直す。容量は `colony.capacity` を増やす。耳の自動回収（§4.5）は `moveEars(c, 'income', n)`。生存者の経路は `ai.ts` の `findPath`（`map.walk` のみ参照。壁・堀を足したら通行判定を差し替える）。襲来撃退の士気 +5 は `morale.ts` の `changeMorale`。襲来時の避難・持ち場は `ai.ts` の `setAlarm(state, on)`（移動のみ）。`prompts/06` `07` の末尾にも同じ内容を追記した
+  - **07 向け**: 研究ポイントは `takeResearchPoints(state)`（呼ぶと 0 に戻る。毎時呼ぶ想定、上限 600）。医療は「技術で解禁」だが今は最初から割り振れる。解禁制にするなら `ui/command/CommandPanel.tsx` の `JOBS` と `assignJob` に条件を足す。遠征の武器は `EXPEDITION_WEAPONS[].tech`
+  - **08 向け**: 音・演出用に `survivorHired`, `survivorDied`, `survivorLeft`, `expeditionSent`, `expeditionReturned`, `wagesPaid{unpaid}`, `candidateFound`, `spotSearched`, `earsDeposited`, `resupplied`, `foodBought`, `colonyLog{kind}`, `defeat`。パネルの見た目は機能優先のまま（`ui/styles.css` 末尾）
+  - **09 向け**: 調整点は `data/colony.ts` に集約。30 日回す雛形は `tests/colony.test.ts` の `rig()`（colony + world のみなら 1 日 = 1,440 tick で数 ms）
+  - デバッグ: `window.__game.debug.addSurvivors(n, job)`、`.give(res, amount)`（台帳を通さない）、`.noInput`（手で `sim.tick` を回すとき用）
+  - 依存の追加なし
+- 追加した共有型・コマンド・イベント:
+  - 型: `LedgerDay`, `LogEntry`, `ColonyState.market / work / policy / villageBought / lastMinute / memorial / metCells`, `Survivor.meals / missed / infectedUntil / fromCell / waitsUntilDay`, `TacticalState.hideouts`, `initialColony()`
+  - データ: `data/colony.ts`（`COLONY`, `LOOT_TABLE`, `EXPEDITION_WEAPONS`）, `data/traits.ts`, `data/names.ts`, `RENDER.survivors`
+  - コマンド: `assignJob`, `hire`, `dismiss`, `buyFood`, `sendExpedition`, `resupply` を実装、`setPolicy` を追加
+  - イベント: `candidateFound`, `spotSearched`, `expeditionSent`, `earsDeposited`, `resupplied`, `foodBought`, `colonyLog`。`survivorHired`, `survivorDied`, `survivorLeft`, `expeditionReturned`, `wagesPaid`, `defeat` を発火
+  - フラグ: `flags.skipMinutes`, `flags.defeat`（ほかに日次ログ抑制用の `craftIdleDay` / `noMedicineDay`）
+  - キー: B（補給）

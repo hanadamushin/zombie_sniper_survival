@@ -45,6 +45,14 @@ export type GameEvent =
   | { type: 'survivorLeft'; id: EntityId; reason: string }
   | { type: 'expeditionReturned'; id: EntityId; survivors: EntityId[]; lost: EntityId[] }
   | { type: 'wagesPaid'; total: number; unpaid: number }
+  // --- colony, added by 05 ---
+  | { type: 'candidateFound'; id: EntityId; cell: CellId; by: 'player' | 'expedition' }
+  | { type: 'spotSearched'; spot: number; items: string }
+  | { type: 'expeditionSent'; id: EntityId; target: CellId; members: EntityId[] }
+  | { type: 'earsDeposited'; amount: number }
+  | { type: 'resupplied'; ammo: number }
+  | { type: 'foodBought'; amount: number; cost: number; source: string }
+  | { type: 'colonyLog'; kind: string; text: string }
   // --- research / progression (07) ---
   | { type: 'techCompleted'; id: string }
   | { type: 'eraAdvanced'; era: 0 | 1 | 2 | 3 }

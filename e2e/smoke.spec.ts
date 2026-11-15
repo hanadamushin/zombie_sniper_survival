@@ -334,3 +334,154 @@ test('home cell: zombies are out there, one shot fired from the start position',
   await expect(page.getByTestId('hud-ammo')).toHaveAttribute('data-ammo', '100');
   expect(errors).toEqual([]);
 });
+
+// ---------------------------------------------------------------------------------------------
+// 05: colony
+// ---------------------------------------------------------------------------------------------
+
+test('colony: meet someone, hire, assign jobs, days pass — food and materials in, wages out; 60 survivors within budget', async ({ page }) => {
+  test.setTimeout(240_000);
+  const errors = trackErrors(page);
+  await page.goto('/?seed=12&scenario=0&res=fixed');
+  await startNewGame(page);
+  await page.waitForFunction(() => (window.__game?.state?.tactical?.hideouts?.length ?? 0) > 0, null, { timeout: 60_000 });
+
+  // Someone is hiding at a search point: the HUD senses them, E talks to them.
+  const h0 = await page.evaluate(() => {
+    const g = window.__game!;
+    const s = g.state!;
+    const hide = s.tactical!.hideouts![0]!;
+    g.debug.teleport(hide.pos[0] + 1, hide.pos[1] + 1, 0, 0);
+    return s.world.cells.H[s.player.cell]!;
+  });
+  await expect(page.getByTestId('hud-act')).toHaveAttribute('data-kind', 'talk');
+  await page.screenshot({ path: 'test-results/colony-hideout.png' });
+  await page.evaluate(() => window.__game!.debug.setInput({ interact: true }));
+  await page.waitForFunction(() => window.__game!.state!.colony.candidates.length > 0);
+  const found = await page.evaluate(() => window.__game!.state!.colony.candidates.length);
+  expect(await page.evaluate(() => window.__game!.state!.world.cells.H[window.__game!.state!.player.cell]!)).toBe(h0 - found);
+  await expect(page.getByTestId('hud-toast')).toBeVisible();
+
+  // Back at the camp with ears in the pocket: hire from the command layer.
+  await page.evaluate(() => {
+    const g = window.__game!;
+    g.debug.teleport(512, 530, 0, 0);
+    g.state!.player.inv.ears = 150;
+  });
+  await page.keyboard.press('Tab');
+  await expect(page.getByTestId('command-panel')).toBeVisible();
+  await page.getByTestId('tab-hire').click();
+  await page.getByTestId('candidate-row').first().getByRole('button').click();
+  await page.getByTestId('tab-people').click();
+  await expect(page.getByTestId('survivor-row')).toHaveCount(1);
+  const first = await page.evaluate(() => window.__game!.state!.colony.survivors[0]!.id);
+  await page.getByTestId(`job-${first}`).selectOption('farming');
+  await page.waitForFunction(() => window.__game!.state!.colony.survivors[0]!.job === 'farming');
+
+  // More hands, then two days go by.
+  const before = await page.evaluate(() => {
+    const g = window.__game!;
+    g.debug.addSurvivors(1, 'farming');
+    g.debug.addSurvivors(2, 'scavenging');
+    g.debug.addSurvivors(1, 'crafting');
+    const s = g.state!;
+    s.colony.stock.ears += 300;
+    for (let i = 0; i < 2 * 1440 * 4; i++) g.sim.tick(s, 0.25, { ...g.debug.noInput });
+    return { survivors: s.colony.survivors.length };
+  });
+  expect(before.survivors).toBe(5);
+  const after = await page.evaluate(() => {
+    const c = window.__game!.state!.colony;
+    const sum = (f: (d: (typeof c.ledger)[number]) => number): number => c.ledger.reduce((s, d) => s + f(d), 0);
+    return {
+      wages: sum((d) => d.wages), foodBought: sum((d) => d.food), foodIn: sum((d) => d.flow?.food?.[0] ?? 0), woodIn: sum((d) => d.flow?.wood?.[0] ?? 0),
+      wood: c.stock.wood, log: c.log.length, days: c.ledger.length,
+    };
+  });
+  expect(after.wages).toBeGreaterThan(10);
+  expect(after.foodBought).toBeGreaterThan(3);
+  expect(after.foodIn).toBeGreaterThan(5);
+  expect(after.wood).toBeGreaterThan(1);
+  expect(after.days).toBeGreaterThanOrEqual(3);
+  await page.screenshot({ path: 'test-results/colony-people.png' });
+  await page.getByTestId('tab-economy').click();
+  await expect(page.getByTestId('ledger').locator('tbody tr')).toHaveCount(after.days);
+  await page.screenshot({ path: 'test-results/colony-economy.png' });
+
+  // Send the two scavengers out with pipes.
+  await page.getByTestId('tab-expedition').click();
+  const scavs = await page.evaluate(() => window.__game!.state!.colony.survivors.filter((s) => s.job === 'scavenging').map((s) => s.id));
+  for (const id of scavs) await page.getByTestId(`member-${id}`).check();
+  await expect(page.getByTestId('exp-estimate')).toBeVisible();
+  await page.screenshot({ path: 'test-results/colony-expedition.png' });
+  await page.getByTestId('exp-send').click();
+  await expect(page.getByTestId('expedition-running')).toHaveCount(1);
+  await page.getByTestId('tab-log').click();
+  await expect(page.getByTestId('colony-log')).toContainText('出発した');
+  await page.screenshot({ path: 'test-results/colony-log.png' });
+
+  // 60 survivors at work in the camp at noon, seen from the edge: budget check (no GPU here: draw calls,
+  // triangles and main-thread time, not fps).
+  await page.evaluate(() => window.__game!.dispatch({ type: 'setMode', mode: 'tactical' }));
+  await expect(page.getByTestId('mode-tactical')).toBeVisible();
+  // Software rendering makes frames so long here that a "frame" bundles several sim steps and a UI sync,
+  // so the per-frame average is only logged; the budget is checked on one sim step + one draw submission.
+  const sample = (): Promise<{ calls: number; triangles: number; cpu: number; tick: number; draw: number; n: number }> => page.evaluate(async () => {
+    const g = window.__game!;
+    const s = g.state!;
+    await new Promise((r) => setTimeout(r, 2500));
+    const a = g.debug.renderInfo();
+    await new Promise((r) => setTimeout(r, 4000));
+    const b = g.debug.renderInfo();
+    let t0 = performance.now();
+    for (let i = 0; i < 600; i++) g.sim.tick(s, 1 / 60, { ...g.debug.noInput });
+    const tick = (performance.now() - t0) / 600;
+    t0 = performance.now();
+    for (let i = 0; i < 20; i++) g.renderer.draw(s, 0, 1 / 60);
+    const draw = (performance.now() - t0) / 20;
+    return { calls: b.calls, triangles: b.triangles, cpu: (b.cpuMs - a.cpuMs) / Math.max(1, b.frames - a.frames), tick, draw, n: s.colony.survivors.filter((x) => x.location.kind === 'home').length };
+  });
+  await page.evaluate(() => {
+    const g = window.__game!;
+    const jobs = ['farming', 'defense', 'scavenging', 'construction', 'research', 'crafting', 'medical', 'idle'] as const;
+    for (let i = g.state!.colony.survivors.length; i < 60; i++) g.debug.addSurvivors(1, jobs[i % jobs.length]);
+    g.state!.colony.stock.food = 60;
+    g.debug.setClock(10);
+    // Let the newcomers walk in from the edge of the camp before looking.
+    for (let i = 0; i < 60 * 90; i++) g.sim.tick(g.state!, 1 / 60, { ...g.debug.noInput });
+    g.debug.teleport(512, 545, 0, -0.05);
+  });
+  const perf = await sample();
+  const line = (p: typeof perf): string => `${p.calls} draw calls, ${p.triangles} triangles, sim step ${p.tick.toFixed(3)} ms + draw submission ${p.draw.toFixed(2)} ms (frame average incl. UI: ${p.cpu.toFixed(2)} ms)`;
+  console.log(`colony camp (tactical), ${perf.n} survivors at home: ${line(perf)}`);
+  expect(perf.calls).toBeLessThan(150);
+  expect(perf.triangles).toBeLessThan(500_000);
+  expect(perf.tick + perf.draw).toBeLessThan(4);
+  await page.screenshot({ path: 'test-results/colony-camp.png' });
+  await page.evaluate(() => window.__game!.dispatch({ type: 'setMode', mode: 'command' }));
+  await page.getByTestId('tab-people').click();
+  await expect(page.getByTestId('survivor-row')).toHaveCount(60);
+  const cmd = await sample();
+  console.log(`colony camp (command layer, 60 rows): ${line(cmd)}`);
+  expect(cmd.tick + cmd.draw).toBeLessThan(4);
+  await page.screenshot({ path: 'test-results/colony-camp-command.png' });
+  await page.setViewportSize({ width: 360, height: 640 });
+  await page.screenshot({ path: 'test-results/colony-360.png' });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+  expect(errors).toEqual([]);
+});
+
+test('colony: dying alone is defeat', async ({ page }) => {
+  const errors = trackErrors(page);
+  await page.goto('/?seed=12&scenario=0&res=fixed');
+  await startNewGame(page);
+  await page.waitForFunction(() => window.__game?.map != null, null, { timeout: 60_000 });
+  await page.evaluate(() => {
+    const s = window.__game!.state!;
+    s.player.hp = 0;
+    s.player.aim.deadT = 0.2;
+  });
+  await expect(page.getByTestId('defeat')).toBeVisible({ timeout: 30_000 });
+  await page.screenshot({ path: 'test-results/colony-defeat.png' });
+  expect(errors).toEqual([]);
+});
