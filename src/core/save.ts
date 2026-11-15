@@ -2,7 +2,8 @@
 // (docs/02_systems_spec.md §10). This is the only core file allowed to touch browser APIs;
 // the (de)serialisation half is pure and unit-tested against an in-memory store.
 
-import { STATE_VERSION, type GameState } from './types.ts';
+import { BALANCE } from '../data/balance.ts';
+import { defaultAim, STATE_VERSION, type GameState } from './types.ts';
 
 export const AUTO_SLOT = 'auto';
 export type SlotId = string; // 'auto' | 'slot1' | 'slot2' | 'slot3'
@@ -45,7 +46,8 @@ export function packState(state: GameState): GameState {
     ...state,
     // Resuming inside the pause menu would be confusing; the command layer needs no pointer lock.
     mode: state.mode === 'menu' ? 'command' : state.mode,
-    tactical: state.tactical ? { ...state.tactical, zombies: [], corpses: [], bullets: [] } : null,
+    // 04: after a load the zombies are placed again from the cell's Z (populated: false); bodies and their ears are gone.
+    tactical: state.tactical ? { ...state.tactical, zombies: [], corpses: [], bullets: [], populated: false } : null,
   };
 }
 
@@ -66,6 +68,16 @@ const MIGRATIONS: Record<number, Migration> = {
     player.vel ??= [0, 0, 0];
     player.eye ??= 1.7;
     player.winded ??= false;
+    return { ...old, player };
+  },
+  // 2 -> 3 (04): player.aim (scope / sway / knife timers) and carried ammunition.
+  2: (old) => {
+    const player = { ...(old.player as Record<string, unknown>) };
+    player.aim ??= defaultAim();
+    const inv = { ...(player.inv as Record<string, number> | undefined) };
+    inv.ammo ??= BALANCE.player.startAmmo;
+    inv.ears ??= 0;
+    player.inv = inv;
     return { ...old, player };
   },
 };

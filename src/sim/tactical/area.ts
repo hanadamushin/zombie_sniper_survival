@@ -13,6 +13,8 @@ import { generateTacticalMap, mapSeedFor, type GenParams, type TacticalMap } fro
 import { cellTactical } from '../world/derive.ts';
 import { createSpatialHash, type SpatialHash } from './collision.ts';
 import { placePlayer } from './player.ts';
+import { rangeMap } from './range.ts';
+import { BALANCE } from '../../data/balance.ts';
 
 export interface TacticalArea {
   map: TacticalMap;
@@ -54,6 +56,7 @@ export function mapOf(state: GameState): TacticalMap | null {
 
 /** True when ensureArea() has (possibly slow) work to do — the main loop shows a loading screen first. */
 export function areaPending(state: GameState, grid: StaticGrid | null): boolean {
+  if (state.flags.range) return !state.tactical || !areas.has(state.tactical);
   if (!grid || state.world.travel || state.world.homeCell === null || !grid.cells[state.player.cell]) return false;
   return !state.tactical || state.tactical.cell !== state.player.cell || !areas.has(state.tactical);
 }
@@ -62,7 +65,24 @@ export function areaPending(state: GameState, grid: StaticGrid | null): boolean 
  * Bring state.tactical and its map in line with where the player is. Cheap when nothing changed.
  * Deterministic: depends only on the state and the static grid.
  */
+/** Firing range (04, debug): a fixed flat map that needs no world data. */
+function ensureRange(state: GameState): TacticalArea {
+  const known = state.tactical ? areas.get(state.tactical) : undefined;
+  if (known) return known;
+  const map = rangeMap();
+  const fresh = !state.tactical;
+  state.tactical ??= { cell: state.player.cell, mapSeed: map.params.mapSeed, zombies: [], corpses: [], bullets: [], reserve: 0, wind: [0, 0], lootSpots: [] };
+  const area: TacticalArea = { map, dynamic: createSpatialHash() };
+  areas.set(state.tactical, area);
+  if (fresh) {
+    placePlayer(state.player, map, map.spawn.edge[0], map.spawn.edge[1], map.spawn.edgeYaw);
+    state.player.inv.ammo = BALANCE.range.ammo;
+  }
+  return area;
+}
+
 export function ensureArea(state: GameState, grid: StaticGrid | null): TacticalArea | null {
+  if (state.flags.range) return ensureRange(state);
   if (!grid || state.world.homeCell === null) return null;
   if (state.world.travel) {
     state.tactical = null; // left the area; a new one is made on arrival

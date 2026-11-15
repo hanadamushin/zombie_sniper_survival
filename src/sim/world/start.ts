@@ -62,6 +62,7 @@ export function evaluateStart(cells: InfectionCells, grid: StaticGrid, cell: Cel
   if (!info || !(R.lands as readonly Land[]).includes(info.land)) return null;
   const z = cells.Z[cell]!;
   if (z / BALANCE.world.cellAreaKm2 >= R.maxZPerKm2) return null;
+  if (z < R.minCellZ) return null; // nothing to hunt at home on day one
   if (landmassSizes(grid)[cell]! < R.minLandmass) return null;
   let nearbyH = 0;
   let nearbyZ = 0;

@@ -62,7 +62,7 @@ type AnyHandler = (state: GameState, cmd: Command, ctx: SimContext) => void;
 
 const NO_INPUT: InputFrame = Object.freeze({
   moveX: 0, moveZ: 0, lookDX: 0, lookDY: 0, fire: false, scope: false, holdBreath: false, sprint: false,
-  reload: false, stance: null, zoomDelta: 0, zeroDelta: 0, knife: false, interact: false,
+  reload: false, stance: null, zoomDelta: 0, zeroDelta: 0, knife: false, interact: false, interactHeld: false,
 });
 
 export function createSim(options: SimOptions = {}): Sim {

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { rand, seedRng } from '../src/core/rng.ts';
 import { deserialize, serialize } from '../src/core/save.ts';
-import { createInitialState, emptyInputFrame, type GameState, type InputFrame, type Land, type StaticGrid } from '../src/core/types.ts';
+import { createInitialState, emptyInputFrame, STATE_VERSION, type GameState, type InputFrame, type Land, type StaticGrid } from '../src/core/types.ts';
 import { BALANCE } from '../src/data/balance.ts';
 import { TACTICAL } from '../src/data/tactical.ts';
 import { addBuilding, addLadder, addStairs, addTower, createFlatBuilder } from '../src/gen/builder.ts';
@@ -569,7 +569,7 @@ describe('operation area life cycle', () => {
     delete old.player.eye;
     delete old.player.winded;
     const loaded = deserialize(JSON.stringify(old));
-    expect(loaded.version).toBe(2);
+    expect(loaded.version).toBe(STATE_VERSION);
     expect(loaded.player.vel).toEqual([0, 0, 0]);
     expect(loaded.player.eye).toBe(1.7);
     expect(loaded.player.winded).toBe(false);

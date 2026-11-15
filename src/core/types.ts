@@ -6,7 +6,7 @@ import { BALANCE } from '../data/balance.ts';
 import { TACTICAL } from '../data/tactical.ts';
 import { seedRng, type RngState } from './rng.ts';
 
-export const STATE_VERSION = 2;
+export const STATE_VERSION = 3;
 
 export type CellId = number; // gy * gridW + gx
 export type EntityId = number; // allocated from state.nextId (see allocId)
@@ -134,6 +134,46 @@ export interface PlayerState {
   scoped: boolean;
   inv: Partial<Record<ResourceId, number>>; // carried (ears, ammo, medicine, ...)
   stats: { kills: number; headshots: number; shots: number; earsCollected: number };
+  /** Aiming / close-combat working state (added by 04, save version 3). */
+  aim: AimState;
+}
+
+/** Scope, sway, recoil, knife, ear collection and death timers of the player (04). */
+export interface AimState {
+  /** 0 = hip, 1 = fully scoped (eases over BALANCE.combat.scope.transition). */
+  scopeT: number;
+  /** Clock of the sway pattern (s) and its current amplitude (mil, eased towards the target). */
+  swayT: number;
+  swayAmp: number;
+  /** Just-moved factor 0..1 (1 while moving, decays after stopping). */
+  moved: number;
+  /** View offset [yaw, pitch] in radians from sway + recoil. The camera and every shot use yaw/pitch + off. */
+  off: [number, number];
+  recoil: [number, number];
+  recoilV: [number, number];
+  holding: boolean;
+  /** Seconds of out-of-breath penalty left. */
+  breathLock: number;
+  /** Trigger was down on the previous step (shots fire on the press). */
+  trigger: boolean;
+  /** Seconds until the knife can swing again. */
+  knifeT: number;
+  /** Ear collection in progress: seconds held and the corpse it applies to. */
+  interactT: number;
+  interactId: EntityId | null;
+  /** Highest feet height since leaving the ground (fall damage), null on the ground. */
+  airPeak: number | null;
+  /** Seconds since the last damage taken counts down from 1 (HUD flash). */
+  hurtT: number;
+  /** > 0 while dead: seconds until the provisional revival. */
+  deadT: number;
+}
+
+export function defaultAim(): AimState {
+  return {
+    scopeT: 0, swayT: 0, swayAmp: 0, moved: 0, off: [0, 0], recoil: [0, 0], recoilV: [0, 0], holding: false,
+    breathLock: 0, trigger: false, knifeT: 0, interactT: 0, interactId: null, airPeak: null, hurtT: 0, deadT: 0,
+  };
 }
 
 export interface TacticalState {
@@ -145,6 +185,14 @@ export interface TacticalState {
   reserve: number; // rough number of zombies that can still be spawned this visit
   wind: [number, number];
   lootSpots: { id: number; pos: [number, number]; taken: boolean }[];
+  /** The initial zombies of this visit have been placed (04; false again after a load). */
+  populated?: boolean;
+  /** Seconds until the next reinforcement from the map edge (04). */
+  spawnT?: number;
+  /** Fixed steps simulated in this area (staggers LOD and sight checks deterministically; 04). */
+  step?: number;
+  /** Firing range only: seconds each target lane has been empty (04). */
+  rangeT?: number[];
 }
 export interface Zombie {
   id: EntityId;
@@ -155,7 +203,42 @@ export interface Zombie {
   state: 'wander' | 'alert' | 'chase' | 'attack' | 'down';
   target: EntityId | 'player' | null;
   crippled: boolean;
+  /** State timer (s): pause / alert time left / attack wind-up / time since death. */
   t: number;
+  // --- working fields of sim/tactical/zombies.ts (04). Zombies are never saved. ---
+  /** Vertical speed while falling. */
+  vy: number;
+  /** Where it is heading: wander goal, the thing that alerted it, or the player's last known position. */
+  goal: [number, number];
+  /** Seconds since it last saw the player (chase). */
+  lost: number;
+  /** Seconds until it may attack again; stagger time left after a hit. */
+  cd: number;
+  flinch: number;
+  /** Side-stepping around an obstacle: seconds left and the side (-1 / 1). */
+  detourT: number;
+  detourSide: number;
+  /** Progress bookkeeping for the stuck test. */
+  stuck: number;
+  /** Detours taken in a row, and seconds of unhindered walking since. */
+  detours: number;
+  free: number;
+  /** Outside staircase being climbed: building id and next waypoint, or -1. */
+  stair: number;
+  stairAt: number;
+  /** Highest corpse id it has already reacted to. */
+  corpseSeen: number;
+  /** Id its body will have (allocated at death, so corpse ids ascend in order of death). */
+  corpseId: number;
+  /** Killed by a head shot (falls backwards). */
+  headshot: boolean;
+  /** Distance walked (drives the gait animation). */
+  walk: number;
+  /** Personal speed factor. */
+  pace: number;
+  /** Firing-range target: 1 stands still, 2 paces sideways; never attacks. `spot` is its lane. */
+  dummy?: number;
+  spot?: number;
 }
 export interface Corpse {
   id: EntityId;
@@ -163,6 +246,11 @@ export interface Corpse {
   ears: number;
   expiresDay: number;
   expiresMinute: number;
+  // --- 04: what the body looks like ---
+  kind: ZombieKind;
+  yaw: number;
+  headshot: boolean;
+  crippled: boolean;
 }
 export interface Bullet {
   id: EntityId;
@@ -171,6 +259,15 @@ export interface Bullet {
   pierceLeft: number;
   dmgMul: number;
   life: number;
+  /** Distance flown (m), drag constant (1/m) and gravity of the round, weapon id (04). */
+  dist: number;
+  drag: number;
+  gravity: number;
+  weapon: string;
+  pierceFactor: number;
+  maxRange: number;
+  /** Zombie hit last (not tested again while passing through it). */
+  lastHit: EntityId | null;
 }
 
 export interface ColonyState {
@@ -267,13 +364,15 @@ export interface InputFrame {
   zeroDelta: number; // one-shot
   knife: boolean; // one-shot
   interact: boolean; // one-shot
+  /** E is held down (ear collection needs a long press; added by 04). */
+  interactHeld: boolean;
 }
 
 export function emptyInputFrame(): InputFrame {
   return {
     moveX: 0, moveZ: 0, lookDX: 0, lookDY: 0,
     fire: false, scope: false, holdBreath: false, sprint: false, reload: false,
-    stance: null, zoomDelta: 0, zeroDelta: 0, knife: false, interact: false,
+    stance: null, zoomDelta: 0, zeroDelta: 0, knife: false, interact: false, interactHeld: false,
   };
 }
 
@@ -337,8 +436,9 @@ export function createInitialState(seed: number, difficulty: Difficulty): GameSt
       infectedUntil: null,
       weapon: { id: p.startWeapon, mag: p.startMag, zeroIdx: 0, zoom: p.startZoom, boltT: 0, reloadT: 0 },
       scoped: false,
-      inv: {},
+      inv: { ammo: p.startAmmo, ears: 0 },
       stats: { kills: 0, headshots: 0, shots: 0, earsCollected: 0 },
+      aim: defaultAim(),
     },
     tactical: null,
     colony: {

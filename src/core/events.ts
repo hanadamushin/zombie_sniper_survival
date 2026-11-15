@@ -6,6 +6,7 @@ import type { CellId, EntityId, Mode, Speed, ZombieKind } from './types.ts';
 
 type Vec3 = [number, number, number];
 export type HitPart = 'head' | 'torso' | 'legs';
+export type HitSurface = 'terrain' | 'tree' | 'building' | 'stair' | 'rock' | 'prop';
 
 export type GameEvent =
   // --- time (01) ---
@@ -15,12 +16,22 @@ export type GameEvent =
   | { type: 'modeChanged'; mode: Mode; prev: Mode }
   | { type: 'commandRejected'; command: string; reason: string }
   // --- tactical (03/04) ---
-  | { type: 'shotFired'; pos: Vec3; dir: Vec3; weapon: string }
-  | { type: 'bulletHit'; zombie: EntityId | null; part: HitPart | null; pos: Vec3 }
-  | { type: 'zombieKilled'; id: EntityId; kind: ZombieKind; by: EntityId | 'player'; headshot: boolean; pos: Vec3 }
+  | { type: 'shotFired'; pos: Vec3; dir: Vec3; weapon: string; scoped?: boolean }
+  /** 04 added: surface (what was hit when no zombie), dir (flight direction), range (m flown), killed. */
+  | { type: 'bulletHit'; zombie: EntityId | null; part: HitPart | null; pos: Vec3; surface?: HitSurface; dir?: Vec3; range?: number; killed?: boolean }
+  | { type: 'zombieKilled'; id: EntityId; kind: ZombieKind; by: EntityId | 'player'; headshot: boolean; pos: Vec3; knife?: boolean }
   | { type: 'earsCollected'; amount: number }
-  | { type: 'playerHurt'; amount: number; hp: number }
-  | { type: 'playerDied' }
+  | { type: 'playerHurt'; amount: number; hp: number; cause?: 'bite' | 'fall' | 'infection' }
+  | { type: 'playerDied'; cause?: 'bite' | 'fall' | 'infection' }
+  // --- tactical, added by 04 ---
+  | { type: 'dryFire' }
+  | { type: 'reloadStarted'; seconds: number }
+  | { type: 'reloadDone'; mag: number }
+  | { type: 'knifeSwing'; hit: EntityId | null; killed: boolean }
+  | { type: 'playerInfected'; untilDay: number; untilMinute: number }
+  /** Provisional: the player is back on their feet after dying (05 replaces the rules). */
+  | { type: 'playerRevived' }
+  | { type: 'zombieAlerted'; id: EntityId; chase: boolean }
   // --- build / defense (06) ---
   | { type: 'structureDamaged'; id: EntityId; hp: number }
   | { type: 'structureDestroyed'; id: EntityId; def: string }

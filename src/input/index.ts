@@ -187,6 +187,7 @@ export function createInput(deps: InputDeps): Input {
       const shift = has('sprintOrBreath');
       frame.holdBreath = shift && frame.scope;
       frame.sprint = shift && !frame.scope;
+      frame.interactHeld = has('interact');
       return frame;
     },
     consume() {

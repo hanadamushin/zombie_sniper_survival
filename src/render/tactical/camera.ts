@@ -6,10 +6,11 @@
 import * as THREE from 'three';
 import type { GameState } from '../../core/types.ts';
 import { RENDER } from '../../data/render.ts';
+import { viewFovDeg } from '../../sim/tactical/weapon.ts';
 import type { FrameInfo, RenderContext, SubRenderer } from '../index.ts';
 
 export interface CameraRig extends SubRenderer {
-  /** Vertical field of view override in degrees (null = RENDER.camera.fov). */
+  /** Vertical field of view override in degrees (null = follow the player's scope: sim/tactical/weapon.ts viewFovDeg). */
   setFov(fov: number | null): void;
   fov(): number;
 }
@@ -18,6 +19,7 @@ export function createCameraRig(): CameraRig {
   const C = RENDER.camera;
   let camera: THREE.PerspectiveCamera;
   let fov: number = C.fov;
+  let override: number | null = null;
   // Sim positions of the last two rendered frames, for interpolation between fixed steps.
   const prev = new THREE.Vector3();
   const curr = new THREE.Vector3();
@@ -31,7 +33,7 @@ export function createCameraRig(): CameraRig {
       camera.rotation.order = 'YXZ';
     },
     setFov(next) {
-      fov = next ?? C.fov;
+      override = next;
     },
     fov: () => fov,
     reset() {
@@ -50,6 +52,7 @@ export function createCameraRig(): CameraRig {
         prev.copy(curr);
         curr.set(x, y, z);
       }
+      fov = override ?? (state.mode === 'tactical' ? viewFovDeg(p) : C.fov);
       if (camera.fov !== fov) {
         camera.fov = fov;
         camera.updateProjectionMatrix();
@@ -63,7 +66,8 @@ export function createCameraRig(): CameraRig {
         eyeY += (iy - eyeY) * Math.min(1, C.stepRate * Math.max(frame.realDt, 1 / 240));
         if (Math.abs(iy - eyeY) > 1.5) eyeY = iy;
         camera.position.set(ix, eyeY + p.eye, iz);
-        camera.rotation.set(p.pitch, p.yaw, 0);
+        // Sway and recoil move the whole picture; the reticle stays in the middle (04).
+        camera.rotation.set(p.pitch + p.aim.off[1], p.yaw + p.aim.off[0], 0);
       } else {
         // Command / world / menu: look down at the player from behind (south).
         camera.position.set(x, y + C.commandHeight, z + C.commandBack);

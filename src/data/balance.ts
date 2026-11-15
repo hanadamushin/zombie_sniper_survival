@@ -111,6 +111,8 @@ export const BALANCE = {
       minNearbyH: 5,
       /** Prefer starts with at least this many zombies within suburbRadius (something to hunt). */
       minNearbyZ: 300,
+      /** The start cell itself must hold at least this many zombies (04: something to shoot on day one). */
+      minCellZ: 40,
       /** Candidates must be on a landmass at least this large and this far apart from each other. */
       minLandmass: 200,
       minSeparation: 12,
@@ -128,7 +130,7 @@ export const BALANCE = {
     },
   },
 
-  // --- initial player values (placeholder; owner: 04 sniping) ---
+  // --- docs/02_systems_spec.md §3.5 player (owner: 04 sniping) ---
   player: {
     hp: 100,
     stamina: 100,
@@ -136,6 +138,129 @@ export const BALANCE = {
     startWeapon: 'rifle',
     startMag: 5,
     startZoom: 4,
+    /** Carried rounds at the start (spec §5 "initial ammo 100"; 05 may move part of it to the colony stock). */
+    startAmmo: 100,
+    maxAmmo: 150,
+    /** Chance that a bite infects, and game hours until an untreated infection kills. */
+    infectionChance: 0.1,
+    infectionHours: 48,
+    /** Falls: no damage up to `fallSafe` metres, then `fallDamagePerM` per extra metre. */
+    fallSafe: 3,
+    fallDamagePerM: 12,
+    /** Provisional death handling until 05 ties it to the colony: seconds on the death screen, ammo floor on revival. */
+    reviveSeconds: 4,
+    reviveAmmo: 40,
+    /** Zombies this close to the revival point are removed (m). */
+    reviveClear: 60,
+  },
+
+  // --- docs/02_systems_spec.md §3.2 / §3.3 / §3.5 aiming, knife, ears (owner: 04 sniping) ---
+  combat: {
+    scope: {
+      /** Seconds to raise / lower the scope. */
+      transition: 0.25,
+      /**
+       * Magnification is measured against this vertical field of view ("1x" for a monitor), not
+       * against the wide hip view: tan(fov / 2) = tan(reference / 2) / zoom.
+       */
+      referenceFov: 40,
+    },
+    /** Sway amplitude in mil by stance (spec §3.3). */
+    swayBase: { stand: 2.4, crouch: 1.2, prone: 0.4 },
+    swayMove: 1.5,
+    swayFatigue: 0.8,
+    /** Seconds until the just-moved factor has decayed to 0. */
+    swayMoveDecay: 1.5,
+    swayDifficulty: [0.8, 1, 1.25],
+    /** Breathing figure-eight period (s) and the share / frequencies (Hz) of the fine tremor on top. */
+    swayPeriod: 4.6,
+    tremorShare: 0.22,
+    tremorHz: [1.7, 2.9, 4.3],
+    /** How fast the amplitude follows its target (1/s). */
+    swayEase: 4,
+    /** Extra sway while the bolt is cycled. */
+    swayBolt: 1.6,
+    /** Holding breath: sway factor, seconds available, recovery takes `breathRecover` times as long. */
+    breathFactor: 0.15,
+    breathSeconds: 6,
+    breathRecover: 2,
+    /** Ran out of breath: sway factor for this many seconds (no holding meanwhile). */
+    breathPenalty: 1.6,
+    breathPenaltySeconds: 3,
+    /** Recoil spring: stiffness (1/s², critically damped) and stance factors of the kick. */
+    recoilStiffness: 190,
+    recoilStance: { stand: 1.3, crouch: 1, prone: 0.7 },
+    /** Wind (only on difficulty 2 or with flags.wind): maximum speed in m/s. */
+    windMax: 6,
+    knife: { range: 1.8, damage: 60, interval: 0.6, arc: 0.9 },
+    ears: { perCorpse: 2, range: 2, seconds: 0.8 },
+    corpse: { hours: 10, max: 200 },
+    bulletLife: 4,
+  },
+
+  // --- docs/02_systems_spec.md §3.4 zombie behaviour (owner: 04; per-kind numbers are in data/zombies.ts) ---
+  zombie: {
+    max: 150,
+    /** Sight: distance by day / night multiplier, half field of view (radians), eye height share of the body. */
+    viewDist: 40,
+    nightView: 1.5,
+    nightSpeed: 1.3,
+    halfFov: Math.PI / 3,
+    /** Alerted zombies look harder: range factor and half field of view. */
+    alertView: 1.25,
+    alertHalfFov: Math.PI * 0.6,
+    /** A crouching / prone player is seen from less far away. */
+    stanceView: { stand: 1, crouch: 0.75, prone: 0.5 },
+    /** Each tree canopy over the line of sight shortens it by this share (floor: canopyMin). */
+    canopyCut: 0.12,
+    canopyMin: 0.45,
+    /** Anything this close is noticed regardless of direction (m). */
+    senseDist: 3,
+    /** Seeing a body within corpseDist puts a zombie on alert for alertSeconds. */
+    corpseDist: 15,
+    alertSeconds: 20,
+    /** A zombie that starts chasing draws others within this range to the spot (m). */
+    callDist: 22,
+    /** Chasers give up this long after losing sight (s). */
+    loseSeconds: 8,
+    wanderSpeed: 0.55,
+    wanderRadius: 40,
+    wanderPause: [2, 9],
+    /** Melee: reach, wind-up before the hit lands, pause after it (s), vertical reach. */
+    attackRange: 1.3,
+    attackReach: 1.9,
+    attackWindup: 0.45,
+    attackCooldown: 0.9,
+    attackHeight: 1.6,
+    /** Seconds from death to becoming a corpse (the fall), and of the stagger after a body hit. */
+    downSeconds: 1.2,
+    flinchSeconds: 0.35,
+    /** Spawning: keep-out distance from the player / the home base centre, cluster size and spread. */
+    spawnMinDist: 90,
+    edgeMinDist: 140,
+    homeKeepOut: 150,
+    cluster: [1, 4],
+    clusterSpread: 12,
+    /** LOD: beyond these distances a zombie is updated every 2nd / 4th step (with a longer dt). */
+    lodMid: 80,
+    lodFar: 200,
+    /** Steps between sight checks of one zombie. */
+    senseEvery: 12,
+    /** Stuck handling: metres of side-stepping per detour — the first one, and the cap as they grow. */
+    detourSeconds: [2.5, 30],
+    turnRate: 5,
+    gravity: 18,
+    stepUp: 0.5,
+  },
+
+  // --- firing range (04, debug): distances of the target lines (m) ---
+  range: {
+    distances: [100, 200, 300, 400, 500, 600],
+    firingLine: [512, 960],
+    laneSpacing: 9,
+    walkerLane: [40, 70],
+    respawnSeconds: 4,
+    ammo: 999,
   },
 
   // --- research (placeholder; owner: 07 tech) ---

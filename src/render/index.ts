@@ -14,7 +14,10 @@ import type { GameState } from '../core/types.ts';
 import { RENDER } from '../data/render.ts';
 import { createSkyRenderer } from './sky.ts';
 import { createCameraRig, type CameraRig } from './tactical/camera.ts';
+import { createEffectsRenderer } from './tactical/effects.ts';
 import { createTacticalRenderer } from './tactical/index.ts';
+import { createScopeRenderer } from './tactical/scope.ts';
+import { createZombieRenderer } from './tactical/zombies.ts';
 
 export interface RenderContext {
   readonly renderer: THREE.WebGLRenderer;
@@ -55,6 +58,9 @@ export interface Renderer {
   /** Draw one frame. */
   draw(state: GameState, alpha: number, realDt?: number): void;
   reset(state: GameState): void;
+  /** Automatic resolution (RENDER.resolution): current scale, and a switch (screenshots / tests turn it off). */
+  resolutionScale(): number;
+  setAutoResolution(on: boolean): void;
   /** Draw calls of the last frame (performance budget: < 150). */
   drawCalls(): number;
   dispose(): void;
@@ -70,13 +76,52 @@ export function createRenderer(canvas: HTMLCanvasElement, events: EventBus): Ren
   let width = 0;
   let height = 0;
 
+  // --- automatic resolution: a safety net for slow GPUs (nobody has tested on real hardware yet) ---
+  const Q = RENDER.resolution;
+  let scale = 1;
+  let auto = true;
+  let avgMs = 16;
+  let slow = 0;
+  let fast = 0;
+  let wait: number = Q.upFrames;
+  let sinceRaise = Infinity;
+  const setScale = (next: number): void => {
+    scale = Math.min(1, Math.max(Q.min, next));
+    width = 0; // forces resize() to apply the new pixel ratio
+  };
+  const adapt = (realDt: number): void => {
+    if (!auto || realDt <= 0) return;
+    const ms = Math.min(100, realDt * 1000);
+    avgMs += (ms - avgMs) / Q.window;
+    sinceRaise += realDt;
+    if (avgMs > Q.slowMs) {
+      fast = 0;
+      if (++slow >= Q.window && scale > Q.min) {
+        // A raise that did not hold: wait longer before trying again.
+        if (sinceRaise < Q.failSeconds) wait = Math.min(Q.upFrames * Q.maxBackoff, wait * 2);
+        setScale(scale - Q.step);
+        slow = 0;
+        avgMs = Q.slowMs - 1;
+      }
+    } else {
+      slow = 0;
+      if (avgMs < Q.fastMs && scale < 1) {
+        if (++fast >= wait) {
+          setScale(scale + Q.step);
+          fast = 0;
+          sinceRaise = 0;
+        }
+      } else fast = 0;
+    }
+  };
+
   const resize = (): void => {
     const w = Math.max(1, canvas.clientWidth);
     const h = Math.max(1, canvas.clientHeight);
     if (w === width && h === height) return;
     width = w;
     height = h;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, RENDER.maxPixelRatio));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, RENDER.maxPixelRatio) * scale);
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
@@ -101,6 +146,7 @@ export function createRenderer(canvas: HTMLCanvasElement, events: EventBus): Ren
       subs.splice(i, 1);
     },
     draw(state, alpha, realDt = 0) {
+      adapt(realDt);
       resize(); // cheap when unchanged; also covers container-driven size changes
       const frame: FrameInfo = { alpha, realDt, width, height };
       for (const s of subs) s.update(state, frame);
@@ -108,6 +154,11 @@ export function createRenderer(canvas: HTMLCanvasElement, events: EventBus): Ren
     },
     reset(state) {
       for (const s of subs) s.reset?.(state);
+    },
+    resolutionScale: () => scale,
+    setAutoResolution(on) {
+      auto = on;
+      if (!on) setScale(1);
     },
     drawCalls: () => renderer.info.render.calls,
     dispose() {
@@ -122,5 +173,8 @@ export function createRenderer(canvas: HTMLCanvasElement, events: EventBus): Ren
   api.register(view);
   api.register(createSkyRenderer());
   api.register(createTacticalRenderer());
+  api.register(createZombieRenderer());
+  api.register(createEffectsRenderer());
+  api.register(createScopeRenderer()); // last: drawn over everything
   return api;
 }

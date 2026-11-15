@@ -1,3 +1,4 @@
+import { makeZombie } from '../src/sim/tactical/zombies.ts';
 import { describe, expect, it } from 'vitest';
 import {
   AUTO_SLOT, deserialize, listSaves, loadGame, MemorySaveStore, migrate, packState, SaveError, saveGame, serialize,
@@ -58,16 +59,17 @@ describe('save', () => {
     state.mode = 'menu';
     state.tactical = {
       cell: 3, mapSeed: 9, reserve: 4, wind: [1, 0],
-      zombies: [{ id: 1, kind: 'walker', pos: [0, 0, 0], yaw: 0, hp: 100, state: 'wander', target: null, crippled: false, t: 0 }],
-      corpses: [{ id: 2, pos: [0, 0, 0], ears: 2, expiresDay: 91, expiresMinute: 0 }],
+      zombies: [makeZombie(state, 'walker', 0, 0, 0, 0)],
+      corpses: [{ id: 2, pos: [0, 0, 0], ears: 2, expiresDay: 91, expiresMinute: 0, kind: 'walker', yaw: 0, headshot: false, crippled: false }],
+      populated: true,
       bullets: [],
       lootSpots: [{ id: 1, pos: [5, 5], taken: true }],
     };
     const packed = packState(state);
     expect(packed.mode).toBe('command');
-    expect(packed.tactical).toEqual({ cell: 3, mapSeed: 9, reserve: 4, wind: [1, 0], zombies: [], corpses: [], bullets: [], lootSpots: [{ id: 1, pos: [5, 5], taken: true }] });
+    expect(packed.tactical).toEqual({ cell: 3, mapSeed: 9, reserve: 4, wind: [1, 0], zombies: [], corpses: [], bullets: [], lootSpots: [{ id: 1, pos: [5, 5], taken: true }], populated: false });
     expect(state.mode).toBe('menu'); // live state untouched
-    expect(state.tactical.zombies).toHaveLength(1);
+    expect(state.tactical?.zombies).toHaveLength(1);
   });
 
   it('rejects broken, versionless and future saves', () => {

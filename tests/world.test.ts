@@ -169,6 +169,7 @@ describe('start candidates', () => {
         const info = grid.cells[c.cell]!;
         expect(['rural', 'forest']).toContain(info.land);
         expect(c.z).toBeLessThan(200);
+        expect(c.z).toBeGreaterThanOrEqual(BALANCE.world.start.minCellZ); // something to shoot at home (04)
         expect(c.nearbyH).toBeGreaterThanOrEqual(5);
         expect(cellsWithin(grid, c.cell, 3).some((id) => grid.cells[id]!.land === 'suburb')).toBe(true);
         expect(evaluateStart(state.world.cells, grid, c.cell)).toEqual(c);

@@ -14,6 +14,12 @@ export const RENDER = {
   /** Visibility 800 m + fog (docs/04_architecture.md §8). */
   fog: { near: 150, far: 800 },
   maxPixelRatio: 2,
+  /**
+   * Automatic resolution (04): when the moving average of the frame time exceeds `slowMs` the
+   * render scale drops by `step` (down to `min`); when frames stay under `fastMs` for `upFrames`
+   * it is raised again. A raise that fails within `failSeconds` doubles the wait before the next try.
+   */
+  resolution: { slowMs: 20, fastMs: 17.5, step: 0.125, min: 0.5, window: 30, upFrames: 150, failSeconds: 4, maxBackoff: 16 },
   /** Anisotropic filtering of the ground texture (keeps roads sharp at grazing angles). */
   groundAnisotropy: 4,
   /** Operation area edge length (m). */
@@ -86,5 +92,50 @@ export const RENDER = {
     grassMax: 5000,
     /** Tree chunks per side (frustum / distance culling granularity). */
     treeChunks: 4,
+  },
+
+  // --- scope overlay (04). Sizes relative to the viewport height unless noted ---
+  scope: {
+    /** Radius of the clear circle. */
+    radius: 0.46,
+    /** Soft edge width and how dark the rim gets. */
+    edge: 0.012,
+    vignette: 0.55,
+    /** Scope shadow: how far the eye box wanders per rad/s of view rotation (clamped), and its softness. */
+    shadowGain: 0.05,
+    shadowMax: 0.11,
+    reticle: 0x0a0c0d,
+    /** Line half-width and dot radius in mil, with minimums in pixels. */
+    lineMil: 0.035,
+    lineMinPx: 0.75,
+    dotMil: 0.11,
+    dotMinPx: 1.6,
+    /** Dots along each arm, where the thick posts start (mil). */
+    dots: 8,
+    postFrom: 10,
+    postMil: 0.3,
+  },
+
+  // --- zombies (04): muted clothes, pale heads; colours picked per zombie by id ---
+  zombies: {
+    skin: [0x9aa58c, 0x8f9a86, 0xa3a08a],
+    walker: { top: [0x4c5560, 0x5a5348, 0x3f4a44, 0x62605c, 0x4a4250], legs: [0x2e3238, 0x3a352e, 0x2a2f2a] },
+    runner: { top: [0x7a3b33, 0x6d4630, 0x80503a], legs: [0x25272c, 0x30302c] },
+    brute: { top: [0x3e4a34, 0x4a4a3a, 0x38403a], legs: [0x2a2c26, 0x33302a] },
+    crawler: { top: [0x5a5648, 0x4e5a52, 0x60584e], legs: [0x34322c, 0x2c3030] },
+    /** Looted bodies are darkened by this factor. */
+    lootedShade: 0.55,
+    blobOpacity: 0.34,
+  },
+
+  // --- hit effects (04): dust / debris / blood puffs ---
+  effects: {
+    max: 384,
+    dust: 0xb9a888,
+    stone: 0xa9a7a0,
+    wood: 0x8a6a48,
+    blood: 0x6a1410,
+    /** Tracer: a short bright streak following the bullet (helps reading the trajectory). */
+    tracer: 0xffe9b0,
   },
 } as const;
