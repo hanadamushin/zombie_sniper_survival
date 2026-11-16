@@ -23,7 +23,8 @@ import { chaseField, raidField, tileOf, type FlowField } from '../build/flowfiel
 import { bodyDistance, damageStructure, defOf, GATE_THICK, moatFilled, overlayOf, structureAtTile, TILE, TILES, type Overlay } from '../build/structures.ts';
 import { cellTactical } from '../world/derive.ts';
 import type { TacticalArea } from './area.ts';
-import { heightAt, isWalkable, pushOut, segmentHitsStatic, supportAt, type Vec3 } from './collision.ts';
+import { heightAt, isWalkable, pushOut, segmentHitsStatic, sightBlocked, supportAt, type Vec3 } from './collision.ts';
+import { GROUND } from '../../gen/index.ts';
 import { hurtPlayer, isDead } from './health.ts';
 import { RANGE_SPOTS } from './range.ts';
 import { segmentCapsule, segmentSphere } from './shapes.ts';
@@ -221,7 +222,7 @@ export function killZombie(state: GameState, area: TacticalArea, ctx: Pick<SimCo
     const other = runtimeOf(t).byId.get(id);
     if (!other || other.state !== 'wander' || other.dummy) continue;
     if (Math.hypot(other.pos[0] - z.pos[0], other.pos[2] - z.pos[2]) > Z.corpseDist) continue;
-    if (segmentHitsStatic(area.map, [other.pos[0], other.pos[1] + 1.5, other.pos[2]], [z.pos[0], z.pos[1] + 0.6, z.pos[2]])) continue;
+    if (sightBlocked(area.map, [other.pos[0], other.pos[1] + 1.5, other.pos[2]], [z.pos[0], z.pos[1] + 0.6, z.pos[2]])) continue;
     alert(other, z.pos[0], z.pos[2], Z.alertSeconds);
     other.corpseSeen = z.corpseId;
   }
@@ -312,7 +313,8 @@ export function seesPlayer(state: GameState, map: TacticalMap, z: Zombie): boole
   eyeB[0] = p.pos[0];
   eyeB[1] = p.pos[1] + p.eye;
   eyeB[2] = p.pos[2];
-  return !segmentHitsStatic(map, eyeA, eyeB);
+  // Hedges, reeds and thickets hide the player — except from something close enough to see through the leaves.
+  return dist > Z.brushNear ? !sightBlocked(map, eyeA, eyeB) : !segmentHitsStatic(map, eyeA, eyeB);
 }
 
 function startChase(state: GameState, area: TacticalArea, ctx: SimContext, z: Zombie): void {
@@ -680,7 +682,7 @@ function updateOne(state: GameState, area: TacticalArea, ctx: SimContext, z: Zom
         for (let i = corpses.length - 1; i >= 0 && corpses[i]!.id > z.corpseSeen; i--) {
           const c = corpses[i]!;
           if (Math.hypot(c.pos[0] - z.pos[0], c.pos[2] - z.pos[2]) > Z.corpseDist) continue;
-          if (segmentHitsStatic(map, [z.pos[0], z.pos[1] + 1.5, z.pos[2]], [c.pos[0], c.pos[1] + 0.5, c.pos[2]])) continue;
+          if (sightBlocked(map, [z.pos[0], z.pos[1] + 1.5, z.pos[2]], [c.pos[0], c.pos[1] + 0.5, c.pos[2]])) continue;
           z.corpseSeen = c.id;
           return alert(z, c.pos[0], c.pos[2], Z.alertSeconds);
         }
@@ -813,14 +815,57 @@ function walkableAt(map: TacticalMap, x: number, z: number): boolean {
   return x > 4 && z > 4 && x < map.size - 4 && z < map.size - 4 && isWalkable(map, Math.floor(x / map.tile), Math.floor(z / map.tile));
 }
 
-/** A place for a new group: on a road half of the time (where there are any), away from the player and the base. */
+/**
+ * Is (x, z) a place where something can stand unseen from most of the map (07b)? Under trees,
+ * beside a building or a thicket, or in a hollow.
+ */
+export function hasCover(map: TacticalMap, x: number, z: number): boolean {
+  const g = map.ground[Math.floor(z / map.tile) * map.tiles + Math.floor(x / map.tile)];
+  if (g === GROUND.forest) return true;
+  const hash = map.hash;
+  const cx0 = Math.max(0, Math.floor((x - Z.coverDist) / hash.cell));
+  const cx1 = Math.min(hash.n - 1, Math.floor((x + Z.coverDist) / hash.cell));
+  const cz0 = Math.max(0, Math.floor((z - Z.coverDist) / hash.cell));
+  const cz1 = Math.min(hash.n - 1, Math.floor((z + Z.coverDist) / hash.cell));
+  for (let cz = cz0; cz <= cz1; cz++) {
+    for (let cx = cx0; cx <= cx1; cx++) {
+      const c = cz * hash.n + cx;
+      for (const si of hash.solids[c]!) {
+        const s = map.solids[si]!;
+        if (s.kind !== 'building' && s.kind !== 'scenery') continue;
+        if (Math.hypot(x - Math.min(s.x1, Math.max(s.x0, x)), z - Math.min(s.z1, Math.max(s.z0, z))) < Z.coverDist) return true;
+      }
+      for (const bi of hash.brush[c]!) {
+        const br = map.brush[bi]!;
+        const dx = br.bx - br.ax;
+        const dz = br.bz - br.az;
+        const len2 = dx * dx + dz * dz;
+        const u = len2 > 0 ? Math.min(1, Math.max(0, ((x - br.ax) * dx + (z - br.az) * dz) / len2)) : 0;
+        if (Math.hypot(x - br.ax - dx * u, z - br.az - dz * u) < br.r + Z.coverDist * 0.5) return true;
+      }
+    }
+  }
+  // A hollow: clearly lower than the ground around it.
+  const d = Z.hollowRing;
+  const here = heightAt(map, x, z);
+  let ring = 0;
+  for (let k = 0; k < 8; k++) ring += heightAt(map, x + Math.cos((k * Math.PI) / 4) * d, z + Math.sin((k * Math.PI) / 4) * d);
+  return ring / 8 - here > Z.hollowDepth;
+}
+
+/**
+ * A place for a new group, away from the player and the base. On a road now and then; otherwise
+ * a spot with cover is preferred, so that they are met at close range rather than seen from afar.
+ */
 function pickAnchor(state: GameState, map: TacticalMap, rng: RngState): [number, number] | null {
   const p = state.player;
   const mid = map.size / 2;
+  let open: [number, number] | null = null;
   for (let i = 0; i < 40; i++) {
     let x: number;
     let z: number;
-    if (map.roads.length > 0 && rand(rng) < 0.5) {
+    const onRoad = map.roads.length > 0 && rand(rng) < Z.spawnRoadShare;
+    if (onRoad) {
       const road = map.roads[randInt(rng, 0, map.roads.length - 1)]!;
       const pt = road.pts[randInt(rng, 0, road.pts.length - 1)]!;
       x = pt[0] + randRange(rng, -6, 6);
@@ -829,12 +874,14 @@ function pickAnchor(state: GameState, map: TacticalMap, rng: RngState): [number,
       x = randRange(rng, 8, map.size - 8);
       z = randRange(rng, 8, map.size - 8);
     }
+    const anyway = rand(rng) < Z.spawnOpenShare;
     if (!walkableAt(map, x, z)) continue;
     if (Math.hypot(x - p.pos[0], z - p.pos[2]) < Z.spawnMinDist) continue;
     if (map.params.isHome && Math.hypot(x - mid, z - mid) < Z.homeKeepOut) continue;
-    return [x, z];
+    if (onRoad || anyway || hasCover(map, x, z)) return [x, z];
+    open ??= [x, z];
   }
-  return null;
+  return open;
 }
 
 function pickEdge(state: GameState, map: TacticalMap, rng: RngState): [number, number] | null {
@@ -873,8 +920,14 @@ function spawn(state: GameState, area: TacticalArea, grid: StaticGrid, dt: numbe
       if (!anchor) break;
       const size = Math.min(target - alive, randInt(rng, Z.cluster[0], Z.cluster[1]));
       for (let k = 0; k < size; k++) {
-        const x = anchor[0] + (k === 0 ? 0 : randRange(rng, -Z.clusterSpread, Z.clusterSpread));
-        const z = anchor[1] + (k === 0 ? 0 : randRange(rng, -Z.clusterSpread, Z.clusterSpread));
+        let x = anchor[0];
+        let z = anchor[1];
+        // The others stand around the first — in cover too, if a few tries find some.
+        for (let tries = 0; k > 0 && tries < Z.clusterTries; tries++) {
+          x = anchor[0] + randRange(rng, -Z.clusterSpread, Z.clusterSpread);
+          z = anchor[1] + randRange(rng, -Z.clusterSpread, Z.clusterSpread);
+          if (walkableAt(map, x, z) && hasCover(map, x, z)) break;
+        }
         if (!walkableAt(map, x, z)) continue;
         const zb = addZombie(state, area, pickKind(rng, info.kinds), x, z, rand(rng) * Math.PI * 2);
         if (!zb) break;

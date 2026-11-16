@@ -6,6 +6,8 @@
 import type { Command } from '../core/commands.ts';
 import type { EventBus } from '../core/events.ts';
 import { emptyInputFrame, type GameState, type InputFrame, type Mode, type Speed } from '../core/types.ts';
+import { INPUT } from '../data/input.ts';
+import { TACTICAL } from '../data/tactical.ts';
 import { actionForCode, SPEED_KEYS, type Action } from './bindings.ts';
 
 export interface InputDeps {
@@ -44,6 +46,19 @@ export function createInput(deps: InputDeps): Input {
   /** Modes to return to when the world map / menu is closed. */
   let beforeWorld: Mode = 'tactical';
   let beforeMenu: Mode = 'tactical';
+
+  /** Arrow-key aiming: seconds each axis has been held, and the time of the last poll. */
+  let lookHeldX = 0;
+  let lookHeldY = 0;
+  let lastPoll = performance.now();
+  const K = INPUT.keyLook;
+  const PX_PER_DEG = Math.PI / 180 / TACTICAL.player.lookSensitivity;
+  /** Pixels of mouse movement that `dt` seconds of a held arrow key are worth. */
+  const keyLook = (heldBefore: number, dt: number, scoped: boolean): number => {
+    const k = scoped ? K.scoped : K.hip;
+    const u = Math.min(1, (heldBefore + dt / 2) / k.ramp);
+    return (k.start + (k.max - k.start) * u * u) * PX_PER_DEG * dt;
+  };
 
   const locked = (): boolean => document.pointerLockElement === canvas;
   const tactical = (): boolean => getState()?.mode === 'tactical';
@@ -189,6 +204,19 @@ export function createInput(deps: InputDeps): Input {
     poll() {
       const active = tactical();
       const has = (a: Action): boolean => active && held.has(a);
+      // Arrow keys -> look deltas, in the same units as mouse movement. Nothing accumulates while paused.
+      const now = performance.now();
+      const dt = Math.min(K.maxStep, Math.max(0, (now - lastPoll) / 1000));
+      lastPoll = now;
+      const state = getState();
+      const dirX = (has('lookRight') ? 1 : 0) - (has('lookLeft') ? 1 : 0);
+      const dirY = (has('lookDown') ? 1 : 0) - (has('lookUp') ? 1 : 0);
+      const running = state !== null && state.time.speed !== 0;
+      const scoped = state?.player.scoped === true;
+      if (dirX !== 0 && running) frame.lookDX += dirX * keyLook(lookHeldX, dt, scoped);
+      if (dirY !== 0 && running) frame.lookDY += dirY * keyLook(lookHeldY, dt, scoped) * K.pitchFactor;
+      lookHeldX = dirX !== 0 ? lookHeldX + dt : 0;
+      lookHeldY = dirY !== 0 ? lookHeldY + dt : 0;
       frame.moveX = (has('right') ? 1 : 0) - (has('left') ? 1 : 0);
       frame.moveZ = (has('forward') ? 1 : 0) - (has('back') ? 1 : 0);
       frame.fire = active && (fireHeld || held.has('fire'));

@@ -242,6 +242,19 @@ export const BALANCE = {
     homeKeepOut: 150,
     cluster: [1, 4],
     clusterSpread: 12,
+    /**
+     * 07b — where the first lot stands: `spawnRoadShare` of the groups on a road, the rest where there is
+     * cover (under trees, within coverDist of a building, a wreck or brush, or in a hollow at least
+     * hollowDepth below the ground hollowRing away); `spawnOpenShare` of them out in the open anyway.
+     */
+    spawnRoadShare: 0.15,
+    clusterTries: 4,
+    spawnOpenShare: 0.12,
+    coverDist: 9,
+    hollowRing: 22,
+    hollowDepth: 1.1,
+    /** Brush hides the player only from zombies further away than this (m). */
+    brushNear: 6,
     /** LOD: beyond these distances a zombie is updated every 2nd / 4th step (with a longer dt). */
     lodMid: 80,
     lodFar: 200,

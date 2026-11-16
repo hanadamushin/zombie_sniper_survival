@@ -2,8 +2,10 @@
 // Later sessions add their own sections; keep keys in English, grouped by screen.
 
 export const ja = {
-  'app.title': '耳の国',
-  'app.subtitle': 'Zombie Sniper Survival',
+  // Working title (07b). The real name goes here — and only here: the title screen, the browser tab
+  // (ui/index.tsx sets document.title from it) and the menus all read this key.
+  'app.title': 'Zombie Sniper Survival',
+  'app.subtitle': '狙撃とサバイバル建国（仮題）',
 
   'title.newGame': '新規ゲーム',
   'title.continue': '続きから',
@@ -34,7 +36,8 @@ export const ja = {
   'mode.menu': 'メニュー',
   'mode.label': 'モード',
 
-  'tactical.clickToAim': '右クリック・Q: スコープ / ホイール・＋－: 倍率 / 左クリック・F: 射撃 / Shift: 息止め・走る / R: リロード / C・Z: しゃがむ・伏せる / PgUp・PgDn: ゼロイン / V: ナイフ / E長押し: 耳を回収',
+  'tactical.clickToAim': 'WASD: 移動 / マウス・矢印キー: 視点 / 右クリック・Q: スコープ / 左クリック・F: 射撃 / Shift: 息止め・走る / ホイール・－ ＝: 倍率 / R: リロード',
+  'tactical.keysOnly': 'マウスなしでも狙撃できます — Q で覗く → 矢印キーで狙う（押し続けると速く）→ Shift で息を止める → F で撃つ。その他の操作は Esc のメニューに一覧',
   'tactical.rangeHint': '射撃場: 標的は 100〜600m（板の横の杭の本数 × 100m）。ミル目盛り 1 つ = 100m で 10cm。身長 1.75m の標的が N ミルなら 距離 ≒ 1750 ÷ N m',
   'hud.hp': '体力',
   'hud.breath': '息',
@@ -70,6 +73,26 @@ export const ja = {
   'menu.saved': 'セーブしました',
   'menu.saveFailed': 'セーブに失敗しました',
   'menu.toTitle': 'タイトルへ戻る',
+  'menu.range': '射撃場で練習する（ゲームは中断して待機）',
+  'menu.leaveRange': '射撃場を出てゲームに戻る',
+  'title.range': '射撃場',
+  'title.rangeNote': '狙撃の練習（100〜600m の標的）',
+  'help.title': '操作一覧',
+  'help.move': '移動 … W A S D',
+  'help.look': '視点・照準 … マウス ／ 矢印キー（押し始めはゆっくり、押し続けると加速。スコープ中は倍率に応じて遅くなる）',
+  'help.scope': 'スコープ … 右クリック（押している間）／ Q（押すたびに切替）',
+  'help.fire': '射撃 … 左クリック ／ F',
+  'help.breath': '息止め（スコープ中）・走る … Shift',
+  'help.zoom': '倍率 … ホイール・2 本指スクロール ／ －（下げる） ＝（上げる）',
+  'help.zero': 'ゼロイン … PageUp ／ PageDown',
+  'help.stance': '姿勢 … C（しゃがむ） Z（伏せる）',
+  'help.reload': 'リロード … R',
+  'help.knife': 'ナイフ … V',
+  'help.interact': '話す・探索 … E ／ 耳の回収 … E 長押し',
+  'help.resupply': '弾薬補給（本拠・駐屯地） … B',
+  'help.layers': '指揮・建築 … Tab ／ 戦略地図 … M',
+  'help.time': '一時停止 … Space ／ 速度 … 1・2・3',
+  'help.menu': 'メニュー … Esc',
 
   'title.loading': '地図を読み込み中…',
   'title.dataFailed': '地図データを読み込めませんでした',
@@ -140,12 +163,12 @@ export const ja = {
   'world.hub': '交通拠点: {name}',
   'world.horde': '本拠への流入（累積）',
 
-  'help.keys': 'Tab: 指揮・建築 / M: 地図 / Space: 一時停止 / 1・2・3: 速度 / B: 弾薬補給（本拠・駐屯地） / Esc: メニュー',
 
   // --- colony (05) ---
   'hud.talk': 'E: 話しかける',
   'hud.search': 'E: 建物を探索する',
-  'hud.someone': '人の気配 {m}m',
+  'hud.someone': '人の気配 {dir} {m}m',
+  'hud.hireHint': '雇用候補が {n} 人います — Tab（指揮）→「雇用候補」で雇えます（契約金は耳で払う）',
   'hud.resupply': 'B: 弾薬を補給（備蓄 {n}）',
   'hud.defeat': '敗北',
   'hud.defeatLead': '共同体に誰もいないまま、あなたは力尽きた。',

@@ -17,6 +17,7 @@ import { createCameraRig, type CameraRig } from './tactical/camera.ts';
 import { createEffectsRenderer } from './tactical/effects.ts';
 import { createTacticalRenderer } from './tactical/index.ts';
 import { createScopeRenderer } from './tactical/scope.ts';
+import { createSignalRenderer } from './tactical/signals.ts';
 import { createStructureRenderer } from './tactical/structures.ts';
 import { createSurvivorRenderer } from './tactical/survivors.ts';
 import { createZombieRenderer } from './tactical/zombies.ts';
@@ -179,6 +180,7 @@ export function createRenderer(canvas: HTMLCanvasElement, events: EventBus): Ren
   api.register(createStructureRenderer()); // 06: walls, moats, towers, buildings, blueprints
   api.register(createZombieRenderer());
   api.register(createSurvivorRenderer());
+  api.register(createSignalRenderer()); // 07b: smoke / light over hideouts
   api.register(createEffectsRenderer());
   api.register(createScopeRenderer()); // last: drawn over everything
   return api;

@@ -12,11 +12,12 @@
 import { randInt, randRange } from '../core/rng.ts';
 import { TACTICAL } from '../data/tactical.ts';
 import { addTower, createBuilder, hAt, homeDist, N, rectFree, rngOf, SIZE, TILE, TILES, tileIndex, type Builder } from './builder.ts';
+import { scatterCover } from './cover.ts';
 import { heightStats, scatterFlora } from './flora.ts';
 import { sampleHeight } from './height.ts';
 import { layout, terrainFn } from './lands.ts';
 import { smoothstep } from './noise.ts';
-import { GROUND, type GenParams, type LootSpot, type Solid, type StaticHash, type TacticalMap } from './types.ts';
+import { GROUND, type Brush, type GenParams, type LootSpot, type Solid, type StaticHash, type TacticalMap } from './types.ts';
 
 export * from './types.ts';
 export { sampleHeight, sampleGradient } from './height.ts';
@@ -179,15 +180,22 @@ function buildWalkGrid(b: Builder): Uint8Array {
 }
 
 /** Bucket solids and tree trunks into the 16 m hash used by collision queries. */
-export function buildStaticHash(solids: readonly Solid[], treeX: Float32Array, treeZ: Float32Array, treeCount: number): StaticHash {
+export function buildStaticHash(solids: readonly Solid[], treeX: Float32Array, treeZ: Float32Array, treeCount: number, brush: readonly Brush[] = []): StaticHash {
   const cell = T.hashCell;
   const n = SIZE / cell;
-  const hash: StaticHash = { cell, n, solids: Array.from({ length: n * n }, () => []), trees: Array.from({ length: n * n }, () => []) };
+  const hash: StaticHash = { cell, n, solids: Array.from({ length: n * n }, () => []), trees: Array.from({ length: n * n }, () => []), brush: Array.from({ length: n * n }, () => []) };
   const clamp = (v: number): number => Math.min(n - 1, Math.max(0, v));
   solids.forEach((s, index) => {
     const cx1 = clamp(Math.floor(s.x1 / cell));
     const cz1 = clamp(Math.floor(s.z1 / cell));
     for (let cz = clamp(Math.floor(s.z0 / cell)); cz <= cz1; cz++) for (let cx = clamp(Math.floor(s.x0 / cell)); cx <= cx1; cx++) hash.solids[cz * n + cx]!.push(index);
+  });
+  brush.forEach((br, index) => {
+    const cx1 = clamp(Math.floor((Math.max(br.ax, br.bx) + br.r) / cell));
+    const cz1 = clamp(Math.floor((Math.max(br.az, br.bz) + br.r) / cell));
+    for (let cz = clamp(Math.floor((Math.min(br.az, br.bz) - br.r) / cell)); cz <= cz1; cz++) {
+      for (let cx = clamp(Math.floor((Math.min(br.ax, br.bx) - br.r) / cell)); cx <= cx1; cx++) hash.brush[cz * n + cx]!.push(index);
+    }
   });
   for (let i = 0; i < treeCount; i++) hash.trees[clamp(Math.floor(treeZ[i]! / cell)) * n + clamp(Math.floor(treeX[i]! / cell))]!.push(i);
   return hash;
@@ -250,10 +258,12 @@ export function finishMap(b: Builder, terrain?: (x: number, z: number) => number
     trees,
     grass,
     rocks: b.rocks,
+    brush: b.brush,
+    props: b.props,
     lootSpots: placeLootSpots(b),
     vantages: b.vantages,
     spawn: { home: [MID, MID], edge: spawn.edge, edgeYaw: spawn.edgeYaw },
-    hash: buildStaticHash(b.solids, trees.x, trees.z, tn),
+    hash: buildStaticHash(b.solids, trees.x, trees.z, tn, b.brush),
     apron,
     apronN,
   };
@@ -270,6 +280,7 @@ export function generateTacticalMap(params: GenParams): TacticalMap {
   findHillVantages(b, median);
   fillVantages(b, median);
   scatterFlora(b);
+  scatterCover(b);
   // Bare rock on the steepest ground (texture + flora rules of later sessions).
   for (let ty = 0; ty < TILES; ty++) {
     for (let tx = 0; tx < TILES; tx++) {

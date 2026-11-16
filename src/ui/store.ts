@@ -20,6 +20,10 @@ export interface UiActions {
   saveSlot(slot: SlotId): Promise<boolean>;
   listSaves(): Promise<SaveMeta[]>;
   quitToTitle(): void;
+  /** Open the firing range (07b). A running game is put aside and comes back with leaveRange(). */
+  openRange(): void;
+  /** Leave the firing range: back to the game it was opened from, or to the title. */
+  leaveRange(): void;
   toggleMode(target: 'command' | 'world' | 'menu'): void;
   togglePause(): void;
 }

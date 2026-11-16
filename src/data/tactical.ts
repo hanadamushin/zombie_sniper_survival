@@ -28,8 +28,8 @@ export const TACTICAL = {
     prone: 0.4,
     /** Velocity approaches the wanted velocity at this rate (1/s). */
     accel: 12,
-    /** Radians per pixel of mouse movement. */
-    lookSensitivity: 0.0027,
+    /** Radians per pixel of mouse movement (scaled down with the scope magnification). 07b: +25 % after the first playtest (was 0.0027). */
+    lookSensitivity: 0.003375,
     maxPitch: 1.5,
     /** Ledges up to this height are stepped onto; anything higher blocks. */
     stepUp: 0.5,
@@ -72,13 +72,84 @@ export const TACTICAL = {
   /**
    * Terrain per land class. amp / wave: fbm amplitude (m) and base wavelength (m);
    * ridge: amplitude of the ridged component; hills: extra rounded hills [count, minH, maxH].
+   * 07b — mid / midWave: a second, shorter undulation (m) that makes knolls and hollows a walker
+   * cannot see over; knolls: small extra hills [count, minH, maxH] (40..70 m across).
    */
   terrain: {
-    urban: { amp: 1.5, wave: 700, ridge: 0, hills: [0, 0, 0] },
-    suburb: { amp: 4, wave: 600, ridge: 0, hills: [1, 12, 18] },
-    rural: { amp: 7, wave: 520, ridge: 0, hills: [3, 20, 34] },
-    forest: { amp: 38, wave: 560, ridge: 22, hills: [2, 20, 40] },
-    mountain: { amp: 60, wave: 680, ridge: 120, hills: [0, 0, 0] },
+    urban: { amp: 1.5, wave: 700, ridge: 0, hills: [0, 0, 0], mid: 0, midWave: 150, knolls: [0, 0, 0] },
+    suburb: { amp: 4, wave: 600, ridge: 0, hills: [1, 12, 18], mid: 0, midWave: 150, knolls: [0, 0, 0] },
+    rural: { amp: 7, wave: 520, ridge: 0, hills: [3, 20, 34], mid: 2.8, midWave: 150, knolls: [5, 5, 9] },
+    forest: { amp: 38, wave: 560, ridge: 22, hills: [2, 20, 40], mid: 2.5, midWave: 110, knolls: [0, 0, 0] },
+    mountain: { amp: 60, wave: 680, ridge: 120, hills: [0, 0, 0], mid: 0, midWave: 150, knolls: [0, 0, 0] },
+  },
+
+  /**
+   * Cover (07b): what breaks the view of someone on foot. Sizes in metres. Brush hides but does not
+   * stop bullets or walkers; logs and wrecks are solid. The numbers were tuned against the share of
+   * 200 m ground-level sight lines that stay open (tests/sight.test.ts): rural 25..45 %, forest < 15 %.
+   */
+  cover: {
+    /** Lines of sight and what a hedge may stand next to: clearance from buildings, from the map edge. */
+    buildingGap: 1.5,
+    edge: 5,
+    /** Brush stays this far from the foot of a roof / tower vantage point. */
+    vantageGap: 9,
+    rural: {
+      /** Embankments across the map: [min, max] count, crest height, half width of the flat crest, width of each slope. */
+      dikes: [1, 2],
+      dikeHeight: [2.4, 3.2],
+      dikeCrest: 2,
+      dikeSlope: 7,
+      /** Field plots are levelled into terraces when the ground under them differs by less than this. */
+      terraceMaxRange: 6.5,
+      /** Chance per field side (north and west) of a hedge, and of a windbreak (hedge + a row of conifers) instead. Paddies get `paddyFactor` of both. */
+      hedge: 0.34,
+      windbreak: 0.12,
+      paddyFactor: 0.45,
+      hedgeRadius: [0.9, 1.3],
+      hedgeHeight: [2.2, 3],
+      windbreakHeight: 3.3,
+      windbreakTreeEvery: 6,
+      /** Gap left in a hedge for a gate. */
+      gate: 5,
+      /** Homestead groves: hedge this far from the house walls on two sides, with trees. */
+      groveGap: 6,
+      groveHeight: 3.2,
+      bamboo: [4, 6],
+      bambooRadius: [7, 11],
+      bambooLength: [0, 26],
+      bambooHeight: 7.5,
+      /** Reed / tall-grass beds on rough ground, and share of dry fields left to overgrow (each gets a few beds). */
+      reeds: [14, 20],
+      reedRadius: [5, 9],
+      reedLength: [0, 28],
+      reedHeight: 2.3,
+      overgrown: 0.22,
+      overgrownBeds: [2, 4],
+      bushes: 220,
+      bushRadius: [1.6, 3.4],
+      bushHeight: [1.9, 2.8],
+      /** Scenery: lone barns / sheds out in the fields, greenhouse frames, wrecks on the roads. */
+      barns: [5, 8],
+      greenhouses: [3, 5],
+      wrecks: [4, 7],
+    },
+    forest: {
+      /** Undergrowth thickets per hectare of wooded ground (open ground gets `openFactor` of it). */
+      thicketsPerHa: 40,
+      openFactor: 0.35,
+      thicketRadius: [1.8, 4.2],
+      thicketHeight: [1.9, 2.7],
+      logs: 150,
+      logLength: [4, 9],
+      logThickness: [0.5, 0.85],
+      /** The track and the creek stay clear of undergrowth and logs this far to each side: the sight lanes. */
+      laneClear: 7,
+      /** Creek: depth of the cut, half width of its bed, width of each bank. */
+      creekDepth: 2.2,
+      creekBed: 2.5,
+      creekBank: 7,
+    },
   },
 
   /** Vegetation density per land: trees per hectare in wooded patches, share of the map that is wooded, grass tufts per hectare, rocks per km². */
@@ -86,7 +157,7 @@ export const TACTICAL = {
     urban: { treesPerHa: 12, wooded: 0.0, street: 0.5, grassPerHa: 120, rocks: 0, conifer: 0.1 },
     suburb: { treesPerHa: 30, wooded: 0.04, street: 0.35, grassPerHa: 120, rocks: 10, conifer: 0.2 },
     rural: { treesPerHa: 120, wooded: 0.16, street: 0, grassPerHa: 260, rocks: 40, conifer: 0.35 },
-    forest: { treesPerHa: 130, wooded: 0.62, street: 0, grassPerHa: 300, rocks: 160, conifer: 0.6 },
+    forest: { treesPerHa: 130, wooded: 0.62, street: 0, grassPerHa: 300, rocks: 260, conifer: 0.6 },
     mountain: { treesPerHa: 95, wooded: 0.4, street: 0, grassPerHa: 160, rocks: 420, conifer: 0.85 },
   },
 

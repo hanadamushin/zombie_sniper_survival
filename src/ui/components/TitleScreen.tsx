@@ -67,6 +67,10 @@ export function TitleScreen({ actions }: { actions: UiActions }) {
           {latest ? <small> — {saveSummary(latest)}</small> : saves ? <small> — {t('title.noSave')}</small> : null}
         </button>
         {error && <p class="error">{t('title.loadFailed')}</p>}
+        <button data-testid="open-range" onClick={() => actions.openRange()}>
+          {t('title.range')}
+          <small> — {t('title.rangeNote')}</small>
+        </button>
 
         {saves && saves.length > 0 && (
           <div class="save-list">

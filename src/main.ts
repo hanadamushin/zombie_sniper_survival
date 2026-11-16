@@ -106,13 +106,40 @@ function cancelIntro(): void {
   ui.setIntro(null);
 }
 
-/** Firing range (04, debug): no world, no saves. `?range=1` opens it at boot. */
+/** The game that was running when the firing range was opened from its menu; "back to the game" resumes it. */
+let suspended: GameState | null = null;
+
+/**
+ * Firing range (04; reachable from the title and the pause menu since 07b): no world, no saves.
+ * `?range=1` opens it at boot. A running game is put aside (and autosaved), not ended.
+ */
 function openRange(): void {
+  if (state && !state.flags.range) {
+    void saveSlot(AUTO_SLOT);
+    suspended = state;
+  }
   const next = createInitialState(1, 1);
   next.flags.range = true;
+  if (suspended) next.flags.rangeReturn = true;
   pending = null;
   ui.setIntro(null);
   start(next);
+}
+
+/** Leave the firing range: back to the suspended game if there is one, otherwise to the title. */
+function leaveRange(): void {
+  if (!state?.flags.range) return;
+  const back = suspended;
+  suspended = null;
+  if (document.pointerLockElement) document.exitPointerLock();
+  if (!back) {
+    state = null;
+    ui.sync(null);
+    return;
+  }
+  // It was left in its menu; resume in the field.
+  if (back.mode === 'menu') back.mode = 'tactical';
+  start(back);
 }
 
 async function saveSlot(slot: SlotId): Promise<boolean> {
@@ -143,6 +170,7 @@ async function loadSlot(slot: SlotId): Promise<boolean> {
 
 function quitToTitle(): void {
   void saveSlot(AUTO_SLOT);
+  suspended = null;
   if (document.pointerLockElement) document.exitPointerLock();
   state = null;
   ui.sync(null);
@@ -157,6 +185,8 @@ const ui = createUi(uiRoot, {
   saveSlot,
   listSaves: () => listSaves(store),
   quitToTitle,
+  openRange,
+  leaveRange,
   toggleMode: input.toggleMode,
   togglePause: input.togglePause,
 });

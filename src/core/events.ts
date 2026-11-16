@@ -6,7 +6,7 @@ import type { CellId, EntityId, Mode, Speed, ZombieKind } from './types.ts';
 
 type Vec3 = [number, number, number];
 export type HitPart = 'head' | 'torso' | 'legs';
-export type HitSurface = 'terrain' | 'tree' | 'building' | 'stair' | 'rock' | 'prop';
+export type HitSurface = 'terrain' | 'tree' | 'building' | 'stair' | 'rock' | 'prop' | 'scenery';
 
 export type GameEvent =
   // --- time (01) ---

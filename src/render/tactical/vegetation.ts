@@ -51,7 +51,8 @@ function broadleafGeometry(): THREE.BufferGeometry {
   return merge([
     paint(new THREE.CylinderGeometry(0.06, 0.09, 0.5, 5, 1, true).translate(0, 0.25, 0), F.trunk),
     paint(new THREE.IcosahedronGeometry(1, 0).scale(1, 0.36, 1).translate(0, 0.66, 0), F.broadleaf),
-    paint(new THREE.IcosahedronGeometry(0.62, 0).scale(1, 0.34, 1).translate(0.25, 0.84, 0.15), F.broadleaf),
+    // 07b: the upper clump is an octahedron (8 triangles instead of 20) to pay for the undergrowth.
+    paint(new THREE.OctahedronGeometry(0.66, 0).scale(1, 0.34, 1).translate(0.25, 0.84, 0.15), F.broadleaf),
   ]);
 }
 

@@ -201,7 +201,9 @@ export const COLONY = {
     cooldownDays: 2,
     /** Reach of E (m), and how far the HUD senses a hideout. */
     reach: 3,
-    senseDist: 160,
+    senseDist: 200,
+    /** 07b: a new game always has one person hiding this far from the middle of the home base (m) — [min, max]. */
+    firstRing: [250, 450],
     /** Candidates wait this many days for an offer. */
     waitDays: 4,
     maxCandidates: 12,

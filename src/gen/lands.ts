@@ -11,6 +11,7 @@ import {
   addBuilding, addLadder, addRoad, addStairs, addTower, forTiles, hAt, heightRange, homeDist, inHomeZone, occupy, rectFree, rngOf,
   SIZE, STAIR_DEPTH, STAIR_LENGTH, TILE, type Builder, type Side,
 } from './builder.ts';
+import { addCreek, addDike, ruralScenery, terrace } from './cover.ts';
 import { fbm, noise2, ridged } from './noise.ts';
 import { GROUND, type Building } from './types.ts';
 
@@ -41,6 +42,18 @@ export function terrainFn(b: Builder): (x: number, z: number) => number {
       break;
     }
   }
+  // 07b: knolls and a shorter undulation. Drawn after the hills so that those stay where they were.
+  const s4 = Math.floor(rand(rng) * 0x7fffffff);
+  for (let i = 0; i < P.knolls[0]; i++) {
+    for (let tries = 0; tries < 40; tries++) {
+      const x = randRange(rng, 60, SIZE - 60);
+      const z = randRange(rng, 60, SIZE - 60);
+      if (homeDist(x, z) < 200) continue;
+      if (hills.some((o) => Math.hypot(o.x - x, o.z - z) < o.s + 60)) continue;
+      hills.push({ x, z, h: randRange(rng, P.knolls[1], P.knolls[2]), s: randRange(rng, 22, 36) });
+      break;
+    }
+  }
   const detail = land === 'urban' ? 0 : land === 'suburb' ? 0.15 : 0.5;
   const offset = P.amp + 4;
   return (x, z) => {
@@ -53,6 +66,7 @@ export function terrainFn(b: Builder): (x: number, z: number) => number {
       const d2 = (x - hill.x) ** 2 + (z - hill.z) ** 2;
       h += hill.h * Math.exp(-d2 / (2 * hill.s * hill.s));
     }
+    if (P.mid > 0) h += P.mid * fbm(x / P.midWave, z / P.midWave, s4, 2);
     if (detail > 0) h += detail * noise2(x / 23, z / 23, s3);
     return h;
   };
@@ -338,6 +352,10 @@ function farmstead(b: Builder, rng: RngState, x: number, z: number): void {
 
 function layoutRural(b: Builder): void {
   const rng = rngOf(b, 'rural');
+  const R = T.cover.rural;
+  // Embankments first: the roads cut through them, the fields stop at them.
+  const dikes = randInt(rng, R.dikes[0], R.dikes[1]);
+  for (let i = 0; i < dikes; i++) addDike(b, crossing(rng, T.homeFlatRadius + 70, 50), randRange(rng, R.dikeHeight[0], R.dikeHeight[1]));
   const main = crossing(rng, T.homeFlatRadius + 40, 45);
   addRoad(b, 'street', 6, main, true);
   // Farm tracks leave the road sideways towards the map edges.
@@ -382,7 +400,12 @@ function layoutRural(b: Builder): void {
     }
   }
 
-  // Field plots on the flatter ground, separated by narrow grass balks.
+  ruralScenery(b, rng, (x, z, big) => (big
+    ? tryBuilding(b, 'barn', x, z, randRange(rng, 9, 13), randRange(rng, 7, 9), randRange(rng, 4.6, 6.2), 'gable', rand(rng))
+    : tryBuilding(b, 'shed', x, z, randRange(rng, 3.5, 5.5), randRange(rng, 3, 4), 2.6, 'flat', rand(rng))) !== null);
+
+  // Field plots on the flatter ground, separated by narrow grass balks. Each plot is levelled:
+  // on sloping ground they step down as terraces.
   let z = randRange(rng, 10, 30);
   while (z < SIZE - 40) {
     const d = randRange(rng, 44, 72);
@@ -397,8 +420,9 @@ function layoutRural(b: Builder): void {
       if (x1 - x0 < 24 || z1 - z0 < 24 || chance(rng, 0.12)) continue;
       if (!rectFree(b, x0, z0, x1, z1, 8) || inHomeZone(b, x0, z0, x1, z1, 12)) continue;
       const [lo, hi] = heightRange(b, x0, z0, x1, z1);
-      if (hi - lo > 4.5) continue;
-      const paddy = hi - lo < 1.6 && chance(rng, 0.55);
+      if (hi - lo > R.terraceMaxRange) continue;
+      const paddy = hi - lo < 2.4 && chance(rng, 0.55);
+      terrace(b, x0, z0, x1, z1);
       b.areas.push({ kind: paddy ? 'paddy' : 'field', x0, z0, x1, z1, variant: rand(rng) });
       occupy(b, x0, z0, x1, z1);
       forTiles(x0, z0, x1, z1, (i, tx, ty) => {
@@ -413,6 +437,8 @@ function layoutRural(b: Builder): void {
 
 function layoutWild(b: Builder, land: 'forest' | 'mountain'): void {
   const rng = rngOf(b, 'wild');
+  // A creek bed: with the track, the long sight lanes of the forest.
+  if (land === 'forest') addCreek(b, crossing(rng, T.homeFlatRadius + 60, 70));
   const track = crossing(rng, T.homeFlatRadius + 50, land === 'forest' ? 90 : 120);
   addRoad(b, 'track', 4, track, true);
 

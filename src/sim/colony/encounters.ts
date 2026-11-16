@@ -10,22 +10,65 @@ import type { SimContext } from '../system.ts';
 import { playerAtHome } from './morale.ts';
 import { ctxNow, itemsParam, logEntry, moveEars, moveStock, type ColonyCtx } from './stock.ts';
 import { addCandidates, hideoutGroup } from './survivors.ts';
+import { mapOf } from '../tactical/area.ts';
+import { isWalkable } from '../tactical/collision.ts';
+import { GROUND } from '../../gen/index.ts';
 
 const N = COLONY.encounter;
+
+/**
+ * The first contact of a new game (07b): one person is always hiding within COLONY.encounter.firstRing
+ * of the home base — at a search point in that ring if there is one, otherwise camping in the open.
+ * Their smoke (render/tactical/signals.ts) is what tells the player that somebody is out there.
+ */
+function firstContact(state: GameState): void {
+  const t = state.tactical!;
+  const map = mapOf(state);
+  if (!map || t.cell !== state.world.homeCell || state.flags.firstContact) return;
+  state.flags.firstContact = true;
+  // Only a colony that has nobody and knows nobody needs the help (old saves included).
+  if (state.colony.survivors.length > 0 || state.colony.candidates.length > 0) return;
+  const rng = stream(state, 'colony.hideout');
+  const home = map.spawn.home;
+  const inRing = (x: number, z: number): boolean => {
+    const d = Math.hypot(x - home[0], z - home[1]);
+    return d >= N.firstRing[0] && d <= N.firstRing[1];
+  };
+  const spots = t.lootSpots.filter((s) => !s.taken && inRing(s.pos[0], s.pos[1]));
+  if (spots.length > 0) {
+    const spot = spots[Math.floor(randRange(rng, 0, spots.length))]!;
+    t.hideouts!.push({ spot: spot.id, pos: [spot.pos[0], spot.pos[1]], met: false, sure: true });
+    return;
+  }
+  for (let i = 0; i < 200; i++) {
+    const a = randRange(rng, 0, Math.PI * 2);
+    const d = randRange(rng, N.firstRing[0], N.firstRing[1]);
+    const x = home[0] + Math.cos(a) * d;
+    const z = home[1] + Math.sin(a) * d;
+    const tx = Math.floor(x / map.tile);
+    const ty = Math.floor(z / map.tile);
+    if (x < 12 || z < 12 || x > map.size - 12 || z > map.size - 12 || !isWalkable(map, tx, ty)) continue;
+    const g = map.ground[ty * map.tiles + tx];
+    if (g === GROUND.road || g === GROUND.track || g === GROUND.field) continue;
+    t.hideouts!.push({ spot: -1, pos: [x, z], met: false, sure: true });
+    return;
+  }
+}
 
 /** Decide once per visit which search points of the area hide people (from the cell's H). */
 export function ensureHideouts(state: GameState): void {
   const t = state.tactical;
   if (!t || t.hideouts || state.flags.range) return;
   t.hideouts = [];
+  firstContact(state);
   const key = String(t.cell);
   const last = state.colony.metCells[key];
   if (last !== undefined && state.time.day - last < N.cooldownDays) return;
   const h = Math.max(0, state.world.cells.H[t.cell] ?? 0);
-  const want = Math.min(N.maxPerArea, Math.round(Math.log10(1 + h)), t.lootSpots.length);
+  const free = t.lootSpots.filter((s) => !s.taken && !t.hideouts!.some((o) => o.spot === s.id));
+  const want = Math.min(N.maxPerArea - t.hideouts.length, Math.round(Math.log10(1 + h)), free.length);
   if (want <= 0) return;
   const rng = stream(state, 'colony.hideout');
-  const free = t.lootSpots.filter((s) => !s.taken);
   for (let i = 0; i < want && free.length > 0; i++) {
     const spot = free.splice(Math.floor(randRange(rng, 0, free.length)), 1)[0]!;
     t.hideouts.push({ spot: spot.id, pos: [spot.pos[0], spot.pos[1]], met: false });
@@ -35,8 +78,11 @@ export function ensureHideouts(state: GameState): void {
 
 export interface Interaction {
   kind: 'talk' | 'search';
+  /** Search point id; -1 when talking to someone camping in the open. */
   spot: number;
   dist: number;
+  /** Index into tactical.hideouts for 'talk'. */
+  hide?: number;
 }
 
 /** What E would do where the player stands: talk to someone hiding, or search a building. */
@@ -45,25 +91,39 @@ export function interactionAt(state: GameState): Interaction | null {
   if (!t) return null;
   const [px, , pz] = state.player.pos;
   let best: Interaction | null = null;
+  const hideouts = t.hideouts ?? [];
   for (const s of t.lootSpots) {
-    const hide = t.hideouts?.find((h) => h.spot === s.id && !h.met);
-    if (s.taken && !hide) continue;
+    const hide = hideouts.findIndex((h) => h.spot === s.id && !h.met);
+    if (s.taken && hide < 0) continue;
     const dist = Math.hypot(s.pos[0] - px, s.pos[1] - pz);
-    if (dist <= N.reach && (!best || dist < best.dist)) best = { kind: hide ? 'talk' : 'search', spot: s.id, dist };
+    if (dist <= N.reach && (!best || dist < best.dist)) best = hide >= 0 ? { kind: 'talk', spot: s.id, dist, hide } : { kind: 'search', spot: s.id, dist };
   }
+  hideouts.forEach((h, hide) => {
+    if (h.met || h.spot >= 0) return;
+    const dist = Math.hypot(h.pos[0] - px, h.pos[1] - pz);
+    if (dist <= N.reach && (!best || dist < best.dist)) best = { kind: 'talk', spot: -1, dist, hide };
+  });
   return best;
 }
 
-/** Nearest person still hiding in this area: distance and bearing relative to the view (HUD hint). */
-export function nearestHideout(state: GameState): { dist: number; turn: number } | null {
+const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'] as const;
+
+/**
+ * Nearest person still hiding in this area (HUD hint): distance, bearing relative to the view
+ * (`turn`, for the arrow) and the compass direction they are in (07b).
+ */
+export function nearestHideout(state: GameState): { dist: number; turn: number; dir: (typeof COMPASS)[number] } | null {
   const p = state.player;
-  let best: { dist: number; turn: number } | null = null;
+  let best: { dist: number; turn: number; dir: (typeof COMPASS)[number] } | null = null;
   for (const h of state.tactical?.hideouts ?? []) {
     if (h.met) continue;
     const dx = h.pos[0] - p.pos[0];
     const dz = h.pos[1] - p.pos[2];
     const dist = Math.hypot(dx, dz);
-    if (dist <= N.senseDist && (!best || dist < best.dist)) best = { dist, turn: Math.atan2(-dx, -dz) - p.yaw };
+    if (dist > N.senseDist || (best && dist >= best.dist)) continue;
+    // Bearing: 0 = north (-z), clockwise; eight sectors.
+    const bearing = (Math.atan2(dx, -dz) + Math.PI * 2) % (Math.PI * 2);
+    best = { dist, turn: Math.atan2(-dx, -dz) - p.yaw, dir: COMPASS[Math.round(bearing / (Math.PI / 4)) % 8]! };
   }
   return best;
 }
@@ -77,15 +137,18 @@ function interact(c: ColonyCtx, grid: StaticGrid | null): void {
   const t = state.tactical;
   const at = interactionAt(state);
   if (!t || !at) return;
-  const spot = t.lootSpots.find((s) => s.id === at.spot)!;
   if (at.kind === 'talk') {
-    const hide = t.hideouts!.find((h) => h.spot === at.spot)!;
+    const hide = t.hideouts![at.hide!]!;
     hide.met = true;
+    // The first contact is there whatever the cell's numbers say.
+    const H = state.world.cells.H;
+    if (hide.sure && (H[t.cell] ?? 0) < 1) H[t.cell] = 1;
     const found = addCandidates(c, t.cell, hideoutGroup(state), 'player');
     if (found.length > 0) logEntry(c, 'people', 'log.met', { names: found.map((s) => s.name).join('、'), n: found.length });
     else logEntry(c, 'people', 'log.metNobody', {});
     return;
   }
+  const spot = t.lootSpots.find((s) => s.id === at.spot)!;
   // Search the building: a handful of things into the pack, and the cell is that much poorer.
   spot.taken = true;
   const land = grid?.cells[t.cell]?.land ?? 'rural';

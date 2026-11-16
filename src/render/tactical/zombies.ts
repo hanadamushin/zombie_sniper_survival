@@ -1,8 +1,13 @@
-// Zombies and bodies as instanced boxes: torso, head, two arms, two legs per figure — one draw call
+// Zombies and bodies as instanced boxes: torso, head, face, two arms, two legs per figure — one draw call
 // for the living, one for the dead, one for the blob shadows. Poses are computed on the CPU from
 // the same numbers the hit shapes use (sim/tactical/zombies.ts hitShapes), so the head you see is
 // the head you hit. Kinds read by silhouette: walkers upright with hanging / reaching arms,
 // runners thin and bent forward, brutes wide and tall, crawlers flat on the ground.
+//
+// Facing (07b): a figure looks along its local -z (root = RotY(yaw), the same convention as the
+// player's view). The lean, the reaching arms and the dark face plate all point that way. The
+// first playtest caught the arms reaching backwards: arm poses are written "negative = forward"
+// but were applied with the sign that swings a hanging limb back. See Bodies.add().
 
 import * as THREE from 'three';
 import type { GameState, ZombieKind } from '../../core/types.ts';
@@ -12,7 +17,7 @@ import { ZOMBIES } from '../../data/zombies.ts';
 import type { RenderContext, SubRenderer } from '../index.ts';
 
 const R = RENDER.zombies;
-const PARTS = 6;
+const PARTS = 7;
 const MAX_LIVE = BALANCE.zombie.max;
 const MAX_DEAD = BALANCE.combat.corpse.max;
 const DOWN = BALANCE.zombie.downSeconds;
@@ -22,8 +27,10 @@ interface Pose {
   tilt: number;
   /** Upper body lean forward about the hips. */
   lean: number;
+  /** Arm swing about the shoulder (radians): 0 hangs down, negative reaches forward, -PI points up past the head. */
   armL: number;
   armR: number;
+  /** Leg swing about the hip: positive = forward. */
   legL: number;
   legR: number;
   /** Hips lowered by this much (knees giving way). */
@@ -95,6 +102,7 @@ class Bodies {
       const crawl = Math.sin(pose.phase);
       this.part(root, 0, 0.2, -0.24, 0, 0, 0, W, 0.26, 0.62, top, shade);
       this.part(root, 0, 0.25, -0.8, 0, 0, 0, def.headR * 1.8, def.headR * 1.9, def.headR * 2, skin, shade);
+      this.part(root, 0, 0.22, -0.8 - def.headR, 0, 0, 0, def.headR * 1.3, def.headR * 1.1, 0.04, R.face, shade);
       this.part(root, -W / 2, 0.14, -0.45, -Math.PI / 2 + 0.25 * crawl, armLen / 2, 0, armW, armLen, armW, armColor, shade);
       this.part(root, W / 2, 0.14, -0.45, -Math.PI / 2 - 0.25 * crawl, armLen / 2, 0, armW, armLen, armW, armColor, shade);
       this.part(root, -W * 0.22, 0.14, 0.2, Math.PI / 2 + 0.08 * crawl, 0.36, 0, legW, 0.72, legW, legs, shade);
@@ -117,9 +125,12 @@ class Bodies {
     const depth = def.torsoR * 1.5;
     this.part(upper, 0, 0, 0, 0, torsoLen / 2, 0, W, torsoLen, depth, top, shade);
     this.part(upper, 0, hip - def.headR, 0, 0, 0, 0, def.headR * 1.8, def.headR * 2, def.headR * 1.9, skin, shade);
+    // Face: a dark plate on the front (-z) of the head — sunken eyes and mouth, and the way it is looking.
+    this.part(upper, 0, hip - def.headR * 1.1, -def.headR * 0.95, 0, 0, 0, def.headR * 1.3, def.headR * 1.1, 0.04, R.face, shade);
     const shoulder = torsoLen - 0.07;
-    this.part(upper, -(W + armW) / 2, shoulder, 0, pose.armL, -armLen / 2, 0, armW, armLen, armW, armColor, shade);
-    this.part(upper, (W + armW) / 2, shoulder, 0, pose.armR, -armLen / 2, 0, armW, armLen, armW, armColor, shade);
+    // Rx(+a) swings a hanging limb towards -z (forward); arm poses are written "negative = forward".
+    this.part(upper, -(W + armW) / 2, shoulder, 0, -pose.armL, -armLen / 2, 0, armW, armLen, armW, armColor, shade);
+    this.part(upper, (W + armW) / 2, shoulder, 0, -pose.armR, -armLen / 2, 0, armW, armLen, armW, armColor, shade);
     this.part(root, -W * 0.22, hipY, 0, pose.legL, -hipY / 2, 0, legW, hipY, legW, legs, shade);
     this.part(root, W * 0.22, hipY, 0, pose.legR, -hipY / 2, 0, legW, hipY, legW, legs, shade);
   }
@@ -145,8 +156,10 @@ function deadPose(kind: ZombieKind, prone: boolean, headshot: boolean, k: number
     const f = ease(k / 0.45);
     pose.tilt = f * (Math.PI / 2) * (1 + 0.06 * Math.sin(Math.min(1, k / 0.45) * Math.PI));
     pose.lean = -0.5 * Math.sin(Math.min(1, k / 0.3) * Math.PI);
-    pose.armL = -1.2 * f;
-    pose.armR = -0.9 * f;
+    // Arms fly up with the jolt, then come to rest beside the body (a little off the ground).
+    const fling = Math.sin(Math.min(1, k / 0.7) * Math.PI);
+    pose.armL = -1.3 * fling - 0.22 * f;
+    pose.armR = -1.0 * fling - 0.08 * f;
     pose.legL = 0.15 * f;
     pose.legR = -0.1 * f;
   } else {
@@ -155,8 +168,9 @@ function deadPose(kind: ZombieKind, prone: boolean, headshot: boolean, k: number
     pose.drop = def.height * 0.12 * Math.sin(Math.min(1, k / 0.5) * Math.PI);
     pose.tilt = -f * (Math.PI / 2);
     pose.lean = 0.5 * Math.sin(Math.min(1, k / 0.6) * Math.PI);
-    pose.armL = 0.5 * f;
-    pose.armR = 0.2 * f;
+    // Arms thrown out ahead: they end up on the ground beyond the head.
+    pose.armL = -3.0 * f;
+    pose.armR = -3.3 * f;
     pose.legL = -0.1 * f;
     pose.legR = 0.12 * f;
   }

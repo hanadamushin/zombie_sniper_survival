@@ -175,7 +175,7 @@ export function createSurvivorRenderer(): SubRenderer {
         if (h.met || nb >= R.max) continue;
         const y = heightAt(map, h.pos[0], h.pos[1]);
         const p = state.player.pos;
-        figure(h.pos[0], y, h.pos[1], Math.atan2(-(p[0] - h.pos[0]), -(p[2] - h.pos[1])), 'wave', 'hidden', h.spot * 7 + 1, 0, clock);
+        figure(h.pos[0], y, h.pos[1], Math.atan2(-(p[0] - h.pos[0]), -(p[2] - h.pos[1])), 'wave', 'hidden', Math.abs(h.spot) * 7 + 1, 0, clock);
         blob(h.pos[0], y, h.pos[1], false);
       }
       mesh.count = n;

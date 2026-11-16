@@ -6,7 +6,7 @@ import { fork, seedRng, type RngState } from '../core/rng.ts';
 import { TACTICAL } from '../data/tactical.ts';
 import { sampleHeight } from './height.ts';
 import { smoothstep } from './noise.ts';
-import { GROUND, type Area, type Building, type BuildingKind, type GenParams, type Ladder, type Road, type RoadKind, type Rock, type Solid, type Vantage } from './types.ts';
+import { GROUND, type Area, type Brush, type Building, type BuildingKind, type GenParams, type Ladder, type Prop, type Road, type RoadKind, type Rock, type Solid, type Vantage } from './types.ts';
 
 const T = TACTICAL;
 export const SIZE = T.size;
@@ -27,6 +27,10 @@ export interface Builder {
   roads: Road[];
   areas: Area[];
   rocks: Rock[];
+  brush: Brush[];
+  props: Prop[];
+  /** Polylines that must stay open to the eye besides the roads (forest creek). */
+  lanes: [number, number][][];
   vantages: Vantage[];
   /** x, z, height, canopy radius, kind — 5 numbers per tree. */
   trees: number[];
@@ -47,6 +51,9 @@ export function createBuilder(params: GenParams): Builder {
     roads: [],
     areas: [],
     rocks: [],
+    brush: [],
+    props: [],
+    lanes: [],
     vantages: [],
     trees: [],
     grass: [],

@@ -27,7 +27,8 @@ export interface Building {
   access: 'none' | 'stairs' | 'ladder';
 }
 
-export type SolidKind = 'building' | 'stair' | 'rock' | 'prop';
+/** 'scenery' (07b): wrecked cars and fallen logs — drawn from TacticalMap.props, not as steel boxes. */
+export type SolidKind = 'building' | 'stair' | 'rock' | 'prop' | 'scenery';
 
 /** Axis-aligned collision box. Blocks movement and bullets; its top can be stood on. */
 export interface Solid {
@@ -105,6 +106,38 @@ export interface Rock {
   h: number;
 }
 
+export type BrushKind = 'hedge' | 'bush' | 'reeds' | 'bamboo';
+/**
+ * Vegetation thick enough to hide what is behind it (07b): a capsule on the ground — the segment
+ * (ax, az) -> (bx, bz) widened by r — that stands h above the terrain. A round patch has a == b.
+ * No collision and bullets pass; lines of sight do not (sim/tactical/collision.ts sightBlocked).
+ */
+export interface Brush {
+  kind: BrushKind;
+  ax: number;
+  az: number;
+  bx: number;
+  bz: number;
+  r: number;
+  h: number;
+}
+
+export type PropKind = 'car' | 'truck' | 'log' | 'greenhouse';
+/** Scenery drawn as boxes (07b). Cars, trucks and logs also have a Solid; greenhouse frames do not. */
+export interface Prop {
+  kind: PropKind;
+  /** Centre, ground height there, and the box: length `w` along x (or along z when `alongX` is false), depth `d`, height `h`. */
+  x: number;
+  z: number;
+  y: number;
+  w: number;
+  d: number;
+  h: number;
+  alongX: boolean;
+  /** 0..1, picks the colour. */
+  tint: number;
+}
+
 export interface LootSpot {
   id: number;
   /** Where the player stands to search (in front of the door). */
@@ -128,6 +161,8 @@ export interface StaticHash {
   solids: number[][];
   /** Indices into TacticalMap.trees per hash cell (by trunk position). */
   trees: number[][];
+  /** Indices into TacticalMap.brush per hash cell (every cell the capsule touches). */
+  brush: number[][];
 }
 
 export interface GenParams {
@@ -158,6 +193,9 @@ export interface TacticalMap {
   trees: Trees;
   grass: Grass;
   rocks: Rock[];
+  /** Sight-blocking vegetation and box scenery (07b). */
+  brush: Brush[];
+  props: Prop[];
   lootSpots: LootSpot[];
   vantages: Vantage[];
   spawn: {

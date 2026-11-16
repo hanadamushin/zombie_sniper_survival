@@ -4,7 +4,8 @@
 //   heightAt(map, x, z)                       terrain height
 //   isWalkable(map, tx, ty)                   4 m nav tile
 //   raycastWorld(map, origin, dir, maxDist)   first hit on terrain / buildings / stairs / rocks / trunks
-//   segmentHitsStatic(map, a, b)              line-of-sight / bullet segment test
+//   segmentHitsStatic(map, a, b)              bullet / hard line-of-sight segment test
+//   sightBlocked(map, a, b)                   can a not see b? (the above, plus hedges, reeds, thickets)
 //   supportAt(map, x, z, feetY, stepUp)       what a walker at (x, z) stands on
 //   pushOut(map, pos, radius, feetY, height)  keep a circle out of walls and trunks
 //   createSpatialHash()                       16 m buckets for dynamic objects (zombies, survivors)
@@ -215,6 +216,91 @@ export function segmentHitsStatic(map: TacticalMap, a: Readonly<Vec3>, b: Readon
   if (len < 1e-9) return false;
   const hit = raycastWorld(map, a, d, len);
   return hit !== null && hit.dist < len - 1e-6;
+}
+
+/** Squared distance between the 2D segments p1 -> p2 and q1 -> q2; `out` receives the parameter (0..1) of the closest point on p. */
+function segSegDist2(p1x: number, p1z: number, p2x: number, p2z: number, q1x: number, q1z: number, q2x: number, q2z: number, out: [number]): number {
+  const d1x = p2x - p1x;
+  const d1z = p2z - p1z;
+  const d2x = q2x - q1x;
+  const d2z = q2z - q1z;
+  const rx = p1x - q1x;
+  const rz = p1z - q1z;
+  const a = d1x * d1x + d1z * d1z;
+  const e = d2x * d2x + d2z * d2z;
+  const f = d2x * rx + d2z * rz;
+  let s: number;
+  let t: number;
+  if (a <= 1e-12 && e <= 1e-12) {
+    s = 0;
+    t = 0;
+  } else if (a <= 1e-12) {
+    s = 0;
+    t = Math.min(1, Math.max(0, f / e));
+  } else {
+    const c = d1x * rx + d1z * rz;
+    if (e <= 1e-12) {
+      t = 0;
+      s = Math.min(1, Math.max(0, -c / a));
+    } else {
+      const b = d1x * d2x + d1z * d2z;
+      const den = a * e - b * b;
+      s = den > 1e-12 ? Math.min(1, Math.max(0, (b * f - c * e) / den)) : 0;
+      t = (b * s + f) / e;
+      if (t < 0) {
+        t = 0;
+        s = Math.min(1, Math.max(0, -c / a));
+      } else if (t > 1) {
+        t = 1;
+        s = Math.min(1, Math.max(0, (b - c) / a));
+      }
+    }
+  }
+  out[0] = s;
+  const dx = rx + d1x * s - d2x * t;
+  const dz = rz + d1z * s - d2z * t;
+  return dx * dx + dz * dz;
+}
+
+const segOut: [number] = [0];
+
+/** True when the straight line a -> b passes through sight-blocking vegetation (TacticalMap.brush) below its top. */
+export function brushBetween(map: TacticalMap, a: Readonly<Vec3>, b: Readonly<Vec3>): boolean {
+  if (map.brush.length === 0) return false;
+  const hash = map.hash;
+  const cs = hash.cell;
+  const hn = hash.n;
+  const dx = b[0] - a[0];
+  const dz = b[2] - a[2];
+  const len = Math.hypot(dx, dz);
+  // Visit the hash cells along the line (every quarter cell; a capsule is listed in every cell it touches).
+  const steps = Math.max(1, Math.ceil(len / (cs * 0.25)));
+  let last = -1;
+  for (let i = 0; i <= steps; i++) {
+    const x = a[0] + (dx * i) / steps;
+    const z = a[2] + (dz * i) / steps;
+    const cx = Math.min(hn - 1, Math.max(0, Math.floor(x / cs)));
+    const cz = Math.min(hn - 1, Math.max(0, Math.floor(z / cs)));
+    const c = cz * hn + cx;
+    if (c === last) continue;
+    last = c;
+    for (const bi of hash.brush[c]!) {
+      const br = map.brush[bi]!;
+      if (segSegDist2(a[0], a[2], b[0], b[2], br.ax, br.az, br.bx, br.bz, segOut) >= br.r * br.r) continue;
+      const s = segOut[0];
+      const px = a[0] + dx * s;
+      const pz = a[2] + dz * s;
+      const y = a[1] + (b[1] - a[1]) * s;
+      const ground = heightAt(map, px, pz);
+      if (y < ground + br.h && y > ground - 2) return true;
+    }
+  }
+  return false;
+}
+
+/** Line of sight between two eyes: blocked by everything a bullet stops at, and by hedges, reeds and thickets. */
+export function sightBlocked(map: TacticalMap, a: Readonly<Vec3>, b: Readonly<Vec3>): boolean {
+  return brushBetween(map, a, b) || segmentHitsStatic(map, a, b);
 }
 
 /**

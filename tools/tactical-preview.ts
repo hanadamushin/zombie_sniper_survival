@@ -69,6 +69,22 @@ export function renderTacticalMap(map: TacticalMap): Buffer {
     const c: Rgb = map.trees.kind[i] ? [60, 110, 50] : [36, 78, 50];
     for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) if (dx * dx + dz * dz <= r * r) put(map.trees.x[i]! + dx, map.trees.z[i]! + dz, c, 0.8);
   }
+  // 07b: sight-blocking brush (hedges dark, bushes green, reeds straw, bamboo bright) and box scenery.
+  const BRUSH: Record<string, Rgb> = { hedge: [26, 60, 30], bush: [50, 92, 44], reeds: [196, 184, 110], bamboo: [120, 190, 70] };
+  for (const br of map.brush) {
+    const len = Math.hypot(br.bx - br.ax, br.bz - br.az);
+    const steps = Math.max(1, Math.ceil(len));
+    for (let s = 0; s <= steps; s++) {
+      const cx = br.ax + ((br.bx - br.ax) * s) / steps;
+      const cz = br.az + ((br.bz - br.az) * s) / steps;
+      for (let dz = -br.r; dz <= br.r; dz++) for (let dx = -br.r; dx <= br.r; dx++) if (dx * dx + dz * dz <= br.r * br.r) put(cx + dx, cz + dz, BRUSH[br.kind]!, 0.85);
+    }
+  }
+  for (const p of map.props) {
+    const hx = (p.alongX ? p.w : p.d) / 2;
+    const hz = (p.alongX ? p.d : p.w) / 2;
+    rect(p.x - hx, p.z - hz, p.x + hx, p.z + hz, p.kind === 'log' ? [96, 70, 44] : p.kind === 'greenhouse' ? [220, 226, 220] : [200, 90, 60], p.kind === 'greenhouse' ? 0.5 : 1);
+  }
   for (const r of map.rocks) rect(r.x - r.r * 0.7, r.z - r.r * 0.7, r.x + r.r * 0.7, r.z + r.r * 0.7, [170, 170, 170]);
   for (const s of map.solids) if (s.kind === 'stair' || s.kind === 'prop') rect(s.x0, s.z0, s.x1, s.z1, [230, 230, 230]);
   for (const b of map.buildings) {

@@ -35,6 +35,9 @@ interface ModeProps {
   grid: StaticGrid | null;
 }
 
+/** Controls listed in the pause menu (07b: includes the keyboard-only way to aim and shoot). */
+const HELP_KEYS: readonly TextKey[] = ['help.move', 'help.look', 'help.scope', 'help.fire', 'help.breath', 'help.zoom', 'help.zero', 'help.stance', 'help.reload', 'help.knife', 'help.interact', 'help.resupply', 'help.layers', 'help.time', 'help.menu'];
+
 const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'] as const;
 
 /** Nearest body that still has its ears: distance and bearing relative to where the player looks. */
@@ -77,6 +80,8 @@ export function TacticalLayer({ state, grid }: ModeProps) {
   const windSpeed = Math.hypot(wind[0], wind[1]);
   const act = dead ? null : interactionAt(state);
   const someone = dead || act ? null : nearestHideout(state);
+  // First steps (07b): somebody is willing to join but nobody has been hired yet — say where to do that.
+  const hireHint = !dead && !state.flags.range && state.colony.candidates.length > 0 && state.colony.survivors.length === 0;
   const post = playerAtHome(state) || state.world.travel ? undefined : outpostAt(state, p.cell);
   const supply = playerAtHome(state) ? state.colony.stock.ammo : (post?.ammo ?? 0);
   const canResupply = !dead && supply >= 1 && (p.inv.ammo ?? 0) < BALANCE.player.maxAmmo;
@@ -108,12 +113,13 @@ export function TacticalLayer({ state, grid }: ModeProps) {
           <span>{t(act.kind === 'talk' ? 'hud.talk' : 'hud.search')}</span>
         </div>
       )}
-      {someone && !ears && (
-        <div class="ear-hint" data-testid="hud-someone">
+      {someone && (
+        <div class={`ear-hint${ears && !reach ? ' second' : ''}`} data-testid="hud-someone" data-dir={someone.dir}>
           <span class="arrow" style={{ transform: `rotate(${(-someone.turn).toFixed(2)}rad)` }}>▲</span>
-          <span>{t('hud.someone', { m: Math.round(someone.dist) })}</span>
+          <span>{t('hud.someone', { dir: t(`compass.${someone.dir}` as TextKey), m: Math.round(someone.dist) })}</span>
         </div>
       )}
+      {hireHint && <div class="guide" data-testid="hud-hire-hint">{t('hud.hireHint', { n: state.colony.candidates.length })}</div>}
       {seen && (rangefinder ? seen.range !== null : seen.zombie !== null) && (
         <div class="scope-info" data-testid="hud-scope-info" data-range={seen.range !== null ? Math.round(seen.range) : ''}>
           {rangefinder && seen.range !== null && <span>{t('hud.range', { m: Math.round(seen.range) })}</span>}
@@ -155,7 +161,11 @@ export function TacticalLayer({ state, grid }: ModeProps) {
           <div class="panel">{t('hud.dead')}</div>
         </div>
       )}
-      <p class="hint">{t(state.flags.range ? 'tactical.rangeHint' : 'tactical.clickToAim')}</p>
+      <div class="hint">
+        {state.flags.range === true && <p>{t('tactical.rangeHint')}</p>}
+        <p>{t('tactical.clickToAim')}</p>
+        <p>{t('tactical.keysOnly')}</p>
+      </div>
     </div>
   );
 }
@@ -233,7 +243,8 @@ export function WorldLayer({ state, actions, grid }: ModeProps) {
   return <WorldMap state={state} grid={grid} actions={actions} />;
 }
 
-export function MenuOverlay({ actions }: ModeProps) {
+export function MenuOverlay({ state, actions }: ModeProps) {
+  const range = state.flags.range === true;
   const [message, setMessage] = useState('');
   const save = (slot: string) => {
     void actions.saveSlot(slot).then((ok) => setMessage(t(ok ? 'menu.saved' : 'menu.saveFailed')));
@@ -247,17 +258,25 @@ export function MenuOverlay({ actions }: ModeProps) {
         <button class="primary" data-testid="menu-resume" onClick={() => actions.toggleMode('menu')}>
           {t('menu.resume')}
         </button>
-        <div class="row">
-          <span class="label">{t('menu.save')}</span>
-          {slots.map((slot) => (
-            <button key={slot} class="chip" data-testid={`save-${slot}`} onClick={() => save(slot)}>
-              {slotLabel(slot)}
-            </button>
-          ))}
-        </div>
+        {!range && (
+          <div class="row">
+            <span class="label">{t('menu.save')}</span>
+            {slots.map((slot) => (
+              <button key={slot} class="chip" data-testid={`save-${slot}`} onClick={() => save(slot)}>
+                {slotLabel(slot)}
+              </button>
+            ))}
+          </div>
+        )}
         <p class="status" data-testid="menu-status">{message}</p>
+        {/* Firing range (07b): from a game it is a detour — the game waits and is resumed afterwards. */}
+        {!range && <button data-testid="menu-range" onClick={() => actions.openRange()}>{t('menu.range')}</button>}
+        {range && state.flags.rangeReturn === true && <button data-testid="menu-leave-range" onClick={() => actions.leaveRange()}>{t('menu.leaveRange')}</button>}
         <button data-testid="menu-title" onClick={() => actions.quitToTitle()}>{t('menu.toTitle')}</button>
-        <p class="help">{t('help.keys')}</p>
+        <h3>{t('help.title')}</h3>
+        <ul class="help" data-testid="menu-help">
+          {HELP_KEYS.map((k) => <li key={k}>{t(k)}</li>)}
+        </ul>
       </div>
     </div>
   );

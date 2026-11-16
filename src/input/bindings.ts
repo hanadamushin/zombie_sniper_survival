@@ -1,10 +1,15 @@
 // Key bindings (docs/02_systems_spec.md §3.1). Values are KeyboardEvent.code.
 
 export const KEYS = {
-  forward: ['KeyW', 'ArrowUp'],
-  back: ['KeyS', 'ArrowDown'],
-  left: ['KeyA', 'ArrowLeft'],
-  right: ['KeyD', 'ArrowRight'],
+  forward: ['KeyW'],
+  back: ['KeyS'],
+  left: ['KeyA'],
+  right: ['KeyD'],
+  // 07b: the arrow keys aim (they used to double as movement). Rates: data/input.ts.
+  lookUp: ['ArrowUp'],
+  lookDown: ['ArrowDown'],
+  lookLeft: ['ArrowLeft'],
+  lookRight: ['ArrowRight'],
   sprintOrBreath: ['ShiftLeft', 'ShiftRight'],
   // Keyboard alternatives to the mouse buttons / wheel (touchpads cannot hold right + left click).
   fire: ['KeyF'],

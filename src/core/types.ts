@@ -206,7 +206,8 @@ export interface TacticalState {
   /** Firing range only: seconds each target lane has been empty (04). */
   rangeT?: number[];
   /** People hiding at search points of this area (05). `met` once the player has talked to them. */
-  hideouts?: { spot: number; pos: [number, number]; met: boolean }[];
+  /** 07b: `spot` is -1 for a camp away from any building; `sure` = someone is there even if the cell's H says nobody is left (the first contact of a new game). */
+  hideouts?: { spot: number; pos: [number, number]; met: boolean; sure?: boolean }[];
 }
 export interface Zombie {
   id: EntityId;

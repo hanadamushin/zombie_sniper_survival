@@ -97,6 +97,47 @@ export const RENDER = {
     treeChunks: 4,
   },
 
+  // --- signs of people (07b): smoke over a hideout by day, a small fire light at night ---
+  signals: {
+    smoke: 0x55554f,
+    opacity: 0.62,
+    /** Puffs per column, seconds one takes to climb it, column height and where it starts above the ground (m). */
+    puffs: 16,
+    seconds: 22,
+    height: 46,
+    base: 2.2,
+    /** Puff radius at the bottom / near the top, and how far the column leans downwind (m). */
+    radius: [0.5, 2.6],
+    drift: 9,
+    light: 0xffb05a,
+    /** Size of the light in pixels (it does not shrink with distance), shown when daylight is below this. */
+    lightPx: 5,
+    lightBelow: 0.45,
+  },
+
+  // --- sight-blocking vegetation and scenery (07b) ---
+  brush: {
+    hedge: 0x35502c,
+    bush: 0x40592f,
+    reedRoot: 0x5f6b38,
+    reedTip: 0xb9ae72,
+    bambooStem: 0x7d8f4a,
+    bambooLeaf: 0x4f7036,
+    bambooTip: 0x86a24e,
+    log: 0x5a4632,
+    wreck: [0x6e4a3a, 0x59616a, 0x7a7466, 0x4a5a4e, 0x8a8f94],
+    wreckDark: 0x1e1f21,
+    wreckBox: 0x8f9296,
+    frame: 0xa9aca8,
+    sheet: 0xd4d6cc,
+    /** Length of one hedge box, spacing of reed spikes / bamboo stems / the bamboo undergrowth (m), width of a reed spike. */
+    hedgePiece: 2.6,
+    reedSpacing: 1.0,
+    reedWidth: 1.05,
+    bambooSpacing: 1.6,
+    bambooUnder: 3.2,
+  },
+
   // --- scope overlay (04). Sizes relative to the viewport height unless noted ---
   scope: {
     /** Radius of the clear circle. */
@@ -122,6 +163,8 @@ export const RENDER = {
   // --- zombies (04): muted clothes, pale heads; colours picked per zombie by id ---
   zombies: {
     skin: [0x9aa58c, 0x8f9a86, 0xa3a08a],
+    /** Dark plate on the front of the head (07b): shows which way a zombie faces. */
+    face: 0x2b2a24,
     walker: { top: [0x4c5560, 0x5a5348, 0x3f4a44, 0x62605c, 0x4a4250], legs: [0x2e3238, 0x3a352e, 0x2a2f2a] },
     runner: { top: [0x7a3b33, 0x6d4630, 0x80503a], legs: [0x25272c, 0x30302c] },
     brute: { top: [0x3e4a34, 0x4a4a3a, 0x38403a], legs: [0x2a2c26, 0x33302a] },
