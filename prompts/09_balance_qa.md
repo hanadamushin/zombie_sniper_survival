@@ -97,3 +97,12 @@
 - 簡略化した効果と未着手の効果は PROGRESS.md の 07 に一覧がある。数値修飾に落としたものは、遊んで物足りなければ挙動を足す候補
 - 難易度の係数（`DIFFICULTY_MODS`）: 低／高で大群メーター ×0.75 / ×1.3、夜間接近 ×0.7 / ×1.3、同時出現 ×0.8 / ×1.2 は 07 が置いた仮の値
 - 人口上限 30（C5 まで）と、建国条件の人口 60 の間隔が適切かは未確認。政府庁舎（セメント 120・金属 60・部品 30、工数 800）も同様
+
+### 07b の結果を受けて
+
+- **見通しの指標**: `node tools/sight-stats.ts`（200m で視線が通る割合）。いま rural 29% / forest 13%。`tests/cover.test.ts` が rural 25〜45%・forest 15% 未満を検査しているので、`TACTICAL.cover` / `TACTICAL.terrain` を触ったら必ず回す。rural は下限に近い（個別のマップは 24〜35%）ので、遮蔽物をこれ以上足すなら生け垣の確率（`hedge`）を下げるなどで釣り合いを取る
+- **未確認（実機で見てほしい）**: 遮蔽物を増やした後の「耳を拾いに歩く退屈さ」。歩き 1.6 m/s は変えていない（上げるなら `TACTICAL.player.walk`、上限 2.4、`02_systems_spec.md` §3.6 も直す）。矢印キー照準の速さ（`INPUT.keyLook`。押し始め 2°/秒・最大 70°/秒はヘッドレスの e2e で 200m に当たることしか確かめていない）。マウス感度 +25%
+- **藪の中は 6m より遠いゾンビから完全に見えない**（`BALANCE.zombie.brushNear`）。葦の中で伏せていれば群れをやり過ごせる。強すぎるなら距離を伸ばすか、視認距離の割引（樹冠と同じ方式）に変える。防衛担当の射線（`sim/build/defense.ts`）は藪を無視している（本拠の周囲 130m に藪はない）
+- **ゾンビの初期配置**は 7 割強が遮蔽物の近く（`BALANCE.zombie.spawnRoadShare` / `spawnOpenShare` / `coverDist`）。射点から見える数が減ったぶん、序盤の耳の稼ぎが落ちていないか通しプレイで確認
+- **最初の 1 人**は H が 0 でも必ず会える（`COLONY.encounter.firstRing`）。契約金ぶんの耳（賃金 × 5）を稼ぐ前に 4 日の待ち時間が切れないか確認
+- **三角形の余裕**: forest は射点から約 40 万、06 の襲来シナリオの指揮視点は 45 万（予算 50 万）。大きな拠点を forest に建てると超える恐れがある。削る場所は `TACTICAL.cover.forest.thicketsPerHa`、`RENDER.brush.reedSpacing` / `bambooSpacing`、樹木の形（`render/tactical/vegetation.ts`）

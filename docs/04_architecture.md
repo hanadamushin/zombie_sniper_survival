@@ -346,7 +346,7 @@ export interface InputFrame { moveX: number; moveZ: number; lookDX: number; look
 
 - `render/index.ts`: 組み込みは `camera` → `sky` → `tactical-world` の順（M0 の仮地面は撤去済み）。追加は `renderer.register(subRenderer)`。`SubRenderer { id, init(ctx), update(state, frame), reset?(state), resize?, dispose? }`。登録順に毎フレーム `update` され、最後に1回だけ描画。新規ゲーム・ロードで state が差し替わると `reset` が呼ばれる。FOV は `renderer.view.setFov()`
 - `ui/`: `ui.sync(state)` で 10Hz 再描画（モード・速度変更時は即時）。モードごとの枠は `ui/components/modes.tsx`。UI からの操作は `UiActions`（`dispatch` ほか）経由
-- `input/`: `poll()` が `InputFrame` を返し、最初のステップが消費したら `consume()`。キー割り当ては `input/bindings.ts`。ポインタロックは tactical のみ
+- `input/`: `poll()` が `InputFrame` を返し、最初のステップが消費したら `consume()`。キー割り当ては `input/bindings.ts`。ポインタロックは tactical のみ。矢印キーの照準は `poll()` の中で経過時間から `lookDX / lookDY`（マウスと同じピクセル相当）に変換する（07b、速さは `data/input.ts`）。`InputFrame` の形は変えていない
 - セーブ: `core/save.ts`。`packState` が保存対象を絞る（戦術の zombies/corpses/bullets は捨てる、menu モードは command として保存）。形を変えたら `STATE_VERSION` を上げ `MIGRATIONS` に追加
 
 ## 7. 戦術マップと当たり判定
@@ -357,13 +357,14 @@ export interface InputFrame { moveX: number; moveZ: number; lookDX: number; look
 - **`TacticalMap` は `GameState` に入れない**（セーブしない）。`mapSeed = mapSeedFor(state.seed, cell)` から再生成してメモリに持つ。
   置き場所は `sim/tactical/area.ts`: `ensureArea(state, grid)` が `state.tactical`（§5 のフィールドのみ）とマップを現在セルに合わせ、`mapOf(state)` / `areaOf(state)` で sim・render・UI が参照する
   - 生成の契機は状態から判定: 移動中は `state.tactical = null`、移動していなくて区域がなければ作る（開始直後・到着時）、区域はあるがマップがなければ `tactical.mapSeed` から作り直す（ロード後。`lootSpots[].taken` は保存値を重ねる）。通過するだけのセルでは作らない
-  - 生成は 1 回 50〜80ms。メインループは `areaPending()` の間ロード表示を 2 フレーム出してから `ensureArea()` を呼ぶ（ヘッドレスでは次の tick が同じことをする）
+  - 生成は 1 回 50〜80ms（07b 以降 rural・forest は 75〜110ms）。メインループは `areaPending()` の間ロード表示を 2 フレーム出してから `ensureArea()` を呼ぶ（ヘッドレスでは次の tick が同じことをする）
 - 地形の高さは描画メッシュと同じ三角形分割で補間する（`gen/height.ts`。各 4m 升を (ix, iz+1)–(ix+1, iz) の対角で分割）
 - 当たり判定の実体は `TacticalMap.solids`（AABB: 建物・階段の段・鉄塔の床と脚・岩）と樹木の幹（円柱）。16m の静的ハッシュ `map.hash` に登録済み。建物の箱は床面より 6m 下まで伸びている（斜面との隙間を塞ぐ）
 - 共通関数（`sim/tactical/collision.ts`。04・06 はこれを使う）:
   - `heightAt(map, x, z)`、`isWalkable(map, tx, ty)`、`gradientAt`
   - `raycastWorld(map, origin, dir, maxDist)` → `{ dist, pos, normal, kind: 'terrain'|'building'|'stair'|'rock'|'prop'|'tree', index }`。樹木は幹（高さの 55% まで）だけが弾と視線を遮る
-  - `segmentHitsStatic(map, a, b)`（視線・弾の線分）
+  - `segmentHitsStatic(map, a, b)`（弾の線分。固いものだけ）
+  - `sightBlocked(map, a, b)`（07b: 目と目の間の視線。上に加えて `map.brush` ＝生け垣・藪・葦・竹やぶで切れる。ゾンビの視認はこれを使う）、`brushBetween`。割合の計測は `sim/tactical/sight.ts` の `openSightShare`
   - `supportAt(map, x, z, feetY)`（立てる高さ: 地形か、足元から 0.5m 以内の箱の上面）、`pushOut(map, [x, z], radius, feetY, height)`（壁と幹からの押し戻し）、`ladderAt`
   - `createSpatialHash()` — 動的オブジェクト用の 16m ハッシュ（`set / remove / query / querySegment`）。現在の区域のものは `areaOf(state).dynamic`
 - 戦術ステップの順序（`sim/tactical/index.ts`）: プレイヤー → 武器（`weapon.ts`: スコープ・揺れ・引き金）→ 弾（`ballistics.ts`）→ ゾンビ（`zombies.ts`: 補充・知覚・状態機械・移動）→ 近接と事後（`combat.ts`: ナイフ・耳・落下・死亡と仮復帰）。毎分 `expireCorpses` と感染の期限判定。プレイヤーへのダメージは `health.ts` の `hurtPlayer`
@@ -376,7 +377,8 @@ export interface InputFrame { moveX: number; moveZ: number; lookDX: number; look
   - ゾンビ: 頭（球）・胴（カプセル）・脚（カプセル）の解析判定。空間ハッシュ（16mセル）で候補を絞る
   - 建物・壁・幹・地形: `raycastWorld`（箱はスラブ法、地形は 2m 刻みのレイマーチ＋二分法）
 - プレイヤー・ゾンビの移動衝突: ハイトマップ＋AABB の押し戻し。物理エンジンは使わない
-- 生成結果の確認: `node tools/tactical-preview.ts <dir> [seed]` が 5 区分＋本拠版を上から見た PNG に書き出す
+- 生成結果の確認: `node tools/tactical-preview.ts <dir> [seed]` が 5 区分＋本拠版を上から見た PNG に書き出す。`node tools/sight-stats.ts` が区分ごとの「200m で視線が通る割合」と生成時間を出す
+- **遮蔽物（07b、`gen/cover.ts`）**: `TacticalMap.brush`（`Brush { kind: 'hedge'|'bush'|'reeds'|'bamboo', ax, az, bx, bz, r, h }` ＝地面に立つカプセル。当たり判定なし・視線だけ遮る。`map.hash.brush` に登録）と `TacticalMap.props`（`Prop { kind: 'car'|'truck'|'log'|'greenhouse', ... }` ＝箱の小道具。車・倒木は `solids` に `kind: 'scenery'` の箱も持つ）。土手・沢・段々畑は高さ配列を直接変える（`addDike` / `addCreek` / `terrace`）。生成の順は 地形 → 本拠の平坦化 → 配置（土手・道路・集落・小道具・畑）→ 射点 → 植生 → 遮蔽物
 
 ## 8. 描画方針（性能予算）
 
@@ -387,7 +389,8 @@ export interface InputFrame { moveX: number; moveZ: number; lookDX: number; look
 - 視程 800m ＋フォグ（260〜800m。04 が 150m から変更）。夜はフォグ色と環境光で表現。空は地平線でフォグ色に溶けるドーム（太陽・月・星はドームのシェーダ内、1 ドローコール）
 - 戦術ワールド（`render/tactical/`）: 地形 1（1m/texel のプロシージャル地面テクスチャ）＋外周の粗い地形 1、建物・階段・鉄塔・はしごは箱の InstancedMesh 1（窓はフラグメントシェーダ）、切妻屋根 1、岩 1、草むら 1（カメラから 150m 以内のみ）、樹木は 2 種 × 4×4 チャンク（視錐台・距離カリング）。実測 15〜40 ドローコール
 - カメラは `renderer.view`（`render/tactical/camera.ts`）。戦術モードの FOV は `sim/tactical/weapon.ts` の `viewFovDeg(player)`（スコープの遷移と倍率）に従い、向きは `yaw/pitch + player.aim.off`（揺れと反動）。`setFov(度)` は強制上書き、`setFov(null)` で戻す
-- ゾンビと死体（04）: 箱の InstancedMesh を生者用・死体用に 1 つずつ（1 体 6 箱。死体は一覧が変わったときだけ書き直す）＋接地の丸い影 1。着弾の土煙・血煙は Points 1。スコープは全画面三角形 1。合計 5 ドローコール
+- 遮蔽物（07b、`render/tactical/brush.ts`）: 箱（生け垣・廃車・倒木・ビニールハウスの骨組み）、塊（藪・竹やぶの下草）、葦の穂、竹の 4 ドローコール。描く形は視線判定のカプセル以上の高さ・幅にしてある（プレイヤーから隠れて見えるものは、ゾンビからも見えない）。潜伏者の合図（`signals.ts`）: 煙の粒 1 ＋夜の灯り 1（Points）
+- ゾンビと死体（04）: 箱の InstancedMesh を生者用・死体用に 1 つずつ（1 体 7 箱。07b で顔の暗い板を追加。**向きはローカル −z が前**で、前傾・伸ばした腕・顔の板がそちらを向く。死体は一覧が変わったときだけ書き直す）＋接地の丸い影 1。着弾の土煙・血煙は Points 1。スコープは全画面三角形 1。合計 5 ドローコール
 - 解像度の自動調整（04）: `RENDER.resolution`。フレーム時間の平均（0.5 秒で平滑化）が 1 秒間 20ms を超えると描画スケールを 0.125 下げ（40ms 超なら 0.25、下限 0.5）、17.5ms 未満が 3 秒続けば戻す。戻して 4 秒以内に再び下がったら次の試行までの待ちを倍にする。`renderer.setAutoResolution(false)` / `?res=fixed` で無効
 - スコープ: カメラ FOV を倍率に応じて絞る＋円形マスクのオーバーレイ（レティクルは CSS/SVG ではなく専用の全画面クアッドで描き、mil 目盛りを FOV と正確に対応させる）。レンダーターゲット二重描画はしない
 - 構造物（06、`render/tactical/structures.ts`）: 箱の InstancedMesh 2 つ（不透明・半透明）＋カーソル周りのグリッド線 1 ＋防衛担当の曳光線 1 の最大 4 ドローコール。木柵 = 高さの揃わない杭、土塁 = 幅広の二段の盛り土、鉄板壁 = 柱と板と錆の帯、コンクリート壁 = 厚い淡色の塊と笠。耐久 75 / 50 / 25% で暗くなり、傾き、杭が抜け、ひびが入る。設計図は半透明の箱＋進捗ぶんの実体＋足場の柱、堀は暗い面と土の縁と死体の山、破壊後は瓦礫。再構築は `gridRev`・損傷の段階・進捗が変わったときだけ（最短 0.2 秒間隔）。壁 587 タイル＋堀 207 タイルで 1.2 万箱ほど

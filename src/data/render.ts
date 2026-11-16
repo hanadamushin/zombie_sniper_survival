@@ -104,10 +104,10 @@ export const RENDER = {
     /** Puffs per column, seconds one takes to climb it, column height and where it starts above the ground (m). */
     puffs: 16,
     seconds: 22,
-    height: 46,
+    height: 55,
     base: 2.2,
     /** Puff radius at the bottom / near the top, and how far the column leans downwind (m). */
-    radius: [0.5, 2.6],
+    radius: [0.7, 3.4],
     drift: 9,
     light: 0xffb05a,
     /** Size of the light in pixels (it does not shrink with distance), shown when daylight is below this. */

@@ -11,7 +11,7 @@ import { finishMap } from '../src/gen/index.ts';
 import { createSim, type Sim } from '../src/sim/index.ts';
 import { areaOf, type TacticalArea } from '../src/sim/tactical/area.ts';
 import { dropAt, integrate, speedAt, SUBSTEPS, timeTo, zeroAngle } from '../src/sim/tactical/ballistics.ts';
-import { supportAt } from '../src/sim/tactical/collision.ts';
+import { heightAt, supportAt } from '../src/sim/tactical/collision.ts';
 import { RANGE_SPOTS } from '../src/sim/tactical/range.ts';
 import { segmentCapsule, segmentSphere } from '../src/sim/tactical/shapes.ts';
 import { scopeFovDeg, swayPattern, swayTarget, viewFovDeg } from '../src/sim/tactical/weapon.ts';
@@ -829,10 +829,15 @@ describe('zombies in the world', () => {
     const t = state.tactical!;
     const before = state.world.cells.Z[cell]!;
     const count = t.zombies.length;
-    const victim = t.zombies[0]!;
     const area = areaOf(state)!;
-    // Kill it the honest way: a head shot from 30 m.
-    state.player.pos = [victim.pos[0], victim.pos[1], victim.pos[2] + 30];
+    // Kill it the honest way: a head shot from 30 m. Since 07b zombies start in cover, so the
+    // victim is first led onto the open, flat middle of the home base.
+    const victim = t.zombies[0]!;
+    const mid = area.map.size / 2;
+    const lane = mid + 80; // clear of the headquarters and the first field
+    victim.pos = [lane, heightAt(area.map, lane, mid - 20), mid - 20];
+    area.dynamic.set(victim.id, victim.pos[0], victim.pos[2]);
+    state.player.pos = [lane, heightAt(area.map, lane, mid + 10), mid + 10];
     victim.t = 100;
     victim.dummy = 1;
     g.run(0.3, input({ scope: true }));
