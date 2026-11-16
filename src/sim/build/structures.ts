@@ -242,6 +242,9 @@ function addSolids(_state: GameState, ov: Overlay, map: TacticalMap, st: Structu
       const [dx, dz] = towerLadderDir(st.rot);
       const lx = cx + dx * (TILE / 2 + 0.45), lz = cz + dz * (TILE / 2 + 0.45);
       ladders.push({ x0: lx - 0.45, z0: lz - 0.45, x1: lx + 0.45, z1: lz + 0.45, y0: heightAt(map, lx, lz), y1: top + 0.02, nx: -dx, nz: -dz });
+      // The ladder itself is a narrow board: the climber leans on it (there is no wall behind a tower ladder).
+      const bx = cx + dx * (TILE / 2 - 0.05), bz = cz + dz * (TILE / 2 - 0.05);
+      box(bx - (dx ? 0.05 : 0.45), bz - (dz ? 0.05 : 0.45), bx + (dx ? 0.05 : 0.45), bz + (dz ? 0.05 : 0.45), base - 2, top - 0.3);
       return;
     }
     case 'building': {

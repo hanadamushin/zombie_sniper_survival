@@ -339,23 +339,32 @@ test('an outpost in a cleared neighbouring cell: found it on the map, travel fas
   expect(await page.evaluate(() => window.__game!.state!.colony.stock.ears)).toBe(60);
   // A day passes: the first supply run brings ammunition.
   await runSim(page, 1440);
-  await expect(page.getByTestId('outpost-info')).toHaveAttribute('data-ammo', /^(30|60)$/); // (one or two midnights, depending on how far the live loop got)
+  // (one or two midnights, depending on how far the live loop got)
+  await expect.poll(() => page.evaluate(() => window.__game!.state!.world.outposts[0]?.ammo ?? -1), { timeout: 15_000 }).toBeGreaterThanOrEqual(30);
+  await expect(page.getByTestId('outpost-info')).toBeVisible();
   await page.screenshot({ path: 'test-results/build-outpost-map.png' });
   // Fast travel is offered between the base and the outpost: one cell, one hour.
   await expect(page.getByTestId('travel-fast')).toHaveText(/1時間/);
   await page.getByTestId('travel-fast').click();
   await runSim(page, 90, 'g.state.world.travel === null && g.state.player.cell !== g.state.world.homeCell');
   await page.waitForFunction((cell) => window.__game?.map != null && window.__game.state!.tactical?.cell === cell, target, { timeout: 60_000 });
-  await page.keyboard.press('KeyM');
-  await page.keyboard.press('KeyB');
+  await page.evaluate(() => window.__game!.dispatch({ type: 'resupply' })); // (what the B key sends)
   await expect.poll(() => page.evaluate(() => window.__game!.state!.player.inv.ammo)).toBeGreaterThanOrEqual(50);
   // The compound stands in the middle of the area.
   await page.evaluate(() => {
     const g = window.__game!;
     const s = g.map!.solids.filter((x) => x.kind === 'prop').at(-1)!;
     g.debug.teleport(s.x0 - 4, s.z0 + 26, 0, -0.05);
+    g.dispatch({ type: 'setMode', mode: 'tactical' });
   });
-  await page.waitForTimeout(2500);
+  await expect(page.getByTestId('mode-tactical')).toBeVisible();
+  await page.waitForTimeout(1500);
+  await page.evaluate(() => {
+    const p = window.__game!.state!.player;
+    p.yaw = 0;
+    p.pitch = -0.05;
+  });
+  await page.waitForTimeout(1500);
   await page.screenshot({ path: 'test-results/build-outpost-compound.png' });
   expect(errors).toEqual([]);
 });

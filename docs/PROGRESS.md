@@ -242,3 +242,55 @@
   - イベント: `candidateFound`, `spotSearched`, `expeditionSent`, `earsDeposited`, `resupplied`, `foodBought`, `colonyLog`。`survivorHired`, `survivorDied`, `survivorLeft`, `expeditionReturned`, `wagesPaid`, `defeat` を発火
   - フラグ: `flags.skipMinutes`, `flags.defeat`（ほかに日次ログ抑制用の `craftIdleDay` / `noMedicineDay`）
   - キー: B（補給）
+
+## 06 建築・防衛・駐屯地 — 2026-11-16
+- 完了したこと:
+  - **構造物の定義**（`data/buildings.ts`）: §6.1 の防御構造 14 種（木柵・土塁・鉄板壁・コンクリート壁、各材質の門、空堀・水堀、跳ね橋、見張り塔、有刺鉄線、自動銃座）と §6.2 の機能建物 23 種。解禁は技術 id で持ち、判定は `isUnlocked(defId, state)` の 1 か所。07 までは `BUILD.unlockAllUntilTech = true` で全解禁
+  - **設計図と建設**（`sim/build/blueprints.ts`, `construction.ts`）: 配置可否（範囲・占有・既存の建物や樹木・傾斜）、取消と解体（資材返却）、優先度、毎時の「資材搬入 → 工数 → 完成」、修理、堀の清掃。新規ゲームは司令部と農地 1 区画つきで始まる（05 の仮の野営地・仮の畑は撤去）
+  - **構造物の働き**（`structures.ts`）: 壁（当たり判定つき、ゾンビが壊す）、門（人と弾は通し、ゾンビは止める）、堀（ゾンビだけ通れず、死体 8 体で埋まる）、見張り塔（はしごで登る射点）、有刺鉄線（減速とダメージ）、跳ね橋（警報中は上がる）、瓦礫、司令部の破壊で敗北。機能建物の収容・容量・農地・係数・士気・食事を共同体へ反映
+  - **フローフィールド**（`flowfield.ts`）: 256×256 の Dijkstra（バケットキュー）。`gridRev` 変更時のみ再計算。襲来用（司令部が目標）と追跡用（プレイヤーが目標、全セル共通で 04 の引っかかり対策）
+  - **襲来**（`raids.ts`）: 夜間接近、`hordeMeter` からの大群（消費ぶんを差し引く）、警告（塔＋防衛担当で 6 時間前）、120 体までの波状投入、警報（`setAlarm`）、撃退の士気、朝の耳回収。**不在時・移動中・死亡後の 3 日間は数値で解決**（`resolveAway`）し、壁の損傷・堀の死体・死傷・撃破数を `BuildState` に書く
+  - **防衛担当**（`defense.ts`）: 武器別の射程・命中・間隔、塔ボーナス、視線判定（地上からは壁越しに撃てない）、屋外の生存者への噛みつき・負傷・死亡
+  - **駐屯地**（`sim/world/outposts.ts`）: 設置・拡張・常駐の出し入れ、日次の襲来判定と陥落、補給（距離による遅延・中継）、駐屯地での `resupply`、ファストトラベル、戦術マップのプレハブ（柵・テント・弾薬箱・旗、当たり判定つき）
+  - **海を渡る経路**: 青函・関門・本四 3 ルート（瀬戸大橋、しまなみ、明石＋鳴門）・佐渡・沖縄を `tools/data/sealinks.ts` に定義、`findRoute` と戦略地図（破線）に反映
+  - **描画**（`render/tactical/structures.ts`）: 材質ごとに形と色の違う壁、門、堀（死体の溜まり具合）、塔、有刺鉄線、建物、設計図（半透明＋足場）、損傷 3 段階、瓦礫、駐屯地のプレハブ、配置カーソルとグリッド、防衛担当の曳光線。最大 4 ドローコール
+  - **UI**: 指揮層の建築タブ（区分・一覧・取消/解体・回転・選択した構造物の耐久と優先度）、地面へのドラッグ配置、俯瞰カメラ（WASD 移動・Q/E と右ドラッグで回転・ホイールで拡大）、上部バーの襲来アラート、戦略地図の駐屯地（設置・拡張・常駐・補給状況・ファストトラベル）と海路、司令部破壊時の敗北文
+  - テスト 16 件追加（`tests/build.test.ts`）: 堀の切れ目へ全経路が向かう／囲いきると最も弱い壁へ／埋まった堀を渡る・水堀は渡れない／再計算は `gridRev` 変更時だけで 5ms 未満、建設（資材・工数・取消・解体・修理・建物の効果・セーブ往復）、配置可否、塔のはしごとゾンビ、大群の発生・警告・到着・波、堀の切れ目に列ができる（実マップ）、柵が破られ司令部が壊れて敗北、塔の防衛担当と朝の耳、**不在時と在席時の結果の比較**、死亡後 3 日間の襲来、駐屯地の一連、**どの開始候補からも 3 地方以上に到達**。e2e 4 件追加（`e2e/build.spec.ts`）
+  - 受け入れ基準は e2e とスクリーンショットで確認: ドラッグで柵 → 門に差し替え → 塔 → 建築担当が完成させる → 夜間接近を塔の上からスコープで撃つ／堀の切れ目に列ができ塔から縦一列に見える／柵が破られ司令部が落ちて敗北画面／隣のセルに駐屯地 → 補給 → ファストトラベル → 弾薬を受け取る／幅 360px
+- **性能の実測**（GPU なし・SwiftShader、1280×720 等倍。sim 1 ステップと `renderer.draw` 1 回を直接計測）:
+  - 襲来 116〜117 体＋生存者 30 人＋壁 587 タイル＋堀 207 タイル（塔の上から）: **24 ドローコール / 27.5 万三角形 / sim 0.25〜0.39 ms ＋ 描画発行 0.75〜1.04 ms**（予算 150 未満・50 万未満・4 ms 未満）。指揮視点では 44 ドローコール / 42.7 万三角形
+  - フローフィールド 1 回 約 2.9 ms（Node。初版は 19 ms あり、クロージャと浮動小数のループ変数をやめて整数だけの内側ループにした）
+  - 「内蔵 GPU で 60fps」は今回も未検証（実機なし）
+- 未完了・既知の問題:
+  - **バランスは未調整・実機で誰も遊んでいない**。特に: 木柵は 5 体に 7〜8 秒で破られる／司令部は建物補正（被ダメージ 2.5%）頼み／防衛担当は調整前、10 人の小銃で 150 体を全滅させたので命中と射程を下げた（今は止めきれない）。数値は `prompts/09` に書いた
+  - 不在時の数値戦闘と在席時の比較は 1 条件（木柵＋門＋塔 3、45 体）だけ。壁なし・堀だけ・大規模は未検証。数値戦闘は侵入経路を 1 本とみなす（実戦では複数の壁に同時に取りつく）
+  - 堀は地面を掘り下げていない（暗い面と土の縁）。プレイヤーと弾は堀を素通りする。生存者は迂回する
+  - 門は常に「人は通れる」扱いで開閉の絵はない。プレイヤーが不死身に近い状態で拠点内にいると、ゾンビは司令部よりプレイヤーを追う
+  - 自動銃座・市場・無線塔・発電機・発電所・学校・政府庁舎は建つだけで効果なし。駐屯地の「調達範囲」「監視」「等級 3 の農地・交易所」、F4a の堀沿い減速、F4b の二重壁、F7b 民兵制は未実装（07 へ）
+  - 生存者の武器は個別に持たせていない（解禁済みで弾のある最良の武器を全員が使う）。生存者はゾンビから逃げず、警報時に司令部へ向かうだけ
+  - 指揮層のパネルが大きく、建築中に拠点が隠れる（建築タブのときだけ低くしてある）。建築可能範囲の円は表示していない（範囲外はカーソルが赤くなる）
+  - 駐屯地の常駐者は食事をしない。駐屯地のプレハブは見た目と当たり判定だけで、常駐者の姿は描かない
+  - e2e「駐屯地」は全件を通しで回したとき 1 回だけ落ちた（単独・4 回反復では再現せず。DOM 待ちを状態の確認に替えた）。再発したら `e2e/build.spec.ts` の補給待ちを疑うこと
+  - セーブ中の襲来個体は保存せず、`raid.toSpawn` に戻す（ロード後に同じ方角から入り直す）
+- 仕様からの変更点（更新した docs）:
+  - `02_systems_spec.md`: §3.4（襲来個体・有刺鉄線）、§4.5 実装メモ（防衛担当の表・塔・耳回収）、§6.3 実装メモ、§6.4 フローフィールド、§7 実装メモ（夜間接近の人口補正、不在時の解決）、§8 実装メモ、§8.1 海を渡る経路
+  - `04_architecture.md`: §5 に 06 の追加フィールドと「建築・防衛」の節、§6 のコマンド・イベント、§7 のナビ、§8 の構造物描画と指揮カメラ
+  - **仕様と違う点**: 夜間接近は `× min(1, 人口/12)` で縮小し、無人の拠点には来ない（序盤に留守で即敗北しないため）。建物は壁攻撃の 2.5% しか受けない。堀は「通行不可」ではなく「死体 8 体ぶんの高コスト」（囲いきった堀だけの拠点でも、いずれ埋めて渡ってくる）。門は弾を通す
+  - `STATE_VERSION` 5（v4 → v5: `build.raid / pendingEars / lastRaid`。司令部と農地は次の分境界で `foundBase` が補う）
+  - `COLONY.camp` を整理（建物のないときの立ち位置だけ残した）、`COLONY.facilities` / `housing` / `farm.provisionalPlots` を削除。`farmPlots` / `housingBeds` / `facilityFactor` は建物の定義から計算。05 のテスト 3 件を新しい前提に合わせた（夜間接近を避けるため本拠セルの Z を 0 にする、司令部ぶんの添字、セーブ版数）。02 のテスト 2 件は「北海道へ行けない」→「青函で行ける、対馬へは行けない」に変更
+  - `RENDER.camera.commandHeight / commandBack` を `commandPitch` に置き換え（距離と向きは `core/view.ts`）、`RENDER.survivors.camp` を削除
+  - 依存の追加なし
+- 次のセッションへの注意:
+  - **07 向け**: `prompts/07` の末尾に追記した（解禁の入口、`unlockAllUntilTech` を false にすること、既に `hasTech` で読んでいるボーナスの一覧、残した未実装）
+  - **08 向け**: `prompts/08` の末尾（イベント一覧、建築パネルの配置、チュートリアルで伝えること）
+  - **09 向け**: `prompts/09` の末尾（見てほしい数値、テストの雛形）
+  - 構造物を足す手順: `data/buildings.ts` に定義 → 必要なら `structures.ts` の `tileCost` / `addSolids` と `render/tactical/structures.ts` の描き分け → `ui/i18n/ja.ts` に `bld.<id>`
+  - 構造物の変更は必ず `build.gridRev++`（オーバーレイ・当たり判定・フローフィールド・描画がこれで更新される）。`state.build.structures` を直接いじるデバッグコードも同じ
+  - デバッグ: `window.__game.debug.build(def, tx, ty, rot)`（完成品を置く）、`.horde(size, dir)`（今すぐ大群）、`.view`（指揮カメラ）、`state.flags.unlockAll = true`
+- 追加した共有型・コマンド・イベント:
+  - 型: `RaidState`, `RaidReport`, `SeaLink`, `BuildState.raid / pendingEars / lastRaid`, `Structure.ruinUntil / wear`, `Outpost.foundedDay / convoy`, `WorldState.travel.fast`, `pendingHorde.warned`, `Zombie.raid / moatT`, `StaticGrid.seaLinks`。`core/view.ts`（`commandView`）
+  - データ: `data/buildings.ts`（`BUILDINGS`, `BUILDING_LIST`, `BUILD`, `DEFENDER_WEAPONS`, `footprint`）、`RENDER.structures`、`BALANCE.world.travel.fastMinutesPerCell`、`tools/data/sealinks.ts`
+  - コマンド: `placeBlueprint`, `cancelStructure`, `foundOutpost` を実装、`setStructurePriority`, `upgradeOutpost`, `assignGarrison` を追加、`travel.fast`
+  - イベント: `blueprintPlaced`, `structureRemoved`, `raidStarted`, `raidEnded`, `defenderFired`, `survivorHurt`, `outpostUpgraded`, `outpostSupplied` を追加。`structureDamaged`, `structureDestroyed`, `structureBuilt`, `moatBridged`, `hordeWarning`, `hordeArrived`, `outpostFounded`, `outpostLost`, `defeat{reason:'hqDestroyed'}` を発火
+  - フラグ: `flags.colonyAlarm`（05 の口を使用）, `flags.skipping`, `flags.unlockAll`
+

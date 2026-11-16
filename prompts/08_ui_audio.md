@@ -75,3 +75,10 @@
 - ログ（`colony.log[].text`）は表示文ではなく `ja.ts` のキー＋パラメータで保存されている。文言を直すときはキーを消さず中身だけ変える（消すと古いセーブのログがキー名で表示される）
 - 05 の音・演出用イベントは PROGRESS.md の 05 の節にある。指揮層パネルは `src/ui/command/`（60 行の一覧は行ごとにメモ化済み。作り直すときも 10Hz で全行を再生成しないこと）
 
+### 06 の結果を受けて
+
+- 建築 UI は機能優先（`ui/command/build.tsx`、スタイルは `ui/styles.css` 末尾）。指揮層のパネルが画面下半分を覆うので、建築中は拠点が隠れやすい。パネルの配置（横置き・折りたたみ）は見直してほしい。視点とカーソルは `core/view.ts` の `commandView`
+- 襲来の HUD は上部バーの 1 行だけ（`Hud.tsx` の `RaidAlert`）。方角は文字のみで、画面上の矢印やミニマップはない
+- 音・演出用のイベント: `hordeWarning`, `hordeArrived`, `raidStarted{kind, size, dir, away}`, `raidEnded{repelled}`, `structureDamaged`, `structureDestroyed{def}`, `structureBuilt{def}`, `blueprintPlaced`, `structureRemoved`, `moatBridged`, `defenderFired{pos, target, hit}`（曳光線は `render/tactical/structures.ts` が描いている）, `survivorHurt`, `outpostFounded`, `outpostLost`, `outpostSupplied`, `defeat{reason}`
+- 堀は地面を掘り下げていない（暗い面＋土の縁で表現）。門は格子で、開閉アニメーションはない。塔の上の防衛担当は立っているだけ（射撃の姿勢なし）
+- チュートリアルで必ず伝えること: 防衛担当は **塔の上からしか壁越しに撃てない**／司令部が壊れると敗北／堀は切れ目を 1 か所残すと列ができる

@@ -258,6 +258,26 @@ export interface Expedition { id: EntityId; members: EntityId[]; target: CellId;
 - `TacticalState.hideouts[]`（探索ポイントに潜む人）
 - `flags.skipMinutes`（`sim/index.ts` がその分数だけ minute / hour / day フックを回して時間を飛ばす）、`flags.defeat`
 
+06 が追加（STATE_VERSION 5）:
+- `BuildState.raid`（進行中の襲来 `RaidState{kind, dir, size, toSpawn, killed, startedAbs, waveT}`）、`pendingEars`（翌朝回収する死体の数）、`lastRaid`（直近の襲来の要約 `RaidReport`）
+- `Structure.ruinUntil`（破壊後、瓦礫として残る期限の絶対分。`hp` は 0）、`wear`（イベントを間引くための端数）
+- `Outpost.foundedDay / convoy{day, ammo}`、`WorldState.travel.fast`、`pendingHorde.warned`、`Zombie.raid / moatT`（保存されない）
+- `StaticGrid.seaLinks[]`（`SeaLink{name, a, b, minutes}`。`grid.json` の `sea`）
+- `flags.colonyAlarm`（襲来中）、`flags.skipping`（`skipMinutes` の消化中。襲来は数値で解決）、`flags.unlockAll`（デバッグ: 全解禁）
+- セーブ時、マップ上の襲来個体は `raid.toSpawn` に戻して保存する（`packState`）
+
+### 建築・防衛（`sim/build/`、06）
+
+- `structures.ts`: 定義の参照（`defOf`）、解禁判定 `isUnlocked` / `techUnlocked`（**ここ 1 か所**）、タイルごとの **オーバーレイ**（`overlayOf(state, walk)`: 占有 `occ`、ゾンビが相手にする構造物 `sidx`、フローコスト `cost`、ゾンビだけを止める障壁 `zblock`、生存者の通行不可 `sblock`、有刺鉄線 `wire`、壁のつながり `links`。`gridRev` と警報の状態でキャッシュ）、当たり判定の同期（`syncSolids` / `syncMap`: 本拠マップの `map.solids` / `map.ladders` / `map.hash` の末尾に構造物ぶんを足し引きする。03 の衝突関数はそのまま使える）、`damageStructure` / `destroyStructure`（司令部なら `flags.defeat`）、建物の効果（`bedsTotal`, `plotInfo`, `jobFacility`, `moraleBonus`, `foodSaving`, `refreshCapacity`）
+- `blueprints.ts`: `placementError`（配置可否の理由）、`placeBlueprint`, `cancelStructure`（取消・解体）、`setPriority`, `foundBase`（司令部と最初の農地。`beginAt` と毎分のフックから呼ばれ、冪等）、`buildNow`（デバッグ・テスト用）
+- `construction.ts`: `construct(c, points)`。共同体の時計から毎時呼ばれる（`colony/index.ts`）。資材は `moveStock` 経由
+- `flowfield.ts`: `computeField(cost, goals)`（Dial 法）、`raidField(state, map|null)`（`gridRev` でキャッシュ）、`chaseField(state, map)`
+- `raids.ts`: `raidMinute`（発生・警告・到着・夜間接近・朝の耳回収）、`raidStep`（波状投入と終了判定）、`resolveAway`（不在時の数値戦闘）、`breachRoute`、`playerPresent`
+- `defense.ts`: `updateDefenders`（射撃と、屋外の生存者への噛みつき）、`guardPosts`, `standHeight`, `defenderWeapon`
+- ゾンビ側の接続は `sim/tactical/zombies.ts`: `followField`（次のタイルが構造物なら近づいて攻撃、堀なら縁から落ちる）、`barrierPush`（箱を持たない障壁からの押し戻し）、`killZombie(..., by)`。`Zombie.target` は攻撃中の構造物の id を持つ
+- 駐屯地は `sim/world/outposts.ts`（設置・拡張・常駐・日次の襲来と補給・補充・プレハブの配置）。コマンドは world システムが担当
+- 指揮層の視点とカーソルは `core/view.ts` の `commandView`（`GameState` の外。UI が書き、描画が読む）
+
 ### 共同体（`sim/colony/`、05）
 
 - 時計: 共同体は `colony.lastMinute` を持ち、`minute` フックで現在時刻まで **1 分ずつ追いつく**。速度・ステップ幅・プレイヤーの所在に結果が依存しない。1 分の処理順は `colonyMinute`（日次 → 納品 → 毎時 → 食事 → 賃金 → 作業 → 製造 → 遠征 → 感染）
@@ -300,6 +320,7 @@ export interface InputFrame { moveX: number; moveZ: number; lookDX: number; look
 02 が追加したイベント: `travelStarted{from, to, minutes}`, `cellEntered{cell, from}`, `travelArrived{cell}`, `travelEncounter{cell, danger}`（枠のみ）, `infectionStepped{day, homeInflow}`。
 04 が追加したイベント: `dryFire`, `reloadStarted{seconds}`, `reloadDone{mag}`, `knifeSwing{hit, killed}`, `playerInfected{untilDay, untilMinute}`, `playerRevived`, `zombieAlerted{id, chase}`。`bulletHit` に `surface`（ゾンビ以外に当たったときの種類）・`dir`・`range`・`killed`、`zombieKilled` に `knife`、`playerHurt` / `playerDied` に `cause`、`shotFired` に `scoped` を追加。
 05 が追加: コマンド `setPolicy{autoBuyFood}`（`resupply` は colony システムが担当）。イベント `candidateFound{id, cell, by}`, `spotSearched{spot, items}`, `expeditionSent`, `earsDeposited{amount}`, `resupplied{ammo}`, `foodBought{amount, cost, source}`, `colonyLog{kind, text}`。`defeat{reason:'noColony'}` と `playerRevived` は共同体が発火。
+06 が追加: コマンド `setStructurePriority{id, priority}`, `upgradeOutpost{id}`, `assignGarrison{survivor, outpost|null}`、`travel` に `fast?`。`placeBlueprint` / `cancelStructure` / `setStructurePriority` は build、`foundOutpost` / `upgradeOutpost` / `assignGarrison` は world、`resupply` は colony（本拠でなければ駐屯地から）。イベント `blueprintPlaced`, `structureRemoved`, `raidStarted{kind, size, dir, away}`, `raidEnded{kind, killed, repelled, away}`, `defenderFired{id, pos, target, hit}`, `survivorHurt`, `outpostUpgraded`, `outpostSupplied`。`structureDamaged`（耐久の 1/20 ごと）, `structureDestroyed`, `structureBuilt`, `moatBridged`, `hordeWarning`, `hordeArrived`, `outpostFounded`, `outpostLost`, `defeat{reason:'hqDestroyed'}` を発火。`zombieKilled.by` は防衛担当か構造物（有刺鉄線・堀）の id になり得る。
 `dayStarted` は 00:00 に、同じ tick の `hourStarted{hour:0}` より先に発火する。
 
 イベントは tick 中にバッファされ、tick 末に購読者へ配信（`sim.events.on(type, fn)` / `onAny`）。sim 内システムが他システムのイベントを見る場合は「次の tick で処理」と決め、`ctx.prevEvents`（直前の tick で出たイベント）を読む。
@@ -334,7 +355,7 @@ export interface InputFrame { moveX: number; moveZ: number; lookDX: number; look
 - 武器の定義は `data/weapons.ts`。`WEAPON_MODS`（技術 id → 差分）を足すと `weaponOf(state)` が研究済みの差分を重ねた定義を返す（07 用）。ゾンビの種類別の数値は `data/zombies.ts`
 - 射撃場: `state.flags.range = true` の状態は世界データなしで動く（`sim/tactical/range.ts` の固定マップ、`ensureArea` が分岐）。`?range=1` または `window.__game.debug.openRange()`。`flags.noSway` で揺れを 0 にできる
 - プレイヤー: `sim/tactical/player.ts` の `updatePlayer(player, map, input, dt, lookScale)`。視線レイは `viewRay(player)`、方位は `headingDeg(yaw)`
-- ナビ/建築グリッド: 4m タイル 256×256（`map.walk`: 建物・階段・大岩・急斜面が 0）。フローフィールドは拠点（司令部）を目標に Dijkstra。`BuildState.gridRev` 変更時のみ再計算（1回 < 5ms を目標）
+- ナビ/建築グリッド: 4m タイル 256×256（`map.walk`: 建物・階段・大岩・急斜面が 0。静的）。構造物は `sim/build/structures.ts` のオーバーレイで重ねる。フローフィールドは拠点（司令部）を目標に Dijkstra。`BuildState.gridRev` 変更時のみ再計算（実測 約 3ms）。規則は `02_systems_spec.md` §6.4
 - 弾の当たり判定: 弾の線分 vs
   - ゾンビ: 頭（球）・胴（カプセル）・脚（カプセル）の解析判定。空間ハッシュ（16mセル）で候補を絞る
   - 建物・壁・幹・地形: `raycastWorld`（箱はスラブ法、地形は 2m 刻みのレイマーチ＋二分法）
@@ -353,7 +374,9 @@ export interface InputFrame { moveX: number; moveZ: number; lookDX: number; look
 - ゾンビと死体（04）: 箱の InstancedMesh を生者用・死体用に 1 つずつ（1 体 6 箱。死体は一覧が変わったときだけ書き直す）＋接地の丸い影 1。着弾の土煙・血煙は Points 1。スコープは全画面三角形 1。合計 5 ドローコール
 - 解像度の自動調整（04）: `RENDER.resolution`。フレーム時間の平均（0.5 秒で平滑化）が 1 秒間 20ms を超えると描画スケールを 0.125 下げ（40ms 超なら 0.25、下限 0.5）、17.5ms 未満が 3 秒続けば戻す。戻して 4 秒以内に再び下がったら次の試行までの待ちを倍にする。`renderer.setAutoResolution(false)` / `?res=fixed` で無効
 - スコープ: カメラ FOV を倍率に応じて絞る＋円形マスクのオーバーレイ（レティクルは CSS/SVG ではなく専用の全画面クアッドで描き、mil 目盛りを FOV と正確に対応させる）。レンダーターゲット二重描画はしない
-- 他セルの出来事（遠征・駐屯地・感染）は一切描画しない（数値のみ）
+- 構造物（06、`render/tactical/structures.ts`）: 箱の InstancedMesh 2 つ（不透明・半透明）＋カーソル周りのグリッド線 1 ＋防衛担当の曳光線 1 の最大 4 ドローコール。木柵 = 高さの揃わない杭、土塁 = 幅広の二段の盛り土、鉄板壁 = 柱と板と錆の帯、コンクリート壁 = 厚い淡色の塊と笠。耐久 75 / 50 / 25% で暗くなり、傾き、杭が抜け、ひびが入る。設計図は半透明の箱＋進捗ぶんの実体＋足場の柱、堀は暗い面と土の縁と死体の山、破壊後は瓦礫。再構築は `gridRev`・損傷の段階・進捗が変わったときだけ（最短 0.2 秒間隔）。壁 587 タイル＋堀 207 タイルで 1.2 万箱ほど
+- 指揮層のカメラ（06）: `core/view.ts` の `commandView`（注視点・距離・向き）に従う俯瞰。`commandView.pick(clientX, clientY)` で画面の点を地面の点に変換する
+- 他セルの出来事（遠征・駐屯地・感染）は一切描画しない（数値のみ）。駐屯地セルに入ったときのプレハブだけは描く
 
 ## 9. UI 方針
 

@@ -248,7 +248,7 @@ export const BUILD = {
     tiers: [
       { ears: 40, cost: { wood: 20 } as Cost, garrison: 1, ammoCap: 60, defense: 12 },
       { ears: 150, cost: { metal: 20 } as Cost, garrison: 2, ammoCap: 200, defense: 30, tech: 'C3' },
-      { ears: 500, cost: { cement: 30 } as Cost, garrison: 4, ammoCap: 600, defense: 70, tech: 'C7' },
+      { ears: 500, cost: { cement: 30 } as Cost, garrison: 4, ammoCap: 600, defense: 70, tech: 'C5' },
     ],
     /** How far from the base (or another outpost) one can be founded, in cells. */
     reach: 12,

@@ -295,6 +295,35 @@ describe('construction', () => {
     expect(copy.build).toEqual(JSON.parse(JSON.stringify(state.build)));
   });
 
+  it('a watchtower is climbed by its ladder; zombies cannot follow and cannot get under it', () => {
+    const r = rig();
+    const { state, sim } = r;
+    const map = areaOf(state)!.map;
+    const laddersBefore = map.ladders.length;
+    const tower = buildNow(state, 'tower', HQX + 6, HQY + 4);
+    r.run(0.1);
+    const [cx, cz] = centreOf(tower);
+    const ground = map.height[Math.round(cz / 4) * map.n + Math.round(cx / 4)]!;
+    expect(map.ladders.length).toBe(laddersBefore + 1);
+    // Walk into the ladder on the south side and keep going.
+    state.player.hp = 100;
+    state.player.pos = [cx, ground, cz + 2.6];
+    state.player.yaw = 0;
+    for (let i = 0; i < 60 * 5; i++) sim.tick(state, DT, { ...idle, moveZ: 1 });
+    expect(state.player.pos[1]).toBeCloseTo(ground + 5, 1);
+    expect(Math.abs(state.player.pos[0] - cx)).toBeLessThan(2);
+    expect(Math.abs(state.player.pos[2] - cz)).toBeLessThan(2);
+    // A walker that has seen the player comes to the foot of the tower and stays outside its footprint.
+    const zb = addZombie(state, areaOf(state)!, 'walker', cx + 14, cz, 0)!;
+    zb.state = 'chase';
+    zb.target = 'player';
+    r.run(40);
+    expect(Math.max(Math.abs(zb.pos[0] - cx), Math.abs(zb.pos[2] - cz))).toBeGreaterThan(2);
+    expect(Math.hypot(zb.pos[0] - cx, zb.pos[2] - cz)).toBeLessThan(6);
+    expect(zb.pos[1]).toBeLessThan(ground + 1);
+    expect(state.player.hp).toBe(100);
+  });
+
   it('placement respects what is already on the ground outside the levelled site', () => {
     const r = rig();
     const map = areaOf(r.state)!.map;
@@ -622,6 +651,5 @@ describe('outposts and sea crossings', () => {
     for (const far of ['札幌', '高松空港', '博多', '那覇空港']) expect(findRoute(grid, tokyo, cellOf(far)), far).not.toBeNull();
     expect(comp[cellOf('札幌')]).toBe(comp[tokyo]);
     expect(isBuilt).toBeTypeOf('function');
-    expect(addZombie).toBeTypeOf('function');
   });
 });

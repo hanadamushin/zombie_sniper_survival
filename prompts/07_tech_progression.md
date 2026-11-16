@@ -70,3 +70,11 @@
 - 遠征の武器は `EXPEDITION_WEAPONS[].tech` に研究ノード id を入れると解禁制になる（今は全部選べる）。医療の仕事も最初から割り振れる
 - 備蓄の増減は `stock.ts` の `moveStock` / `moveEars` を通す（交易の収入など）
 - 基盤テスト「ハンドラのないコマンドは警告」は `startResearch` を使っている。実装したら別の未実装コマンドに替える
+
+### 06 の結果を受けて
+
+- **解禁の入口は 1 か所**: `sim/build/structures.ts` の `techUnlocked(state, tech)` / `isUnlocked(defId, state)`。建物（`BUILDINGS[].tech`）、防衛担当の武器（`DEFENDER_WEAPONS[].tech`）、駐屯地の等級（`BUILD.outpost.tiers[].tech`）がここを通る。今は `BUILD.unlockAllUntilTech = true` で全解禁なので、技術を実装したら **false にする**（`flags.unlockAll` はデバッグ用に残る）。false にすると初期に建てられるのは木柵・木の門・テントだけになる。e2e とテストは全解禁を前提にしているものがあるので、`state.flags.unlockAll = true` を立てるか技術を付与すること
+- 数値ボーナスは `hasTech(state, id)`（実際に `research.done` にあるかだけを見る）で既に読んでいる: F4a（堀の工数 ×0.6）、F4b（修理速度 ×1.5）、F5 / F8（建築範囲）、F6b（壁の自己修復 1%/時）、F9（防御構造の耐久 ×1.5）、A2（食料容量 ×1.5）、C3（補給 ×1.5）、S7b（補給遅延なし）、C6b（大群の 24 時間前警告）。`research.done` に id を入れれば効く
+- **未実装で 07 に残したもの**: F4a の「堀沿いの速度 −20%」、F4b の「壁の二重化ボーナス」、F7a 自動銃座（建物 `turret` は定義と見た目だけ）、F7b 民兵制、A4a の家畜の誘引、市場・無線塔・発電機・発電所・学校・政府庁舎の効果（建物は建つ）、駐屯地の「調達範囲 +1」「周辺セルの監視」「等級 3 の農地・交易所」、車両によるファストトラベル短縮
+- 勝利条件の「駐屯地 6 か所・3 地方以上」は `state.world.outposts[].cell` と `grid.cells[cell].region` で数えられる。海路（`grid.seaLinks`）でどの開始地点からも 3 地方へ届くことはテスト済み
+- 建物の効果を足すときは `data/buildings.ts` の定義にフィールドを足し、`structures.ts` の「Effects on the colony」節で読む（収容・農地・係数・士気・食事はこの形）
