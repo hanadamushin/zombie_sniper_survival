@@ -263,10 +263,9 @@ describe('modifiers', () => {
     expect(getMod(state, 'job.research', 1)).toBe(1);
     buildNow(state, 'powerPlant', 100, 100, 0);
     expect(getMod(state, 'job.research', 1)).toBeCloseTo(1.2, 9);
-    expect(hasFlag(state, 'power')).toBe(true);
     state.build.structures.pop();
     state.build.gridRev++;
-    expect(hasFlag(state, 'power')).toBe(false);
+    expect(getMod(state, 'job.research', 1)).toBe(1);
 
     // Difficulty is part of the table.
     expect(getMod(state, 'weapon.sway', 1)).toBe(1);
@@ -623,13 +622,14 @@ describe('tech behaviour', () => {
     expect(r.state.research.locked).toContain('F7a');
   });
 
-  it('turrets fire only with the technology and power', () => {
+  it('turrets fire only with the technology and fuel', () => {
     const r = rig();
     buildNow(r.state, 'turret', BUILD.start.hq[0] - 5, BUILD.start.hq[1] - 5, 0);
+    r.state.colony.stock.fuel = 0;
     expect(activeTurrets(r.state).length).toBe(0);
     grantTech(r.state, ['F7a']);
-    expect(activeTurrets(r.state).length).toBe(0); // no power
-    buildNow(r.state, 'generator', BUILD.start.hq[0] - 7, BUILD.start.hq[1] - 5, 0);
+    expect(activeTurrets(r.state).length).toBe(0); // no fuel
+    r.state.colony.stock.fuel = 5;
     expect(activeTurrets(r.state).length).toBe(1);
   });
 

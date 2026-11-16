@@ -97,9 +97,8 @@ export const FLAGS = {
   vaccine: 'bites no longer infect; held cells are cleared slowly — research/effects.ts',
   noStarve: 'missing meals no longer cost health — morale.ts',
   'garrison.fed': 'garrisons live off the land: outposts send food home — research/effects.ts',
-  power: 'a generator or power plant runs — modifiers.ts (buildings with needsPower)',
   education: 'the school teaches: knowledge +1 every 30 days — research/effects.ts',
-  turret: 'automatic turrets fire — defense.ts',
+  turret: 'automatic turrets fire while there is fuel and ammunition — defense.ts',
 } as const;
 export type FlagId = keyof typeof FLAGS;
 

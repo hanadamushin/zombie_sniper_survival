@@ -114,7 +114,7 @@ export function BuildTab({ state, actions, tool, setTool }: Props) {
               onClick={() => setTool({ ...tool, def: d.id === tool.def ? null : d.id, remove: false, selected: null })}
             >
               <b>{tk(`bld.${d.id}`)}</b>
-              <small>{open ? costText(d.cost) : t('build.locked', { tech: d.tech ?? '' })}</small>
+              <small>{open ? costText(d.cost) : t('build.locked', { tech: d.techAny ? d.techAny.map((x) => tk(`tech.${x}`)).join('／') : d.tech ? tk(`tech.${d.tech}`) : '' })}</small>
               <small>
                 {t('build.work', { n: d.work })}
                 {d.hp > 0 ? `・${t('build.hp', { n: d.hp })}` : ''}

@@ -45,9 +45,9 @@ export function ammoPerShot(state: GameState, w: Pick<DefenderWeapon, 'ammo'>): 
   return getMod(state, 'ammo.issue', w.ammo);
 }
 
-/** Automatic turrets that fire (F7a): they need power and ammunition, not people. */
+/** Automatic turrets that fire (F7a): they need fuel for their generator and ammunition, not people. */
 export function activeTurrets(state: GameState): Structure[] {
-  if (!hasFlag(state, 'turret') || !hasFlag(state, 'power')) return [];
+  if (!hasFlag(state, 'turret') || state.colony.stock.fuel <= 0) return [];
   return state.build.structures.filter((s) => isBuilt(s) && s.def === 'turret');
 }
 export const TURRET_WEAPON: DefenderWeapon = { id: 'turret', ...RESEARCH.turret };
@@ -173,7 +173,7 @@ export function updateDefenders(state: GameState, area: TacticalArea, ctx: SimCo
     rt.cd.set(s.id, shoot(s.id, s.pos[0], y, s.pos[1], w, range, hitChance, sniper ? RESEARCH.snipers.headshot : w.headshot, w.interval / defenderSkill(state, d.power)));
   }
 
-  // Automatic turrets (F7a): no crew, but they eat ammunition and stop without power.
+  // Automatic turrets (F7a): no crew, but they eat ammunition and stop without fuel.
   for (const tur of activeTurrets(state)) {
     const key = -tur.id;
     const cd = (rt.cd.get(key) ?? rand(rng)) - dt;

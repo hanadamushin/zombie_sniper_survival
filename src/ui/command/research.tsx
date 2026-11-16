@@ -15,9 +15,9 @@ import { num, tk } from './format.ts';
 // --- layout: ten columns (2 + 3 + 3 + 2 per era), two lanes per category (branch pairs sit one above the other) ---
 const COL_W = 124;
 const NODE_W = 112;
-const NODE_H = 30;
-const LANE_H = 36;
-const ROW_H = LANE_H * 2 + 14;
+const NODE_H = 24;
+const LANE_H = 28;
+const ROW_H = LANE_H * 2 + 8;
 const HEAD_H = 22;
 const LEFT = 26;
 const ERA_COLS = [0, 2, 5, 8, 10] as const;
@@ -35,7 +35,7 @@ export const TREE_LAYOUT = POS;
 function box(t: TechDef): { x: number; y: number } {
   const [col, lane] = POS[t.id] ?? [0, 0];
   const row = TECH_CATEGORIES.indexOf(t.cat);
-  return { x: LEFT + col * COL_W + (COL_W - NODE_W) / 2, y: HEAD_H + row * ROW_H + 7 + lane * LANE_H };
+  return { x: LEFT + col * COL_W + (COL_W - NODE_W) / 2, y: HEAD_H + row * ROW_H + 6 + lane * LANE_H };
 }
 const WIDTH = LEFT + 10 * COL_W;
 const HEIGHT = HEAD_H + TECH_CATEGORIES.length * ROW_H;

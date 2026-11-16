@@ -6,8 +6,7 @@
 //   techAvailable(state, 'F3')         ... or everything is unlocked for debugging (flags.unlockAll)
 //
 // Sources, compiled into one table: the researched nodes (data/techs.ts), the buildings that stand
-// (data/buildings.ts `mods` / `flags`; those with `needsPower` only count while something supplies
-// the `power` flag), and the difficulty. Survivor traits stay per person (data/traits.ts) and are
+// (data/buildings.ts `mods` / `flags`), and the difficulty. Survivor traits stay per person (data/traits.ts) and are
 // multiplied in where a single survivor's output is computed.
 //
 // The table is cached per GameState and rebuilt when the researched list, the structures
@@ -47,17 +46,14 @@ function compile(state: GameState): ModTable {
   const table: ModTable = { add: {}, mul: {}, flags: new Set() };
   for (const e of DIFFICULTY_MODS[state.difficulty] ?? []) apply(table, e);
   for (const id of state.research.done) for (const e of TECHS[id]?.effects ?? []) apply(table, e);
-  // Buildings: each kind counts once. Power sources first, then whatever needs power.
+  // Buildings: each kind counts once, however many stand.
   const standing = new Set<string>();
   for (const st of state.build.structures) if (st.progress >= 1 && st.ruinUntil === undefined) standing.add(st.def);
-  for (const pass of [0, 1]) {
-    for (const id of standing) {
-      const def = BUILDINGS[id];
-      if (!def || (def.needsPower === true) !== (pass === 1)) continue;
-      if (def.needsPower && !table.flags.has('power')) continue;
-      for (const f of def.flags ?? []) table.flags.add(f);
-      for (const m of def.mods ?? []) apply(table, { kind: 'modifier', ...m });
-    }
+  for (const id of standing) {
+    const def = BUILDINGS[id];
+    if (!def) continue;
+    for (const f of def.flags ?? []) table.flags.add(f);
+    for (const m of def.mods ?? []) apply(table, { kind: 'modifier', ...m });
   }
   return table;
 }

@@ -19,6 +19,10 @@ async function startNewGame(page: Page): Promise<void> {
   await page.getByTestId('intro-skip').click();
   await page.getByTestId('start-0').click();
   await page.waitForFunction(() => window.__game?.map != null);
+  // These scenarios are about building and defence; what research unlocks is e2e/research.spec.ts.
+  await page.evaluate(() => {
+    window.__game!.state!.flags.unlockAll = true;
+  });
 }
 
 /** Screen position of the middle of a tile under the command camera. */

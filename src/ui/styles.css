@@ -335,7 +335,11 @@ button.primary small { color: var(--muted); font-size: 12px; }
 .tech-alloc label { display: flex; flex-direction: column; min-width: 0; }
 .tech-alloc input { width: 100%; margin: 0; }
 .tech-alloc small { color: var(--muted); font-size: 11px; min-height: 1.3em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tech-scroll { overflow-x: auto; overflow-y: hidden; max-width: 100%; border: 1px solid var(--border); border-radius: 4px; flex: 0 0 auto; }
+.command-panel[data-tab="research"] { max-height: calc(100vh - 56px); }
+/* The tree is wide: keep the grid track of the layer from growing to its content (the tree scrolls in its own box). */
+.mode-layer.command { grid-template-columns: minmax(0, 1fr); }
+.research, .research > * { min-width: 0; }
+.tech-scroll { overflow: auto; max-width: 100%; border: 1px solid var(--border); border-radius: 4px; flex: 0 0 auto; }
 .tech-tree { position: relative; }
 .tech-lines { position: absolute; left: 0; top: 0; pointer-events: none; }
 .tech-lines line { stroke: #6b7686; stroke-width: 1.5; }
@@ -354,8 +358,8 @@ button.primary small { color: var(--muted); font-size: 12px; }
 .tech-node[data-status="done"] .bar { background: transparent; }
 .tech-node[data-status="active"] { border-color: #7fc7ff; }
 .tech-node[data-status="available"] { border-color: #9aa7b8; background: #263142; }
-.tech-node[data-status="unavailable"] { opacity: 0.55; }
-.tech-node[data-status="locked"] { opacity: 0.45; border-style: dashed; }
+.tech-node[data-status="unavailable"] { color: #6f7b8a; background: #141a23; }
+.tech-node[data-status="locked"] { color: #5a6472; background: #11161d; border-style: dashed; }
 .tech-node[data-status="locked"] .label { text-decoration: line-through; }
 .tech-node.selected { outline: 2px solid #fff; outline-offset: 1px; }
 .tech-detail h3, .branch-dialog h3 { margin: 0 0 4px; }
@@ -364,6 +368,8 @@ button.primary small { color: var(--muted); font-size: 12px; }
 .branch-dialog { border: 1px solid #ff9a6a; border-radius: 4px; padding: 8px; }
 .branch-dialog .sides { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
 .branch-dialog .side { border: 1px solid var(--border); border-radius: 4px; padding: 6px; }
+.branch-dialog .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.branch-dialog .actions button, .tech-detail button { width: auto; flex: 0 0 auto; padding: 4px 14px; font-size: 13px; }
 .branch-dialog .side.chosen { border-color: var(--accent); }
 .branch-dialog .side.lost b { text-decoration: line-through; color: var(--muted); }
 .tech-victory ul, .stat-list { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 2px 14px; }

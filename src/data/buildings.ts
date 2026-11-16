@@ -61,8 +61,7 @@ export interface BuildingDef {
   // --- global effects while at least one stands (07; compiled by sim/research/modifiers.ts) ---
   mods?: readonly { key: ModKey; op: 'add' | 'mul'; value: number }[];
   flags?: readonly FlagId[];
-  /** Its mods / flags (and, for a turret, its fire) only count while a generator or power plant stands. */
-  needsPower?: boolean;
+
 }
 
 const wall = (id: string, hp: number, cost: Cost, work: number, era: 0 | 1 | 2 | 3, tech: string | undefined, height: number, thick: number, look: BuildingDef['look']): BuildingDef =>
@@ -97,7 +96,7 @@ const DEFS: BuildingDef[] = [
   { id: 'drawbridge', kind: 'bridge', category: 'defense', size: [1, 1], hp: 200, cost: { wood: 10, metal: 2 }, work: 50, era: 1, tech: 'F4a', height: 0.3, look: 'wood' },
   { id: 'tower', kind: 'tower', category: 'defense', size: [1, 1], hp: 400, cost: { wood: 20, metal: 4 }, work: 60, era: 0, tech: 'F2', height: 5, look: 'wood' },
   { id: 'barbedWire', kind: 'wire', category: 'defense', size: [1, 1], hp: 80, cost: { metal: 2 }, work: 4, era: 1, tech: 'F4b', height: 1, look: 'wire' },
-  building('turret', 'defense', [1, 1], 300, { metal: 12, parts: 6 }, 80, 2, 'F7a', 2.2, 'steel', { needsPower: true }),
+  building('turret', 'defense', [1, 1], 300, { metal: 12, parts: 6 }, 80, 2, 'F7a', 2.2, 'steel', { fuelPerDay: 0.5 }), // its own little generator
 
   // --- §6.2 functional buildings ---
   building('hq', 'civic', [3, 3], 2000, {}, 0, 0, undefined, 4.2, 'wood', { unique: true, fixed: true, beds: 4 }),
@@ -118,10 +117,10 @@ const DEFS: BuildingDef[] = [
   building('market', 'civic', [3, 2], 300, { wood: 30 }, 70, 1, 'C4a', 2.8, 'cloth', { mods: [{ key: 'food.priceMax', op: 'mul', value: 0.8 }] }),
   building('barracks', 'civic', [3, 2], 500, { wood: 24, metal: 10 }, 90, 1, 'C4b', 3.2, 'brick', { job: { defense: 1.25 }, beds: 6 }),
   building('radio', 'civic', [1, 1], 250, { metal: 20, parts: 12 }, 120, 2, 'C6a', 14, 'steel'),
-  building('generator', 'work', [1, 1], 200, { metal: 12, parts: 8 }, 60, 1, 'S5b', 1.6, 'steel', { flags: ['power'], fuelPerDay: 0.3 }),
+  building('generator', 'work', [1, 1], 200, { metal: 12, parts: 8 }, 60, 1, 'S5b', 1.6, 'steel', { fuelPerDay: 0.3, mods: [{ key: 'job.crafting', op: 'mul', value: 1.1 }] }),
   building('powerPlant', 'work', [3, 3], 900, { cement: 40, metal: 40, parts: 20 }, 300, 2, 'S6b', 6, 'concrete',
     // Machines in the workshop and the laboratory, floodlights on the walls.
-    { flags: ['power'], fuelPerDay: 1, mods: [{ key: 'job.crafting', op: 'mul', value: 1.2 }, { key: 'job.research', op: 'mul', value: 1.2 }, { key: 'defender.hit', op: 'add', value: 0.08 }] }),
+    { fuelPerDay: 1, mods: [{ key: 'job.crafting', op: 'mul', value: 1.2 }, { key: 'job.research', op: 'mul', value: 1.2 }, { key: 'defender.hit', op: 'add', value: 0.08 }] }),
   building('tavern', 'civic', [2, 2], 300, { wood: 24 }, 60, 2, 'A6b', 3.0, 'wood', { morale: 6 }),
   building('school', 'civic', [3, 2], 600, { cement: 20, wood: 20 }, 160, 3, 'S8', 3.6, 'brick', { mods: [{ key: 'job.research', op: 'mul', value: 1.2 }] }),
   building('monument', 'civic', [1, 1], 500, { cement: 20, metal: 5 }, 100, 2, 'C5', 5, 'concrete', { morale: 3 }),
