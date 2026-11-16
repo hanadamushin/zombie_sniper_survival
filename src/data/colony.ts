@@ -248,10 +248,10 @@ export interface ExpeditionWeapon {
 }
 export const EXPEDITION_WEAPONS: readonly ExpeditionWeapon[] = [
   { id: 'unarmed', bonus: 0, ammo: 0, kills: 0 },
-  { id: 'melee', bonus: 0.08, ammo: 0, kills: 2 },
-  { id: 'bow', bonus: 0.15, ammo: 0, kills: 4 },
-  { id: 'pistol', bonus: 0.22, ammo: 6, kills: 5 },
-  { id: 'rifleArmor', bonus: 0.3, ammo: 12, kills: 10 },
+  { id: 'melee', bonus: 0.08, ammo: 0, kills: 2, tech: 'W1' },
+  { id: 'bow', bonus: 0.15, ammo: 0, kills: 4, tech: 'W3' },
+  { id: 'pistol', bonus: 0.22, ammo: 6, kills: 5, tech: 'W4' },
+  { id: 'rifleArmor', bonus: 0.3, ammo: 12, kills: 10, tech: 'W4' },
 ];
 export function expeditionWeapon(id: string): ExpeditionWeapon | undefined {
   return EXPEDITION_WEAPONS.find((w) => w.id === id);

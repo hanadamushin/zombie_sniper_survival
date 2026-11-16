@@ -3,6 +3,7 @@
 
 import type { CellId, GameState, StaticGrid } from '../../core/types.ts';
 import { BALANCE } from '../../data/balance.ts';
+import { getMod } from '../research/modifiers.ts';
 import { cellsWithin } from './grid.ts';
 
 const T = BALANCE.world.travel;
@@ -27,6 +28,11 @@ export function legMinutes(grid: StaticGrid, from: CellId, to: CellId, fast = fa
   const diagonal = from % w !== to % w && Math.floor(from / w) !== Math.floor(to / w);
   const mountain = grid.cells[to]?.land === 'mountain';
   return T.minutesPerCell * (diagonal ? T.diagonalFactor : 1) * (mountain ? T.mountainFactor : 1);
+}
+
+/** Factor on travel times from technology (vehicles, S7b). Routes carry the unscaled minutes; multiply when showing or spending them. */
+export function travelFactor(state: GameState, fast = false): number {
+  return getMod(state, fast ? 'travel.fast' : 'travel.time', 1);
 }
 
 /** Cheapest route over land and the fixed sea crossings, or null when the destination cannot be reached. `fast`: between outposts (06). */
@@ -140,7 +146,7 @@ export function advanceTravel(state: GameState, grid: StaticGrid): { entered: Ce
   const entered: CellId[] = [];
   if (!travel) return { entered, arrived: false };
   const last = travel.path.length - 1;
-  let budget = 1; // minutes
+  let budget = 1 / travelFactor(state, travel.fast === true); // minutes of unscaled route time covered in one game minute
   while (budget > 0 && travel.progress < last) {
     const leg = Math.floor(travel.progress);
     const minutes = legMinutes(grid, travel.path[leg]!, travel.path[leg + 1]!, travel.fast === true);
@@ -171,5 +177,5 @@ export function travelMinutesLeft(state: GameState, grid: StaticGrid): number {
     const frac = leg === Math.floor(travel.progress) ? 1 - (travel.progress - leg) : 1;
     total += frac * legMinutes(grid, travel.path[leg]!, travel.path[leg + 1]!, travel.fast === true);
   }
-  return total;
+  return total * travelFactor(state, travel.fast === true);
 }

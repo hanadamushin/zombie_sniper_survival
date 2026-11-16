@@ -22,6 +22,11 @@ import { outpostAt } from '../../sim/world/outposts.ts';
 import { logText } from '../command/format.ts';
 import { interactionAt, nearestHideout } from '../../sim/colony/encounters.ts';
 import { playerAtHome } from '../../sim/colony/morale.ts';
+import { hasFlag } from '../../sim/research/modifiers.ts';
+import { endingStats } from '../../sim/research/victory.ts';
+import { observe } from '../../sim/tactical/observe.ts';
+import { ZOMBIES } from '../../data/zombies.ts';
+import { tk } from '../command/format.ts';
 
 interface ModeProps {
   state: GameState;
@@ -75,6 +80,10 @@ export function TacticalLayer({ state, grid }: ModeProps) {
   const post = playerAtHome(state) || state.world.travel ? undefined : outpostAt(state, p.cell);
   const supply = playerAtHome(state) ? state.colony.stock.ammo : (post?.ammo ?? 0);
   const canResupply = !dead && supply >= 1 && (p.inv.ammo ?? 0) < BALANCE.player.maxAmmo;
+  // Rangefinder (W6a) and observation records (S2): what the reticle rests on.
+  const rangefinder = scoped && !dead && hasFlag(state, 'scope.rangefinder');
+  const records = scoped && !dead && hasFlag(state, 'intel.zombies');
+  const seen = rangefinder || records ? observe(state) : null;
   const busy = w.reloadT > 0 ? t('hud.reloading') : w.boltT > 0 ? t('hud.bolt') : w.mag === 0 ? t((p.inv.ammo ?? 0) > 0 ? 'hud.empty' : 'hud.noAmmo') : '';
   return (
     <div class={`mode-layer tactical${scoped ? ' scoped' : ''}`} data-testid="mode-tactical">
@@ -103,6 +112,13 @@ export function TacticalLayer({ state, grid }: ModeProps) {
         <div class="ear-hint" data-testid="hud-someone">
           <span class="arrow" style={{ transform: `rotate(${(-someone.turn).toFixed(2)}rad)` }}>▲</span>
           <span>{t('hud.someone', { m: Math.round(someone.dist) })}</span>
+        </div>
+      )}
+      {seen && (rangefinder ? seen.range !== null : seen.zombie !== null) && (
+        <div class="scope-info" data-testid="hud-scope-info" data-range={seen.range !== null ? Math.round(seen.range) : ''}>
+          {rangefinder && seen.range !== null && <span>{t('hud.range', { m: Math.round(seen.range) })}</span>}
+          {rangefinder && seen.holdMil !== null && <span>{t('hud.holdover', { mil: (seen.holdMil >= 0 ? '+' : '') + seen.holdMil.toFixed(1) })}</span>}
+          {records && seen.zombie && <span data-testid="hud-target">{t('hud.target', { kind: tk(`zkind.${seen.zombie.kind}`), hp: Math.max(0, Math.round(seen.zombie.hp)), max: ZOMBIES[seen.zombie.kind].hp })}</span>}
         </div>
       )}
       <Toast state={state} grid={grid} />
@@ -172,7 +188,42 @@ export function DefeatOverlay({ state, actions }: ModeProps) {
         <h2>{t('hud.defeat')}</h2>
         <p data-testid="defeat-lead">{t(state.build.structures.some((b) => b.def === 'hq' && b.ruinUntil !== undefined) ? 'hud.defeatHq' : 'hud.defeatLead')}</p>
         <p class="status">{t('hud.defeatDays', { day: state.time.day })}</p>
+        <StatList state={state} defeat />
         <button class="primary" onClick={() => actions.quitToTitle()}>{t('menu.toTitle')}</button>
+      </div>
+    </div>
+  );
+}
+
+/** The record of a game: shown on the ending and on the defeat screen. */
+function StatList({ state, defeat }: { state: GameState; defeat?: boolean }) {
+  const s = endingStats(state);
+  return (
+    <ul class="stat-list" data-testid="end-stats">
+      <li>{defeat ? t('defeat.stats.days', { n: s.days }) : t('ending.days', { n: s.days, day: s.day })}</li>
+      <li>{t('ending.kills', { n: s.kills })}</li>
+      <li>{t('ending.headshots', { pct: Math.round(s.headshotRate * 100), shots: s.shots })}</li>
+      <li>{t('ending.survivors', { n: s.survivors })}</li>
+      <li>{t('ending.lost', { n: s.lost })}</li>
+      <li>{t('ending.outposts', { n: s.outposts })}</li>
+      <li>{t('ending.techs', { n: s.techs })}</li>
+    </ul>
+  );
+}
+
+/** The nation has been declared (07). The goal technology names the ending; the game goes on afterwards. */
+export function EndingOverlay({ state, actions }: ModeProps) {
+  const v = state.research.victory!;
+  return (
+    <div class="mode-layer menu ending" data-testid="ending" data-tech={v.tech}>
+      <div class="panel menu-panel">
+        <h2>{t('ending.title')}</h2>
+        <p class="status">{tk(`tech.${v.tech}`)}</p>
+        <p data-testid="ending-text">{tk(`ending.${v.tech}`)}</p>
+        <h3>{t('ending.stats')}</h3>
+        <StatList state={state} />
+        <button class="primary" data-testid="ending-continue" onClick={() => actions.dispatch({ type: 'dismissEnding' })}>{t('ending.continue')}</button>
+        <button onClick={() => actions.quitToTitle()}>{t('menu.toTitle')}</button>
       </div>
     </div>
   );

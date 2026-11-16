@@ -6,7 +6,10 @@ import { gauss, stream } from '../../core/rng.ts';
 import type { GameState, PlayerState } from '../../core/types.ts';
 import { BALANCE } from '../../data/balance.ts';
 import { RENDER } from '../../data/render.ts';
-import { WEAPON_MODS, WEAPONS, type WeaponDef } from '../../data/weapons.ts';
+import { RESEARCH } from '../../data/techs.ts';
+import { WEAPONS, type WeaponDef } from '../../data/weapons.ts';
+import { daylight } from '../../core/time.ts';
+import { getMod, hasFlag, modTable, type ModTable } from '../research/modifiers.ts';
 import type { SimContext } from '../system.ts';
 import { spawnBullet, zeroAngle } from './ballistics.ts';
 import { viewDir } from './player.ts';
@@ -16,26 +19,37 @@ const MIL = 0.001;
 const DEG = Math.PI / 180;
 const TAU = Math.PI * 2;
 
-const variants = new Map<string, WeaponDef>();
+const variants = new WeakMap<ModTable, Map<string, WeaponDef>>();
 
-/** Definition of a weapon with the patches of the researched technologies applied (cached). */
-export function weaponDef(id: string, techs: readonly string[] = []): WeaponDef {
-  const base = WEAPONS[id] ?? WEAPONS.rifle!;
-  const mods = WEAPON_MODS.filter((m) => (m.weapon === undefined || m.weapon === base.id) && techs.includes(m.tech));
-  if (mods.length === 0) return base;
-  const key = `${base.id}|${mods.map((m) => m.tech).join(',')}`;
-  let def = variants.get(key);
+/**
+ * The weapon the player is holding right now: the base definition with the `weapon.*` modifiers
+ * of the researched technologies applied. Cached per modifier table, so it costs a lookup.
+ */
+export function weaponOf(state: GameState): WeaponDef {
+  const base = WEAPONS[state.player.weapon.id] ?? WEAPONS.rifle!;
+  const table = modTable(state);
+  let byId = variants.get(table);
+  if (!byId) variants.set(table, (byId = new Map()));
+  let def = byId.get(base.id);
   if (!def) {
-    def = { ...base };
-    for (const m of mods) Object.assign(def, m.patch);
-    variants.set(key, def);
+    def = {
+      ...base,
+      damageMul: getMod(state, 'weapon.damage', base.damageMul),
+      torsoMul: getMod(state, 'weapon.torso', base.torsoMul),
+      pierce: Math.max(1, Math.round(getMod(state, 'weapon.pierce', base.pierce))),
+      muzzleVelocity: getMod(state, 'weapon.velocity', base.muzzleVelocity),
+      dragPerKm: getMod(state, 'weapon.drag', base.dragPerKm),
+      boltTime: getMod(state, 'weapon.bolt', base.boltTime),
+      magSize: Math.max(1, Math.round(getMod(state, 'weapon.mag', base.magSize))),
+      zoomMax: getMod(state, 'weapon.zoomMax', base.zoomMax),
+      maxRange: getMod(state, 'weapon.range', base.maxRange),
+      recoilMil: getMod(state, 'weapon.recoil', base.recoilMil),
+      recoilSideMil: getMod(state, 'weapon.recoil', base.recoilSideMil),
+      ammoPerShot: Math.max(1, Math.round(getMod(state, 'weapon.ammoPerShot', base.ammoPerShot))),
+    };
+    byId.set(base.id, def);
   }
   return def;
-}
-
-/** The weapon the player is holding right now. */
-export function weaponOf(state: GameState): WeaponDef {
-  return weaponDef(state.player.weapon.id, state.research.done);
 }
 
 /** Vertical field of view (degrees) at a magnification: tan(fov / 2) = tan(reference / 2) / zoom. */
@@ -71,7 +85,10 @@ export function swayTarget(state: GameState): number {
   const p = state.player;
   if (state.flags.noSway === true) return 0; // firing-range option: check the ballistics without the wobble
   const fatigue = 1 - p.stamina / BALANCE.player.stamina;
-  let sway = C.swayBase[p.stance] * (1 + C.swayMove * p.aim.moved) * (1 + C.swayFatigue * fatigue) * C.swayDifficulty[state.difficulty];
+  // Difficulty and calibre come in through the `weapon.sway` modifier.
+  let sway = getMod(state, 'weapon.sway', C.swayBase[p.stance] * (1 + C.swayMove * p.aim.moved) * (1 + C.swayFatigue * fatigue));
+  // In the dark the target swims — unless the scope sees in the dark (W7).
+  if (!state.flags.range && daylight(state.time.minute / 60) < RESEARCH.nightBelow && !hasFlag(state, 'scope.nightVision')) sway *= RESEARCH.nightSway;
   if (p.aim.holding) sway *= C.breathFactor;
   else if (p.aim.breathLock > 0) sway *= C.breathPenalty;
   if (p.weapon.boltT > 0) sway *= C.swayBolt;
@@ -119,9 +136,10 @@ export function updateWeapon(state: GameState, ctx: SimContext): void {
   if (w.reloadT > 0) {
     w.reloadT = Math.max(0, w.reloadT - dt);
     if (w.reloadT === 0) {
-      const n = Math.min(def.magSize - w.mag, p.inv.ammo ?? 0);
+      // A large-calibre cartridge is worth several ordinary rounds of the stock.
+      const n = Math.min(def.magSize - w.mag, Math.floor((p.inv.ammo ?? 0) / def.ammoPerShot));
       w.mag += n;
-      p.inv.ammo = (p.inv.ammo ?? 0) - n;
+      p.inv.ammo = (p.inv.ammo ?? 0) - n * def.ammoPerShot;
       ctx.emit({ type: 'reloadDone', mag: w.mag });
     }
   }
@@ -175,14 +193,14 @@ export function updateWeapon(state: GameState, ctx: SimContext): void {
     w.reloadT = def.reloadTime;
     ctx.emit({ type: 'reloadStarted', seconds: def.reloadTime });
   };
-  if (alive && input.reload && w.reloadT <= 0 && w.mag < def.magSize && ammo > 0) startReload();
+  if (alive && input.reload && w.reloadT <= 0 && w.mag < def.magSize && ammo >= def.ammoPerShot) startReload();
 
   // --- trigger (fires on the press) ---
   const pressed = alive && input.fire && !aim.trigger;
   aim.trigger = input.fire;
   if (!pressed || w.boltT > 0 || w.reloadT > 0 || !state.tactical) return;
   if (w.mag <= 0) {
-    if (ammo > 0) startReload();
+    if (ammo >= def.ammoPerShot) startReload();
     else ctx.emit({ type: 'dryFire' });
     return;
   }

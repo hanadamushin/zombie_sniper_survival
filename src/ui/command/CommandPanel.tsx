@@ -7,17 +7,20 @@ import { RESOURCE_IDS, type CellId, type GameState, type JobId, type StaticGrid,
 import { toAbsMinutes } from '../../core/time.ts';
 import { BALANCE } from '../../data/balance.ts';
 import { COLONY, EXPEDITION_WEAPONS, expeditionWeapon } from '../../data/colony.ts';
-import { craftingByHand, foodDays, foodNeedPerDay, villageNear, villagePrice } from '../../sim/colony/economy.ts';
-import { expeditionTargets, returnChance, weaponAvailable } from '../../sim/colony/expeditions.ts';
-import { farmPlots, housingBeds, outputPerHour, seasonFactor } from '../../sim/colony/jobs.ts';
+import { craftingByHand, foodDays, foodNeedPerDay, villageNear, villagePrice, wageDue } from '../../sim/colony/economy.ts';
+import { expeditionAmmo, expeditionBonus, expeditionDanger, expeditionRadius, expeditionTargets, returnChance, weaponAvailable } from '../../sim/colony/expeditions.ts';
+import { farmPlots, housingBeds, jobMul, outputPerHour, seasonOf } from '../../sim/colony/jobs.ts';
+import { JOB_TECH } from '../../sim/colony/index.ts';
+import { techUnlocked } from '../../sim/build/structures.ts';
+import { hasFlag } from '../../sim/research/modifiers.ts';
 import { playerAtHome } from '../../sim/colony/morale.ts';
-import { isFit, isHome, signingFee } from '../../sim/colony/survivors.ts';
-import { dangerOf } from '../../sim/world/derive.ts';
+import { isFit, isHome, populationCap, signingFee } from '../../sim/colony/survivors.ts';
 import { t, type TextKey } from '../i18n/ja.ts';
 import type { UiActions } from '../store.ts';
 import { cellName, formatDuration } from '../world/info.ts';
 import { BuildTab, type BuildTool } from './build.tsx';
 import { logText, logTime, num, statusText, tk } from './format.ts';
+import { ResearchTab } from './research.tsx';
 
 interface Props {
   state: GameState;
@@ -29,8 +32,8 @@ interface PanelProps extends Props {
   setTool(next: BuildTool): void;
 }
 
-type Tab = 'people' | 'build' | 'hire' | 'economy' | 'expedition' | 'log';
-const TABS: readonly Tab[] = ['people', 'build', 'hire', 'economy', 'expedition', 'log'];
+type Tab = 'people' | 'build' | 'research' | 'hire' | 'economy' | 'expedition' | 'log';
+const TABS: readonly Tab[] = ['people', 'build', 'research', 'hire', 'economy', 'expedition', 'log'];
 const JOBS: readonly JobId[] = ['idle', 'farming', 'defense', 'scavenging', 'construction', 'research', 'crafting', 'medical'];
 
 function Stats({ s }: { s: Survivor }) {
@@ -42,6 +45,7 @@ function Trait({ s }: { s: Survivor }) {
 
 interface RowProps {
   s: Survivor;
+  state: GameState;
   status: string;
   /** Everything the row shows, as one string: the row is re-rendered only when this changes. */
   sig: string;
@@ -52,14 +56,14 @@ class SurvivorRow extends Component<RowProps> {
   override shouldComponentUpdate(next: RowProps): boolean {
     return next.sig !== this.props.sig;
   }
-  override render({ s, status, actions }: RowProps) {
+  override render({ s, state, status, actions }: RowProps) {
     return (
       <div class="row-card" data-testid="survivor-row" data-id={s.id} data-status={s.status}>
         <div class="who">
           <b>{s.name}</b> <Trait s={s} />
         </div>
         <Stats s={s} />
-        <span class="wage">{s.job === 'farming' ? t('cmd.wageFarmer') : t('cmd.wage', { n: s.wage })}</span>
+        <span class="wage">{s.job === 'farming' ? t('cmd.wageFarmer') : t('cmd.wage', { n: num(wageDue(state, s)) })}</span>
         <span class="morale" title={t('cmd.morale', { n: Math.round(s.morale) })} data-low={s.morale < COLONY.morale.desertBelow}>
           <span style={{ width: `${Math.round(s.morale)}%` }} />
           <em>{t('cmd.morale', { n: Math.round(s.morale) })}</em>
@@ -70,11 +74,14 @@ class SurvivorRow extends Component<RowProps> {
           value={s.job}
           onChange={(e) => actions.dispatch({ type: 'assignJob', survivor: s.id, job: (e.target as HTMLSelectElement).value as JobId })}
         >
-          {JOBS.map((j) => (
-            <option key={j} value={j}>
-              {tk(`job.${j}`)}{j !== 'idle' ? ` ${t('cmd.output', { n: num(outputPerHour({ ...s, status: 'ok' }, j)) })}` : ''}
-            </option>
-          ))}
+          {JOBS.map((j) => {
+            const open = techUnlocked(state, JOB_TECH[j]);
+            return (
+              <option key={j} value={j} disabled={!open}>
+                {tk(`job.${j}`)}{!open ? t('cmd.jobLocked') : j !== 'idle' ? ` ${t('cmd.output', { n: num(outputPerHour({ ...s, status: 'ok' }, j) * jobMul(state, j)) })}` : ''}
+              </option>
+            );
+          })}
         </select>
         <button class="chip" disabled={s.location.kind !== 'home'} onClick={() => actions.dispatch({ type: 'dismiss', survivor: s.id })}>{t('cmd.dismiss')}</button>
       </div>
@@ -89,7 +96,7 @@ function People({ state, actions }: Props) {
     <div class="rows">
       {list.map((s) => {
         const status = statusText(state, s);
-        return <SurvivorRow key={s.id} s={s} status={status} actions={actions} sig={`${s.job}|${Math.round(s.morale)}|${Math.round(s.hp / 5)}|${s.status}|${s.location.kind}|${status}`} />;
+        return <SurvivorRow key={s.id} s={s} state={state} status={status} actions={actions} sig={`${s.job}|${Math.round(s.morale)}|${Math.round(s.hp / 5)}|${s.status}|${s.location.kind}|${status}|${state.research.done.length}|${s.kno}`} />;
       })}
       {state.colony.memorial.length > 0 && (
         <p class="empty" title={state.colony.memorial.map((m) => `${m.name}（${m.day}日目・${tk(`cause.${m.cause}`)}）`).join('\n')}>
@@ -104,23 +111,29 @@ function Hire({ state, actions, grid }: Props) {
   const colony = state.colony;
   const carried = state.player.inv.ears ?? 0;
   const ears = colony.stock.ears + carried;
+  const cap = populationCap(state);
+  const full = colony.survivors.length >= cap;
+  const showStats = hasFlag(state, 'hire.stats') || state.flags.unlockAll === true; // recruiting (C2)
   return (
     <div class="rows">
-      <p class="note">{t('cmd.earsAvail', { n: num(ears), stock: num(colony.stock.ears), carried })}</p>
+      <p class="note">
+        {t('cmd.earsAvail', { n: num(ears), stock: num(colony.stock.ears), carried })}
+        {cap < 1000 ? `\u3000${t('cmd.popCap', { n: colony.survivors.length, cap })}` : ''}
+      </p>
       {colony.candidates.length === 0 && <p class="empty">{t('cmd.noCandidates')}</p>}
       {colony.candidates.map((s) => (
         <div class="row-card" key={s.id} data-testid="candidate-row">
           <div class="who">
             <b>{s.name}</b> <Trait s={s} />
           </div>
-          <Stats s={s} />
+          {showStats ? <Stats s={s} /> : <span class="stats" data-testid="stats-hidden">{t('cmd.statsHidden')}</span>}
           <span class="wage">{t('cmd.wage', { n: s.wage })}</span>
           <span class="status">
             {grid && s.fromCell !== undefined ? t('cmd.from', { place: cellName(grid, s.fromCell) }) : ''}{' '}
             {t('cmd.waits', { n: Math.max(0, (s.waitsUntilDay ?? state.time.day) - state.time.day) })}
           </span>
-          <button class="primary" data-testid={`hire-${s.id}`} disabled={ears < signingFee(s)} onClick={() => actions.dispatch({ type: 'hire', candidate: s.id })}>
-            {t('cmd.hire', { n: signingFee(s) })}
+          <button class="primary" data-testid={`hire-${s.id}`} disabled={full || ears < signingFee(s, state)} onClick={() => actions.dispatch({ type: 'hire', candidate: s.id })}>
+            {t('cmd.hire', { n: signingFee(s, state) })}
           </button>
         </div>
       ))}
@@ -131,7 +144,7 @@ function Hire({ state, actions, grid }: Props) {
 function Economy({ state, actions, grid }: Props) {
   const colony = state.colony;
   const E = COLONY.economy;
-  const wages = colony.survivors.reduce((sum, s) => sum + (s.job === 'farming' ? 0 : s.wage), 0);
+  const wages = colony.survivors.reduce((sum, s) => sum + (s.job === 'farming' ? 0 : wageDue(state, s)), 0);
   const village = villageNear(state, grid);
   const left = Math.max(0, E.villageDailyCap - colony.villageBought);
   const lot = Math.min(4, left);
@@ -148,9 +161,9 @@ function Economy({ state, actions, grid }: Props) {
         <dt>{t('cmd.need')}</dt>
         <dd>{num(foodNeedPerDay(state))}</dd>
         <dt>{t('cmd.wagesDay')}</dt>
-        <dd>{wages}</dd>
+        <dd>{num(wages)}</dd>
         <dt>{t('cmd.plots')}</dt>
-        <dd>{t('cmd.plotsN', { n: farmPlots(state), s: seasonFactor(state.time.day) })}</dd>
+        <dd>{t('cmd.plotsN', { n: farmPlots(state), s: seasonOf(state, state.time.day) })}</dd>
         <dt>{t('cmd.beds')}</dt>
         <dd>{t('cmd.bedsN', { used: colony.survivors.filter(isHome).length, n: housingBeds(state) })}</dd>
         <dt>{t('cmd.research')}</dt>
@@ -161,8 +174,8 @@ function Economy({ state, actions, grid }: Props) {
         <span class="label">{t('cmd.village')}</span>
         {village ? (
           <>
-            <button data-testid="buy-food" disabled={lot <= 0 || colony.stock.ears < villagePrice()} onClick={() => actions.dispatch({ type: 'buyFood', amount: lot, source: 'village' })}>
-              {t('cmd.villageBuy', { n: lot, cost: num(lot * villagePrice()) })}
+            <button data-testid="buy-food" disabled={lot <= 0 || colony.stock.ears < villagePrice(state)} onClick={() => actions.dispatch({ type: 'buyFood', amount: lot, source: 'village' })}>
+              {t('cmd.villageBuy', { n: lot, cost: num(lot * villagePrice(state)) })}
             </button>
             <span class="note">{t('cmd.villageLeft', { n: num(left) })}</span>
             <label class="check">
@@ -212,25 +225,26 @@ function Economy({ state, actions, grid }: Props) {
 function Expeditions({ state, actions, grid }: Props) {
   const [picked, setPicked] = useState<number[]>([]);
   const [target, setTarget] = useState<CellId | null>(null);
-  const [weapon, setWeapon] = useState('melee');
+  const [weapon, setWeapon] = useState(() => [...EXPEDITION_WEAPONS].reverse().find((x) => x.ammo === 0 && weaponAvailable(state, x))?.id ?? 'unarmed');
   const home = state.world.homeCell;
   // Routes only change with the home cell; danger and loot are read live below.
-  const targets = useMemo(() => (grid ? expeditionTargets(state, grid) : []), [grid, home]);
+  const targets = useMemo(() => (grid ? expeditionTargets(state, grid) : []), [grid, home, expeditionRadius(state), state.research.done.length]);
   const X = COLONY.expedition;
   const fit = state.colony.survivors.filter(isFit).sort((a, b) => Number(b.job === 'scavenging') - Number(a.job === 'scavenging'));
   const members = picked.filter((id) => fit.some((s) => s.id === id));
   const chosen = targets.find((x) => x.cell === target) ?? targets[0];
-  const w = expeditionWeapon(weapon) ?? EXPEDITION_WEAPONS[0]!;
+  const picked0 = expeditionWeapon(weapon);
+  const w = picked0 && weaponAvailable(state, picked0) ? picked0 : EXPEDITION_WEAPONS[0]!;
   const now = toAbsMinutes(state.time);
-  const ammo = w.ammo * members.length;
+  const ammo = expeditionAmmo(state, w, members.length);
   const enoughAmmo = state.colony.stock.ammo >= ammo;
   const sizeOk = members.length >= X.minMembers && members.length <= X.maxMembers;
   const toggle = (id: number): void => setPicked(members.includes(id) ? members.filter((x) => x !== id) : members.length < X.maxMembers ? [...members, id] : members);
   const cells = state.world.cells;
-  const dangerNow = (cell: CellId): number => dangerOf(cells.Z[cell] ?? 0);
+  const dangerNow = (cell: CellId): number => expeditionDanger(state, cell);
   const known = (cell: CellId): boolean => (cells.intel[cell] ?? 0) >= 1;
   const chance = chosen && members.length > 0
-    ? members.reduce((sum, id) => sum + returnChance(fit.find((s) => s.id === id)!, w, members.length, dangerNow(chosen.cell)), 0) / members.length
+    ? members.reduce((sum, id) => sum + returnChance(fit.find((s) => s.id === id)!, w, members.length, dangerNow(chosen.cell), expeditionBonus(state)), 0) / members.length
     : 0;
   const send = (): void => {
     if (!chosen) return;
@@ -263,7 +277,7 @@ function Expeditions({ state, actions, grid }: Props) {
             {fit.map((s) => (
               <label key={s.id} class={members.includes(s.id) ? 'check on' : 'check'}>
                 <input type="checkbox" data-testid={`member-${s.id}`} checked={members.includes(s.id)} onChange={() => toggle(s.id)} />
-                {s.name}（{tk(`job.${s.job}`)}・{num(outputPerHour(s, 'scavenging'))}）
+                {s.name}（{tk(`job.${s.job}`)}・{num(outputPerHour(s, 'scavenging') * jobMul(state, 'scavenging'))}）
               </label>
             ))}
           </div>
@@ -288,7 +302,7 @@ function Expeditions({ state, actions, grid }: Props) {
             <select data-testid="exp-weapon" value={w.id} onChange={(e) => setWeapon((e.target as HTMLSelectElement).value)}>
               {EXPEDITION_WEAPONS.filter((x) => weaponAvailable(state, x)).map((x) => (
                 <option key={x.id} value={x.id}>
-                  {tk(`xweapon.${x.id}`)}（+{Math.round(x.bonus * 100)}%{x.ammo > 0 ? `・${t('res.ammo')} ${x.ammo}/人` : ''}）
+                  {tk(`xweapon.${x.id}`)}（+{Math.round(x.bonus * 100)}%{x.ammo > 0 ? `・${t('res.ammo')} ${num(expeditionAmmo(state, x, 1))}/人` : ''}）
                 </option>
               ))}
             </select>
@@ -329,7 +343,7 @@ export function CommandPanel(props: PanelProps) {
     setTabRaw(next);
   };
   const colony = state.colony;
-  const count: Partial<Record<Tab, number>> = { build: state.build.structures.filter((b) => b.progress < 1).length || undefined, people: colony.survivors.length, hire: colony.candidates.length, expedition: state.world.expeditions.length };
+  const count: Partial<Record<Tab, number>> = { research: Object.keys(state.research.active).length || undefined, build: state.build.structures.filter((b) => b.progress < 1).length || undefined, people: colony.survivors.length, hire: colony.candidates.length, expedition: state.world.expeditions.length };
   return (
     <div class="panel command-panel" data-testid="command-panel" data-tab={tab}>
       <div class="stock" data-testid="stock">
@@ -350,6 +364,7 @@ export function CommandPanel(props: PanelProps) {
       <div class="tab-body">
         {tab === 'people' && <People {...props} />}
         {tab === 'build' && <BuildTab state={state} actions={props.actions} tool={props.tool} setTool={props.setTool} />}
+        {tab === 'research' && <ResearchTab state={state} actions={props.actions} grid={props.grid} />}
         {tab === 'hire' && <Hire {...props} />}
         {tab === 'economy' && <Economy {...props} />}
         {tab === 'expedition' && <Expeditions {...props} />}

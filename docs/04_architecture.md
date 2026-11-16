@@ -266,6 +266,21 @@ export interface Expedition { id: EntityId; members: EntityId[]; target: CellId;
 - `flags.colonyAlarm`（襲来中）、`flags.skipping`（`skipMinutes` の消化中。襲来は数値で解決）、`flags.unlockAll`（デバッグ: 全解禁）
 - セーブ時、マップ上の襲来個体は `raid.toSpawn` に戻して保存する（`packState`）
 
+07 が追加（STATE_VERSION は 5 のまま。どれも省略可能なフィールド）:
+- `ResearchState.progress`（進行中でないノードに注いだ RP）、`ResearchState.victory{day, minute, tech}`（建国宣言の記録）
+- `Bullet.torsoMul`、`BuildingDef.techAny / mods / flags`、`WeaponDef.torsoMul / ammoPerShot`
+- `flags.endingSeen`（エンディングを閉じた）、`flags.lostTotal`（失った生存者の累計）
+- 削除: `BUILD.unlockAllUntilTech`・`BUILD.radiusTech`・`BUILD.moatWorkF4a` ほか技術別の定数、`BUILD.raid.hordeMax` は配列から単一値（150）へ、`BALANCE.combat.swayDifficulty`、`WEAPON_MODS` と `weaponDef()`。いずれも修飾（`getMod`）に置き換えた
+
+### 研究・修飾（`sim/research/`、07）
+
+- `data/techs.ts`: 全 56 ノード（`TECHS` / `TECH_LIST`）、修飾キーの一覧 `MOD_KEYS`、フラグの一覧 `FLAGS`（どこで読むかを併記）、挙動系の数値 `RESEARCH`、難易度の修飾 `DIFFICULTY_MODS`、`locksOf(id)`
+- `modifiers.ts`: `getMod(state, key, base)` / `hasFlag(state, flag)` / `techDone` / `techAvailable` / `modTable`（キャッシュ）/ `invalidateMods`。**sim のどこからでも import してよい**（data と型にしか依存しない）
+- `index.ts`: `researchSystem`（`hour`: RP の配分と完了・勝利判定、`day`: 日次の効果）、`startResearch` / `setAllocation` / `completeTech` / `grantTech`（デバッグ・テスト用。前提ごと付与）/ `techStatus` / `startError` / `researchPerDay` / `daysLeft`
+- `effects.ts`（日次の効果）、`victory.ts`（`victoryProgress` / `checkVictory` / `endingStats` / `debugFulfilVictory`）、`forecast.ts`（`forecastInfection`: 世界セルのコピーに `stepInfection` を 7 日ぶん。乱数は `fork` した系列で本番の系列を進めない。日ごとにキャッシュ）
+- 数値を技術で変えたいとき: `MOD_KEYS` にキーを足す → ノードの `effects` に `mul` / `add` を書く → 読む側を `getMod(state, 'キー', 元の値)` にする。整合性テストが「誰も設定していないキー」「一覧にないキー」を落とす
+- `sim/tactical/observe.ts`: スコープが指しているゾンビと距離・必要な見越し（測距と観察記録の HUD 用）
+
 ### 建築・防衛（`sim/build/`、06）
 
 - `structures.ts`: 定義の参照（`defOf`）、解禁判定 `isUnlocked` / `techUnlocked`（**ここ 1 か所**）、タイルごとの **オーバーレイ**（`overlayOf(state, walk)`: 占有 `occ`、ゾンビが相手にする構造物 `sidx`、フローコスト `cost`、ゾンビだけを止める障壁 `zblock`、生存者の通行不可 `sblock`、有刺鉄線 `wire`、壁のつながり `links`。`gridRev` と警報の状態でキャッシュ）、当たり判定の同期（`syncSolids` / `syncMap`: 本拠マップの `map.solids` / `map.ladders` / `map.hash` の末尾に構造物ぶんを足し引きする。03 の衝突関数はそのまま使える）、`damageStructure` / `destroyStructure`（司令部なら `flags.defeat`）、建物の効果（`bedsTotal`, `plotInfo`, `jobFacility`, `moraleBonus`, `foodSaving`, `refreshCapacity`）
@@ -298,7 +313,7 @@ xoshiro128**。状態はプレーンオブジェクトで、関数に渡して�
 
 **コマンド**（UI・入力 → sim）: 判別共用体 `Command`。`dispatch(cmd)` でキューに積み、次の tick 冒頭で適用。
 例: `{type:'assignJob', survivor, job}`, `{type:'placeBlueprint', def, tx, ty, rot}`, `{type:'cancelStructure', id}`,
-`{type:'hire', candidate}`, `{type:'dismiss', survivor}`, `{type:'startResearch', id}`, `{type:'setAllocation', allocation}`,
+`{type:'hire', candidate}`, `{type:'dismiss', survivor}`, `{type:'startResearch', id}`, `{type:'setAllocation', allocation}`, `{type:'dismissEnding'}`（07）,
 `{type:'sendExpedition', members, target, weapon}`, `{type:'foundOutpost', cell}`, `{type:'travel', to}`,
 `{type:'setSpeed', speed}`, `{type:'buyFood', amount, source}`, `{type:'resupply'}`, `{type:'setMode', mode}`
 
@@ -321,6 +336,7 @@ export interface InputFrame { moveX: number; moveZ: number; lookDX: number; look
 04 が追加したイベント: `dryFire`, `reloadStarted{seconds}`, `reloadDone{mag}`, `knifeSwing{hit, killed}`, `playerInfected{untilDay, untilMinute}`, `playerRevived`, `zombieAlerted{id, chase}`。`bulletHit` に `surface`（ゾンビ以外に当たったときの種類）・`dir`・`range`・`killed`、`zombieKilled` に `knife`、`playerHurt` / `playerDied` に `cause`、`shotFired` に `scoped` を追加。
 05 が追加: コマンド `setPolicy{autoBuyFood}`（`resupply` は colony システムが担当）。イベント `candidateFound{id, cell, by}`, `spotSearched{spot, items}`, `expeditionSent`, `earsDeposited{amount}`, `resupplied{ammo}`, `foodBought{amount, cost, source}`, `colonyLog{kind, text}`。`defeat{reason:'noColony'}` と `playerRevived` は共同体が発火。
 06 が追加: コマンド `setStructurePriority{id, priority}`, `upgradeOutpost{id}`, `assignGarrison{survivor, outpost|null}`、`travel` に `fast?`。`placeBlueprint` / `cancelStructure` / `setStructurePriority` は build、`foundOutpost` / `upgradeOutpost` / `assignGarrison` は world、`resupply` は colony（本拠でなければ駐屯地から）。イベント `blueprintPlaced`, `structureRemoved`, `raidStarted{kind, size, dir, away}`, `raidEnded{kind, killed, repelled, away}`, `defenderFired{id, pos, target, hit}`, `survivorHurt`, `outpostUpgraded`, `outpostSupplied`。`structureDamaged`（耐久の 1/20 ごと）, `structureDestroyed`, `structureBuilt`, `moatBridged`, `hordeWarning`, `hordeArrived`, `outpostFounded`, `outpostLost`, `defeat{reason:'hqDestroyed'}` を発火。`zombieKilled.by` は防衛担当か構造物（有刺鉄線・堀）の id になり得る。
+07 が追加: コマンド `dismissEnding`、`startResearch` / `setAllocation` を実装（research システム）。イベント `techCompleted{id}`, `eraAdvanced{era}`, `victory{tech}` を発火。`candidateFound.by` に `'radio'`。拒否理由 `unknownTech` / `techDone` / `techLocked` / `techEra` / `techPrereq` / `badAllocation` / `popCap`、`assignJob` の `locked`。
 `dayStarted` は 00:00 に、同じ tick の `hourStarted{hour:0}` より先に発火する。
 
 イベントは tick 中にバッファされ、tick 末に購読者へ配信（`sim.events.on(type, fn)` / `onAny`）。sim 内システムが他システムのイベントを見る場合は「次の tick で処理」と決め、`ctx.prevEvents`（直前の tick で出たイベント）を読む。
@@ -352,7 +368,7 @@ export interface InputFrame { moveX: number; moveZ: number; lookDX: number; look
   - `createSpatialHash()` — 動的オブジェクト用の 16m ハッシュ（`set / remove / query / querySegment`）。現在の区域のものは `areaOf(state).dynamic`
 - 戦術ステップの順序（`sim/tactical/index.ts`）: プレイヤー → 武器（`weapon.ts`: スコープ・揺れ・引き金）→ 弾（`ballistics.ts`）→ ゾンビ（`zombies.ts`: 補充・知覚・状態機械・移動）→ 近接と事後（`combat.ts`: ナイフ・耳・落下・死亡と仮復帰）。毎分 `expireCorpses` と感染の期限判定。プレイヤーへのダメージは `health.ts` の `hurtPlayer`
 - ゾンビの当たり判定の形は `hitShapes(z)`（頭の球・胴と脚のカプセル）。描画（`render/tactical/zombies.ts`）も同じ寸法から箱を置く。ゾンビの追加は `addZombie(state, area, kind, x, z, yaw)`（空間ハッシュと id 索引を同時に更新する。`tactical.zombies` へ直接 push してもよいが索引は次のステップで作り直される）
-- 武器の定義は `data/weapons.ts`。`WEAPON_MODS`（技術 id → 差分）を足すと `weaponOf(state)` が研究済みの差分を重ねた定義を返す（07 用）。ゾンビの種類別の数値は `data/zombies.ts`
+- 武器の定義は `data/weapons.ts`。`weaponOf(state)` が `weapon.*` の修飾（`data/techs.ts`）を重ねた定義を返す（07）。ゾンビの種類別の数値は `data/zombies.ts`
 - 射撃場: `state.flags.range = true` の状態は世界データなしで動く（`sim/tactical/range.ts` の固定マップ、`ensureArea` が分岐）。`?range=1` または `window.__game.debug.openRange()`。`flags.noSway` で揺れを 0 にできる
 - プレイヤー: `sim/tactical/player.ts` の `updatePlayer(player, map, input, dt, lookScale)`。視線レイは `viewRay(player)`、方位は `headingDeg(yaw)`
 - ナビ/建築グリッド: 4m タイル 256×256（`map.walk`: 建物・階段・大岩・急斜面が 0。静的）。構造物は `sim/build/structures.ts` のオーバーレイで重ねる。フローフィールドは拠点（司令部）を目標に Dijkstra。`BuildState.gridRev` 変更時のみ再計算（実測 約 3ms）。規則は `02_systems_spec.md` §6.4

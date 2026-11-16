@@ -123,6 +123,7 @@ export function spawnBullet(state: GameState, def: WeaponDef, origin: Readonly<V
     pierceFactor: def.pierceFactor,
     maxRange: def.maxRange,
     lastHit: null,
+    ...(def.torsoMul !== 1 ? { torsoMul: def.torsoMul } : {}),
   };
   t.bullets.push(bullet);
   return bullet;
@@ -179,7 +180,7 @@ export function updateBullets(state: GameState, area: TacticalArea, ctx: SimCont
         if (best < 0) break;
         const z = zombieById(t, best)!;
         const pos: Vec3 = [p0[0] + d[0] * bestT, p0[1] + d[1] * bestT, p0[2] + d[2] * bestT];
-        const killed = damageZombie(state, area, ctx, z, bestPart, b.dmgMul, d);
+        const killed = damageZombie(state, area, ctx, z, bestPart, b.dmgMul, d, undefined, b.torsoMul ?? 1);
         ctx.emit({ type: 'bulletHit', zombie: best, part: bestPart, pos, dir: [d[0], d[1], d[2]], range: b.dist + bestT, killed });
         b.lastHit = best;
         b.pierceLeft -= 1;

@@ -9,6 +9,7 @@
 //   building  solid box with an effect                    field   open ground with an effect (crops)
 
 import type { ResourceId } from '../core/types.ts';
+import type { FlagId, ModKey } from './techs.ts';
 
 export type StructureKind = 'wall' | 'gate' | 'moat' | 'bridge' | 'wire' | 'tower' | 'building' | 'field';
 export type BuildCategory = 'defense' | 'housing' | 'food' | 'work' | 'civic';
@@ -27,6 +28,8 @@ export interface BuildingDef {
   work: number;
   /** Tech node that unlocks it (docs/03_tech_tree.md); undefined = from the start. */
   tech?: string;
+  /** Unlocked by any one of these instead (the capitol: any goal technology). */
+  techAny?: readonly string[];
   era: 0 | 1 | 2 | 3;
   /** Height in metres (collision and drawing); for towers the deck level. */
   height: number;
@@ -55,6 +58,10 @@ export interface BuildingDef {
   fuelPerDay?: number;
   /** Zombies cannot fill it with bodies. */
   unfillable?: boolean;
+  // --- global effects while at least one stands (07; compiled by sim/research/modifiers.ts) ---
+  mods?: readonly { key: ModKey; op: 'add' | 'mul'; value: number }[];
+  flags?: readonly FlagId[];
+
 }
 
 const wall = (id: string, hp: number, cost: Cost, work: number, era: 0 | 1 | 2 | 3, tech: string | undefined, height: number, thick: number, look: BuildingDef['look']): BuildingDef =>
@@ -89,7 +96,7 @@ const DEFS: BuildingDef[] = [
   { id: 'drawbridge', kind: 'bridge', category: 'defense', size: [1, 1], hp: 200, cost: { wood: 10, metal: 2 }, work: 50, era: 1, tech: 'F4a', height: 0.3, look: 'wood' },
   { id: 'tower', kind: 'tower', category: 'defense', size: [1, 1], hp: 400, cost: { wood: 20, metal: 4 }, work: 60, era: 0, tech: 'F2', height: 5, look: 'wood' },
   { id: 'barbedWire', kind: 'wire', category: 'defense', size: [1, 1], hp: 80, cost: { metal: 2 }, work: 4, era: 1, tech: 'F4b', height: 1, look: 'wire' },
-  building('turret', 'defense', [1, 1], 300, { metal: 12, parts: 6 }, 80, 2, 'F7a', 2.2, 'steel'),
+  building('turret', 'defense', [1, 1], 300, { metal: 12, parts: 6 }, 80, 2, 'F7a', 2.2, 'steel', { fuelPerDay: 0.5 }), // its own little generator
 
   // --- §6.2 functional buildings ---
   building('hq', 'civic', [3, 3], 2000, {}, 0, 0, undefined, 4.2, 'wood', { unique: true, fixed: true, beds: 4 }),
@@ -98,7 +105,7 @@ const DEFS: BuildingDef[] = [
   building('house', 'housing', [2, 2], 400, { wood: 20, metal: 6 }, 60, 1, 'F3', 3.2, 'brick', { beds: 6 }),
   building('apartment', 'housing', [3, 2], 900, { cement: 30, metal: 12 }, 160, 2, 'F5', 7.5, 'concrete', { beds: 16 }),
   { id: 'farm', kind: 'field', category: 'food', size: [4, 4], hp: 0, cost: {}, work: 24, era: 0, tech: 'A1', height: 0.3, look: 'soil', plots: 1 },
-  building('ranch', 'food', [4, 3], 300, { wood: 30 }, 70, 1, 'A4a', 3.0, 'wood', { plots: 1, yieldMul: 1.8, morale: 2 }),
+  building('ranch', 'food', [4, 3], 300, { wood: 30 }, 70, 1, 'A4a', 3.0, 'wood', { plots: 1, yieldMul: 1.8, morale: 2, mods: [{ key: 'raid.nightSize', op: 'mul', value: 1.2 }] }), // livestock draws the dead
   building('greenhouse', 'food', [3, 2], 150, { metal: 10, parts: 4 }, 60, 1, 'A4b', 2.6, 'glass', { plots: 1, allSeason: true }),
   building('storehouse', 'work', [2, 2], 300, { wood: 24 }, 40, 0, 'A2', 3.0, 'wood',
     { capacity: { food: 120, ammo: 600, wood: 300, metal: 200, cement: 200, parts: 80, medicine: 30, fuel: 80 } }),
@@ -107,15 +114,17 @@ const DEFS: BuildingDef[] = [
   building('clinic', 'work', [2, 2], 300, { wood: 16, metal: 6 }, 70, 1, 'S4', 3.0, 'cloth', { job: { medical: 1.3 } }),
   building('hospital', 'work', [3, 3], 900, { cement: 40, metal: 20, parts: 10 }, 220, 2, 'S6a', 6.5, 'concrete', { job: { medical: 1.8 } }),
   building('canteen', 'civic', [2, 2], 300, { wood: 24, metal: 4 }, 60, 1, 'C1', 3.0, 'wood', { foodSaving: 0.1, morale: 2 }),
-  building('market', 'civic', [3, 2], 300, { wood: 30 }, 70, 1, 'C4a', 2.8, 'cloth'),
+  building('market', 'civic', [3, 2], 300, { wood: 30 }, 70, 1, 'C4a', 2.8, 'cloth', { mods: [{ key: 'food.priceMax', op: 'mul', value: 0.8 }] }),
   building('barracks', 'civic', [3, 2], 500, { wood: 24, metal: 10 }, 90, 1, 'C4b', 3.2, 'brick', { job: { defense: 1.25 }, beds: 6 }),
-  building('radio', 'civic', [1, 1], 250, { metal: 20, parts: 12 }, 120, 2, 'C6', 14, 'steel'),
-  building('generator', 'work', [1, 1], 200, { metal: 12, parts: 8 }, 60, 1, 'S5b', 1.6, 'steel'),
-  building('powerPlant', 'work', [3, 3], 900, { cement: 40, metal: 40, parts: 20 }, 300, 2, 'S6b', 6, 'concrete'),
+  building('radio', 'civic', [1, 1], 250, { metal: 20, parts: 12 }, 120, 2, 'C6a', 14, 'steel'),
+  building('generator', 'work', [1, 1], 200, { metal: 12, parts: 8 }, 60, 1, 'S5b', 1.6, 'steel', { fuelPerDay: 0.3, mods: [{ key: 'job.crafting', op: 'mul', value: 1.1 }] }),
+  building('powerPlant', 'work', [3, 3], 900, { cement: 40, metal: 40, parts: 20 }, 300, 2, 'S6b', 6, 'concrete',
+    // Machines in the workshop and the laboratory, floodlights on the walls.
+    { fuelPerDay: 1, mods: [{ key: 'job.crafting', op: 'mul', value: 1.2 }, { key: 'job.research', op: 'mul', value: 1.2 }, { key: 'defender.hit', op: 'add', value: 0.08 }] }),
   building('tavern', 'civic', [2, 2], 300, { wood: 24 }, 60, 2, 'A6b', 3.0, 'wood', { morale: 6 }),
-  building('school', 'civic', [3, 2], 600, { cement: 20, wood: 20 }, 160, 3, 'S8', 3.6, 'brick'),
-  building('monument', 'civic', [1, 1], 500, { cement: 20, metal: 5 }, 100, 2, 'C6', 5, 'concrete', { morale: 3 }),
-  building('capitol', 'civic', [4, 3], 3000, { cement: 120, metal: 60, parts: 30 }, 800, 3, 'C9', 9, 'concrete', { unique: true }),
+  building('school', 'civic', [3, 2], 600, { cement: 20, wood: 20 }, 160, 3, 'S8', 3.6, 'brick', { mods: [{ key: 'job.research', op: 'mul', value: 1.2 }] }),
+  building('monument', 'civic', [1, 1], 500, { cement: 20, metal: 5 }, 100, 2, 'C5', 5, 'concrete', { morale: 3 }),
+  building('capitol', 'civic', [4, 3], 3000, { cement: 120, metal: 60, parts: 30 }, 800, 3, undefined, 9, 'concrete', { unique: true, techAny: ['F9', 'S9', 'C9'] }),
 ];
 
 export const BUILDINGS: Readonly<Record<string, BuildingDef>> = Object.fromEntries(DEFS.map((d) => [d.id, d]));
@@ -146,11 +155,8 @@ export const DEFENDER_WEAPONS: readonly DefenderWeapon[] = [
 ];
 
 export const BUILD = {
-  /** Until the tech tree exists (07) everything can be built. 07 sets this to false; `flags.unlockAll` still overrides. */
-  unlockAllUntilTech: true,
-  /** Buildable radius around the headquarters (m), and what techs add. */
+  /** Buildable radius around the headquarters (m); techs add to it (modifier `build.radius`). */
   radius: 120,
-  radiusTech: { F5: 60, F8: 120 } as Record<string, number>,
   /** Where a new game puts the headquarters and the first field (tile of the min corner; the map centre is tile 128). */
   start: { hq: [126, 123], farm: [134, 126] },
   /** Largest height difference under a footprint outside the levelled ground (m). */
@@ -169,11 +175,6 @@ export const BUILD = {
   wireSlow: 0.3,
   wireDps: 5,
   wireWear: 1,
-  /** Tech effects on structures. */
-  moatWorkF4a: 0.6,
-  repairSpeedF4b: 1.5,
-  selfRepairF6b: 0.01,
-  hpMulF9: 1.5,
 
   // --- flow field costs (spec §3.4 / prompt D). One step on open ground costs 1. ---
   flow: {
@@ -203,8 +204,8 @@ export const BUILD = {
     /** Horde threshold = base + perHead * population (player included). */
     hordeBase: 60,
     hordePerHead: 4,
-    /** Largest horde by difficulty. */
-    hordeMax: [80, 150, 250],
+    /** Largest horde (normal difficulty; 80 / 150 / 250 through the modifier `raid.hordeMax`). */
+    hordeMax: 150,
     /** Hours between the horde forming and its arrival; who gets told when. */
     leadHours: 6,
     warnTowerHours: 6,

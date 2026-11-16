@@ -42,6 +42,7 @@ const HQY = BUILD.start.hq[1] + 1;
 /** A base without a world: just the structures (flow-field tests need nothing else). */
 function bare(): GameState {
   const state = createInitialState(3, 1);
+  state.flags.unlockAll = true; // these tests are about structures, not about what research has unlocked
   state.world.homeCell = 0;
   foundBase(state);
   noFarm(state);
@@ -180,6 +181,7 @@ interface Rig {
 /** A started game with every system and the real home map. The player cannot be hurt and stands out of the way. */
 function rig(seed = 7): Rig {
   const state = createInitialState(seed, 1);
+  state.flags.unlockAll = true;
   initWorld(state, grid, scenario);
   const start = findStartCandidates(state.world.cells, grid, stream(state, 'world.start'))[0]!;
   beginAt(state, grid, start.cell);
@@ -386,7 +388,7 @@ describe('raids', () => {
     state.world.hordeMeter = 500;
     r.run(62);
     expect(state.world.pendingHorde!.warned).toBe(true);
-    expect(state.world.pendingHorde!.size).toBe(BUILD.raid.hordeMax[1]);
+    expect(state.world.pendingHorde!.size).toBe(BUILD.raid.hordeMax);
     expect(state.world.hordeMeter).toBe(350);
   });
 

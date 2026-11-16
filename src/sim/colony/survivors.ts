@@ -6,6 +6,8 @@ import { COLONY } from '../../data/colony.ts';
 import { TACTICAL } from '../../data/tactical.ts';
 import { FAMILY_NAMES, GIVEN_NAMES } from '../../data/names.ts';
 import { TRAITS, traitOf } from '../../data/traits.ts';
+import { RESEARCH } from '../../data/techs.ts';
+import { getMod } from '../research/modifiers.ts';
 import { logEntry, moveEars, type ColonyCtx } from './stock.ts';
 
 const S = COLONY.survivor;
@@ -37,8 +39,14 @@ export function wageOf(sum: number, trait: string): number {
   return Math.max(1, Math.round((S.wageBase + S.wagePerPoint * (sum - S.wageSumRef)) * (traitOf(trait).wageMul ?? 1)));
 }
 
-export function signingFee(s: Survivor): number {
-  return s.wage * S.feeDays;
+export function signingFee(s: Survivor, state?: GameState): number {
+  const fee = s.wage * S.feeDays;
+  return state ? Math.max(1, Math.round(getMod(state, 'hire.fee', fee))) : fee; // recruiting (C2)
+}
+
+/** People the colony can hold: a few dozen until there is an administration (C5); beds still decide who sleeps well. */
+export function populationCap(state: GameState): number {
+  return getMod(state, 'colony.popCap', RESEARCH.popCap);
 }
 
 /** A new person from a cell of the given land class. Not yet part of any list. */
@@ -99,7 +107,7 @@ export function returnHidden(state: GameState, cell: CellId | null | undefined):
  * People found in `cell` become candidates. The cell's H drops by the number found; the number is
  * capped by H and by the room on the list.
  */
-export function addCandidates(c: ColonyCtx, cell: CellId, want: number, by: 'player' | 'expedition'): Survivor[] {
+export function addCandidates(c: ColonyCtx, cell: CellId, want: number, by: 'player' | 'expedition' | 'radio'): Survivor[] {
   const { state, grid } = c;
   const E = COLONY.encounter;
   const room = Math.max(0, E.maxCandidates - state.colony.candidates.length);
@@ -141,7 +149,8 @@ export function hire(c: ColonyCtx, candidateId: number): string | null {
   const colony = c.state.colony;
   const s = colony.candidates.find((x) => x.id === candidateId);
   if (!s) return 'unknownCandidate';
-  const fee = signingFee(s);
+  if (colony.survivors.length >= populationCap(c.state)) return 'popCap';
+  const fee = signingFee(s, c.state);
   // The player pays out of pocket when the stores cannot.
   const pocket = c.state.player.inv.ears ?? 0;
   if (colony.stock.ears + pocket < fee) return 'noEars';

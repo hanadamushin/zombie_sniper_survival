@@ -43,6 +43,7 @@ interface Rig {
 /** A started game. `full` runs every system (map, zombies, survivor movement); otherwise only colony + world. */
 function rig(full = false, seed = 7): Rig {
   const state = createInitialState(seed, 1);
+  state.flags.unlockAll = true; // gear and jobs are tech-gated since 07; these tests are about the colony itself
   initWorld(state, grid, scenario);
   const start = findStartCandidates(state.world.cells, grid, stream(state, 'world.start'))[0]!;
   beginAt(state, grid, start.cell);

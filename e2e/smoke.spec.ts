@@ -344,6 +344,10 @@ test('colony: meet someone, hire, assign jobs, days pass — food and materials 
   const errors = trackErrors(page);
   await page.goto('/?seed=12&scenario=0&res=fixed');
   await startNewGame(page);
+  // Gear and the medical job are tech-gated since 07 (e2e/research.spec.ts covers the gating).
+  await page.evaluate(() => {
+    window.__game!.state!.flags.unlockAll = true;
+  });
   await page.waitForFunction(() => (window.__game?.state?.tactical?.hideouts?.length ?? 0) > 0, null, { timeout: 60_000 });
 
   // Someone is hiding at a search point: the HUD senses them, E talks to them.

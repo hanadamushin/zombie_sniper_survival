@@ -24,6 +24,10 @@ import { workMinute } from './jobs.ts';
 import { dailyMorale, healthHour, infectionMinute, unpaidMorale, updatePlayerDeath } from './morale.ts';
 import { ctxNow, ledgerOf, logEntry, type ColonyCtx } from './stock.ts';
 import { dismiss, expireCandidates, hire } from './survivors.ts';
+import { techUnlocked } from '../build/structures.ts';
+
+/** Jobs that need a technology before anyone can be put on them (data/techs.ts `unlock job`). */
+export const JOB_TECH: Partial<Record<JobId, string>> = { medical: 'S4' };
 
 const T = COLONY.schedule;
 const DAY = BALANCE.time.minutesPerDay;
@@ -79,6 +83,7 @@ export const colonySystem: System = {
       const s = state.colony.survivors.find((x) => x.id === cmd.survivor);
       if (!s || !JOBS.includes(cmd.job)) return ctx.emit({ type: 'commandRejected', command: cmd.type, reason: 'unknownSurvivor' });
       if (s.job === cmd.job) return;
+      if (!techUnlocked(state, JOB_TECH[cmd.job])) return ctx.emit({ type: 'commandRejected', command: cmd.type, reason: 'locked' });
       s.job = cmd.job;
       logEntry(ctxNow(state, ctx.grid, ctx.emit), 'people', 'log.assigned', { name: s.name, job: cmd.job });
     },

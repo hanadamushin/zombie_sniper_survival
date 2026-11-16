@@ -6,7 +6,9 @@ import type { GameState, StaticGrid, Survivor } from '../../core/types.ts';
 import { BALANCE } from '../../data/balance.ts';
 import { COLONY } from '../../data/colony.ts';
 import { TACTICAL } from '../../data/tactical.ts';
+import { RESEARCH } from '../../data/techs.ts';
 import { traitOf } from '../../data/traits.ts';
+import { getMod, hasFlag } from '../research/modifiers.ts';
 import type { SimContext } from '../system.ts';
 import { areaOf } from '../tactical/area.ts';
 import { DEATH_HOLD } from '../tactical/combat.ts';
@@ -34,6 +36,7 @@ export function killSurvivor(c: ColonyCtx, s: Survivor, cause: string): void {
   s.status = 'dead';
   colony.survivors = colony.survivors.filter((x) => x !== s);
   colony.memorial.push({ name: s.name, day: c.day, cause });
+  c.state.flags.lostTotal = Number(c.state.flags.lostTotal ?? 0) + 1; // the memorial is capped; the ending wants the full count
   if (colony.memorial.length > 50) colony.memorial.shift();
   for (const o of colony.survivors) changeMorale(o, M.death);
   logEntry(c, 'death', 'log.died', { name: s.name, cause });
@@ -52,14 +55,17 @@ export function dailyMorale(c: ColonyCtx): void {
   const comforts = moraleBonus(c.state); // canteen, tavern, monument... (06)
   let bed = 0;
   let homeless = 0;
+  const hungerMul = getMod(c.state, 'morale.hungry', 1); // rationing (C1) softens it
+  const moraleMax = getMod(c.state, 'morale.max', 100); // discipline (C4b) caps it
+  const noStarve = hasFlag(c.state, 'noStarve');
   for (const s of [...colony.survivors]) {
     if (isHome(s)) {
       const meals = s.meals;
       if (s.missed === 0) changeMorale(s, M.fed);
-      else if (meals > 0) changeMorale(s, M.hungry);
+      else if (meals > 0) changeMorale(s, M.hungry * hungerMul);
       else {
-        changeMorale(s, M.starving);
-        s.hp -= H.starveHp;
+        changeMorale(s, M.starving * hungerMul);
+        if (!noStarve) s.hp -= H.starveHp;
       }
       if (bed++ < beds) changeMorale(s, M.housed);
       else {
@@ -68,6 +74,7 @@ export function dailyMorale(c: ColonyCtx): void {
       }
       changeMorale(s, (traitOf(s.trait).moralePerDay ?? 0) + comforts);
     }
+    if (s.morale > moraleMax) s.morale = moraleMax;
     s.meals = 0;
     s.missed = 0;
     if (s.hp <= 0) {
@@ -85,6 +92,7 @@ function desert(c: ColonyCtx, s: Survivor): void {
   colony.survivors = colony.survivors.filter((x) => x !== s);
   const ears = Math.floor(moveEars(c, 'other', Math.min(colony.stock.ears, s.wage * M.stealWageDays)));
   const food = moveStock(c, 'food', -M.stealFood);
+  if (hasFlag(c.state, 'desert.armed')) moveStock(c, 'ammo', -RESEARCH.desertAmmo); // under discipline (C4b) they do not leave, they desert — with a gun
   returnHidden(c.state, c.state.world.homeCell);
   logEntry(c, 'morale', 'log.deserted', { name: s.name, ears, food: Math.round(food * 10) / 10, reason: s.unpaidDays > 0 ? 'unpaid' : 'misery' });
   c.emit({ type: 'survivorLeft', id: s.id, reason: 'deserted' });
@@ -107,7 +115,8 @@ export function healthHour(c: ColonyCtx): void {
   const playerHere = playerAtHome(state) && player.aim.deadT <= 0;
   if (atHome.length > 0 || playerHere) colony.work.medical = Math.min(COLONY.buffers.medical, colony.work.medical + H.firstAidPerHour);
 
-  for (const s of atHome) if (s.hp < 100) s.hp = Math.min(100, s.hp + H.restPerHour);
+  const rest = getMod(state, 'heal.rest', H.restPerHour); // first aid (S1)
+  for (const s of atHome) if (s.hp < 100) s.hp = Math.min(100, s.hp + rest);
   if (playerHere && player.hp < BALANCE.player.hp) player.hp = Math.min(BALANCE.player.hp, player.hp + H.playerRestPerHour);
 
   // Infections: the most urgent case first.
@@ -115,9 +124,10 @@ export function healthHour(c: ColonyCtx): void {
   const sick: Patient[] = atHome.filter((s) => s.status === 'infected' && s.infectedUntil).map((s) => ({ until: s.infectedUntil!, s }));
   if (playerHere && player.infectedUntil) sick.push({ until: player.infectedUntil, s: null });
   sick.sort((a, b) => a.until.day * 1440 + a.until.minute - (b.until.day * 1440 + b.until.minute));
+  const cureMedicine = getMod(state, 'cure.medicine', H.cureMedicine); // epidemiology (S5a)
   for (const p of sick) {
     if (colony.work.medical < H.cureWork) break;
-    if (colony.stock.medicine < H.cureMedicine) {
+    if (colony.stock.medicine < cureMedicine) {
       if (state.flags.noMedicineDay !== c.day) {
         state.flags.noMedicineDay = c.day;
         logEntry(c, 'health', 'log.noMedicine', {});
@@ -125,7 +135,7 @@ export function healthHour(c: ColonyCtx): void {
       break;
     }
     colony.work.medical -= H.cureWork;
-    moveStock(c, 'medicine', -H.cureMedicine);
+    moveStock(c, 'medicine', -cureMedicine);
     if (p.s) {
       p.s.infectedUntil = null;
       p.s.status = p.s.hp >= H.fitHp ? 'ok' : 'injured';
@@ -213,6 +223,8 @@ function revivePlayer(state: GameState, _grid: StaticGrid | null, c: ColonyCtx):
   p.eye = TACTICAL.player.eyeHeight.stand;
   p.infectedUntil = null;
   p.inv = { ammo: 0, ears: 0 };
+  // Ear receipts (C7): half of what was carried is honoured at the headquarters.
+  if (hasFlag(state, 'ears.receipt') && lostEars > 0) moveEars(c, 'income', Math.floor(lostEars * RESEARCH.receiptShare));
   p.weapon.mag = 0;
   p.weapon.boltT = 0;
   p.weapon.reloadT = 0;

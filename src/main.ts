@@ -5,6 +5,8 @@
 // Session lifecycle (new game / load / save / quit) lives here because it replaces the
 // GameState object that everything else reads.
 
+import { ALL_TECH_IDS, grantTech, researchHour } from './sim/research/index.ts';
+import { debugFulfilVictory } from './sim/research/victory.ts';
 import { createStepper } from './core/loop.ts';
 import { AUTO_SLOT, createDefaultSaveStore, listSaves, loadGame, saveGame, type SlotId } from './core/save.ts';
 import { effectiveSpeed } from './core/time.ts';
@@ -268,6 +270,10 @@ interface DebugApi {
   /** Building shortcuts (06): put a finished structure down; schedule a horde of `size` from bearing `dir` (radians) arriving now. */
   build(def: string, tx: number, ty: number, rot?: number): number;
   horde(size: number, dir?: number): void;
+  /** Research shortcuts (07): grant nodes with their prerequisites ('all' = one full route); add research points; set up everything for the declaration. */
+  grantTech(ids: string[] | 'all'): string[];
+  research(points: number): void;
+  fulfilVictory(goal?: 'F9' | 'S9' | 'C9', capitol?: boolean): void;
   /** Overhead camera of the command layer (core/view.ts). */
   readonly view: typeof commandView;
   /** An empty input frame, for ticking the sim by hand. */
@@ -362,6 +368,19 @@ window.__game = {
       if (!state || state.world.homeCell === null) return;
       state.world.cells.Z[state.world.homeCell] = Math.max(state.world.cells.Z[state.world.homeCell] ?? 0, size + 20);
       state.world.pendingHorde = { arrivesDay: state.time.day, arrivesMinute: state.time.minute, size, dir, warned: true };
+    },
+    grantTech(ids) {
+      if (!state) return [];
+      grantTech(state, ids === 'all' ? ALL_TECH_IDS : ids, (e) => sim.events.emit(e));
+      return [...state.research.done];
+    },
+    research(points) {
+      if (!state) return;
+      state.colony.work.research += points;
+      researchHour(state, (e) => sim.events.emit(e), grid);
+    },
+    fulfilVictory(goal = 'F9', capitol = true) {
+      if (state && grid) debugFulfilVictory(state, grid, goal, capitol);
     },
     view: commandView,
     noInput: emptyInputFrame(),

@@ -1,8 +1,8 @@
 // Weapon definitions (docs/02_systems_spec.md §3.2). Owner: 04 sniping; 07 adds tech variants.
 //
-// A weapon is a plain record. Technology changes it through WEAPON_MODS: each entry names the
-// research node that unlocks it and a patch that is merged over the base definition
-// (sim/tactical/weapon.ts `weaponOf`). 07 fills the list; nothing else has to change.
+// A weapon is a plain record. Technology changes it through modifiers (data/techs.ts `weapon.*`):
+// sim/tactical/weapon.ts `weaponOf(state)` returns the definition with them applied — large calibre
+// or semi-automatic (W5), optics or ammunition engineering (W6).
 
 export interface WeaponDef {
   id: string;
@@ -24,8 +24,11 @@ export interface WeaponDef {
   /** Bodies one bullet can pass through, and the damage factor after each one. */
   pierce: number;
   pierceFactor: number;
-  /** Multiplies the damage table of data/zombies.ts. */
+  /** Multiplies the damage table of data/zombies.ts; torsoMul on top for torso hits. */
   damageMul: number;
+  torsoMul: number;
+  /** Rounds of stock ammunition one cartridge costs (large calibre: 3). */
+  ammoPerShot: number;
   /** Bullets are removed after flying this far (m). */
   maxRange: number;
   /** Recoil kick in mil (up) and random sideways share, hip-fire spread (mil, 1 sigma). */
@@ -50,20 +53,11 @@ export const WEAPONS: Record<string, WeaponDef> = {
     pierce: 2,
     pierceFactor: 0.6,
     damageMul: 1,
+    torsoMul: 1,
+    ammoPerShot: 1,
     maxRange: 800,
     recoilMil: 14,
     recoilSideMil: 3,
     hipSpreadMil: 35,
   },
 };
-
-export interface WeaponMod {
-  /** Research node id (data/techs.ts, 07) that enables this patch. */
-  tech: string;
-  /** Applies to this weapon id, or to every weapon when omitted. */
-  weapon?: string;
-  patch: Partial<Omit<WeaponDef, 'id'>>;
-}
-
-/** Tech-driven variants (large calibre, semi-auto, optics, ammunition). Filled by 07. */
-export const WEAPON_MODS: readonly WeaponMod[] = [];

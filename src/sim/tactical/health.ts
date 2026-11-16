@@ -5,6 +5,7 @@ import { chance, stream } from '../../core/rng.ts';
 import { addMinutes, hasReached } from '../../core/time.ts';
 import type { GameState } from '../../core/types.ts';
 import { BALANCE } from '../../data/balance.ts';
+import { getMod } from '../research/modifiers.ts';
 import type { SimContext } from '../system.ts';
 
 const P = BALANCE.player;
@@ -21,8 +22,8 @@ export function hurtPlayer(state: GameState, ctx: SimContext, amount: number, ca
   p.hp = Math.max(0, p.hp - amount);
   p.aim.hurtT = 1;
   ctx.emit({ type: 'playerHurt', amount, hp: p.hp, cause });
-  if (cause === 'bite' && p.hp > 0 && !p.infectedUntil && chance(stream(state, 'tactical.infection'), P.infectionChance)) {
-    const until = addMinutes({ day: state.time.day, minute: state.time.minute }, P.infectionHours * 60);
+  if (cause === 'bite' && p.hp > 0 && !p.infectedUntil && chance(stream(state, 'tactical.infection'), getMod(state, 'infection.chance', P.infectionChance))) {
+    const until = addMinutes({ day: state.time.day, minute: state.time.minute }, getMod(state, 'infection.hours', P.infectionHours) * 60);
     p.infectedUntil = { day: until.day, minute: until.minute };
     ctx.emit({ type: 'playerInfected', untilDay: until.day, untilMinute: until.minute });
   }

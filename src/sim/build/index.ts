@@ -13,7 +13,6 @@
 // (scheduling, waves, the battle in numbers when the player is away), defense.ts (defenders).
 import { toAbsMinutes } from '../../core/time.ts';
 import type { GameState } from '../../core/types.ts';
-import { BUILD } from '../../data/buildings.ts';
 import { ctxNow, moveStock } from '../colony/stock.ts';
 import type { SimContext, System } from '../system.ts';
 import { areaOf } from '../tactical/area.ts';
@@ -22,7 +21,8 @@ import { updateDefenders } from './defense.ts';
 import { playerPresent, raidAbandoned, raidMinute, raidStep } from './raids.ts';
 import { heightAt } from '../tactical/collision.ts';
 import { outpostAt, outpostPrefab } from '../world/outposts.ts';
-import { defOf, hasTech, isBuilt, maxHp, syncMap, syncSolids } from './structures.ts';
+import { getMod } from '../research/modifiers.ts';
+import { defOf, isBuilt, maxHp, syncMap, syncSolids } from './structures.ts';
 
 function homeMap(state: GameState) {
   const area = areaOf(state);
@@ -55,10 +55,11 @@ function upkeep(state: GameState, ctx: SimContext): void {
     build.gridRev++;
   }
   if (state.time.minute % 60 !== 0) return;
-  if (hasTech(state, 'F6b') && !build.raid) {
+  const selfRepair = getMod(state, 'wall.selfRepair', 0);
+  if (selfRepair > 0 && !build.raid) {
     for (const st of build.structures) {
       const def = defOf(st);
-      if (isBuilt(st) && def.kind === 'wall') st.hp = Math.min(maxHp(state, def), st.hp + maxHp(state, def) * BUILD.selfRepairF6b);
+      if (isBuilt(st) && def.kind === 'wall') st.hp = Math.min(maxHp(state, def), st.hp + maxHp(state, def) * selfRepair);
     }
   }
   if (state.time.minute === 0) {

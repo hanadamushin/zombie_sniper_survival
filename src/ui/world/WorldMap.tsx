@@ -4,7 +4,9 @@
 import { useMemo, useState } from 'preact/hooks';
 import type { CellId, GameState, StaticGrid } from '../../core/types.ts';
 import { dangerOf, isCleared } from '../../sim/world/derive.ts';
-import { findRoute, travelMinutesLeft } from '../../sim/world/travel.ts';
+import { findRoute, travelFactor, travelMinutesLeft } from '../../sim/world/travel.ts';
+import { forecastInfection } from '../../sim/research/forecast.ts';
+import { hasFlag } from '../../sim/research/modifiers.ts';
 import { BUILD } from '../../data/buildings.ts';
 import { isFit } from '../../sim/colony/survivors.ts';
 import { foundError, garrisonOf, isStation, outpostAt, outpostDefense, upgradeError } from '../../sim/world/outposts.ts';
@@ -28,6 +30,7 @@ interface Props {
 export function WorldMap({ state, grid, actions }: Props) {
   const [mode, setMode] = useState<ViewMode>('z');
   const [hover, setHover] = useState<CellId | null>(null);
+  const [forecastOn, setForecast] = useState(false);
   const [selected, setSelected] = useState<CellId | null>(null);
   const [focus, setFocus] = useState<MapFocus>(() => ({ key: 'start', cell: state.player.cell, scale: 14 }));
 
@@ -47,12 +50,15 @@ export function WorldMap({ state, grid, actions }: Props) {
 
   if (!grid || state.world.gridW !== grid.gridW) return <div class="mode-layer world" data-testid="mode-world" />;
   const cells = state.world.cells;
+  // Epidemiological survey (S7a): the zombie view can show where they will be in a week.
+  const canForecast = hasFlag(state, 'map.forecast');
+  const forecast = canForecast && forecastOn && mode === 'z' ? forecastInfection(state, grid) : null;
 
   const paint = (id: CellId): string => {
     const intel = cells.intel[id] ?? 0;
     if (mode === 'pop') return popColor(grid.cells[id]!.pop0);
     if (mode === 'loot') return intel === 0 ? UNKNOWN : lootColor(intel === 1 ? Math.round(cells.loot[id]! * 4) / 4 : cells.loot[id]!);
-    const z = cells.Z[id]!;
+    const z = forecast ? forecast.Z[id]! : cells.Z[id]!;
     return zColor(intel >= 2 ? z : intel === 1 ? roughly(z) : zBandValue(z));
   };
 
@@ -104,6 +110,9 @@ export function WorldMap({ state, grid, actions }: Props) {
               {t(`world.view.${v}` as TextKey)}
             </button>
           ))}
+          {canForecast && mode === 'z' && (
+            <button class={forecastOn ? 'chip active' : 'chip'} data-testid="view-forecast" onClick={() => setForecast(!forecastOn)}>{t('world.forecast')}</button>
+          )}
         </div>
         <div class="legend">
           <span>{t('world.legend.low')}</span>
@@ -126,6 +135,7 @@ export function WorldMap({ state, grid, actions }: Props) {
           <dd data-testid="info-z">
             {intel === 0 ? t(zBand(z)) : knownCount(z, intel, 'world.bodies')}
             {intel >= 2 && isCleared(z) ? `（${t('world.cleared')}）` : ''}
+            {forecast ? <small data-testid="info-forecast"> {t('world.forecastNote', { day: forecast.forDay, z: knownCount(forecast.Z[shown]!, Math.max(1, intel), 'world.bodies') })}</small> : null}
           </dd>
           <dt>{t('world.h')}</dt>
           <dd>{knownCount(cells.H[shown]!, intel, 'world.people')}</dd>
@@ -200,9 +210,9 @@ export function WorldMap({ state, grid, actions }: Props) {
           <div class="route">
             {route ? (
               <>
-                <p class="status" data-testid="route-info">{t('world.route', { cells: route.path.length - 1, time: formatDuration(route.minutes) })}</p>
+                <p class="status" data-testid="route-info">{t('world.route', { cells: route.path.length - 1, time: formatDuration(route.minutes * travelFactor(state)) })}</p>
                 <button class="primary" data-testid="travel-go" onClick={() => go()}>{t('world.go')}</button>
-                {fastRoute && <button data-testid="travel-fast" onClick={() => go(true)}>{t('world.fast', { time: formatDuration(fastRoute.minutes) })}</button>}
+                {fastRoute && <button data-testid="travel-fast" onClick={() => go(true)}>{t('world.fast', { time: formatDuration(fastRoute.minutes * travelFactor(state, true)) })}</button>}
               </>
             ) : (
               <p class="error" data-testid="route-info">{t('world.noRoute')}</p>

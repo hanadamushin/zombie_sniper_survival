@@ -8,7 +8,9 @@ import type { GameState, Structure, Zombie } from '../../core/types.ts';
 import { BUILD, DEFENDER_WEAPONS, type DefenderWeapon } from '../../data/buildings.ts';
 import { ZOMBIES } from '../../data/zombies.ts';
 import type { TacticalMap } from '../../gen/index.ts';
-import { defenders } from '../colony/jobs.ts';
+import { RESEARCH } from '../../data/techs.ts';
+import { fighters } from '../colony/jobs.ts';
+import { getMod, hasFlag } from '../research/modifiers.ts';
 import { killSurvivor } from '../colony/morale.ts';
 import { ctxNow, moveStock } from '../colony/stock.ts';
 import { isHome } from '../colony/survivors.ts';
@@ -36,6 +38,24 @@ export function defenderSkill(state: GameState, power: number): number {
 /** Expected zombies put down per shot (used by the abstract battle; the real one rolls each shot). */
 export function killsPerShot(w: DefenderWeapon, hit: number, avgHp: number, bruteShare: number): number {
   return Math.min(1, hit) * ((1 - bruteShare) * (w.headshot + (1 - w.headshot) * Math.min(1, w.damage / avgHp)) + bruteShare * Math.min(1, w.damage / ZOMBIES.brute.hp));
+}
+
+/** Rounds one shot takes from the stores (standardised logistics, W8, halves it). */
+export function ammoPerShot(state: GameState, w: Pick<DefenderWeapon, 'ammo'>): number {
+  return getMod(state, 'ammo.issue', w.ammo);
+}
+
+/** Automatic turrets that fire (F7a): they need fuel for their generator and ammunition, not people. */
+export function activeTurrets(state: GameState): Structure[] {
+  if (!hasFlag(state, 'turret') || state.colony.stock.fuel <= 0) return [];
+  return state.build.structures.filter((s) => isBuilt(s) && s.def === 'turret');
+}
+export const TURRET_WEAPON: DefenderWeapon = { id: 'turret', ...RESEARCH.turret };
+
+/** Ids of the defenders who serve as snipers (W9): the best few. */
+export function sniperIds(state: GameState, list: readonly { survivor: { id: number }; power: number; militia?: boolean }[]): Set<number> {
+  if (!hasFlag(state, 'snipers')) return new Set();
+  return new Set([...list].filter((d) => !d.militia).sort((a, b) => b.power - a.power || a.survivor.id - b.survivor.id).slice(0, RESEARCH.snipers.count).map((d) => d.survivor.id));
 }
 
 export function towers(state: GameState): Structure[] {
@@ -111,7 +131,29 @@ export function updateDefenders(state: GameState, area: TacticalArea, ctx: SimCo
   const rng = stream(state, 'build.defense');
   const ov = overlayOf(state, area.map.walk);
 
-  for (const d of defenders(state)) {
+  const hitBonus = getMod(state, 'defender.hit', 0); // floodlights (power plant)
+  /** One shot from (x, y, z): pick a target, pay for the round, roll the hit. Returns the seconds to wait. */
+  const shoot = (id: number, x: number, y: number, z: number, w: DefenderWeapon, range: number, hitChance: number, headshot: number, interval: number): number => {
+    const target = nearestZombie(state, area, x, y, z, range, w.range > 5);
+    if (!target) return 0.4;
+    const rounds = ammoPerShot(state, w);
+    if (rounds > 0) moveStock(ctxNow(state, ctx.grid, ctx.emit), 'ammo', -rounds);
+    const hit = rand(rng) < hitChance + hitBonus;
+    ctx.emit({ type: 'defenderFired', id, pos: [x, y, z], target: [target.pos[0], target.pos[1] + 1.1, target.pos[2]], hit });
+    if (!hit) return interval;
+    if (target.kind !== 'brute' && rand(rng) < headshot) killZombie(state, area, ctx, target, true, false, id);
+    else {
+      target.hp -= w.damage;
+      if (target.hp <= 0) killZombie(state, area, ctx, target, false, false, id);
+      else target.flinch = 0.2;
+    }
+    return interval;
+  };
+
+  const list = fighters(state, alarm);
+  const snipers = sniperIds(state, list);
+  const towerRange = getMod(state, 'tower.range', R.towerRange);
+  for (const d of list) {
     if (!d.onDuty && !alarm) continue;
     const s = d.survivor;
     const cd = (rt.cd.get(s.id) ?? rand(rng) * 2) - dt;
@@ -124,23 +166,28 @@ export function updateDefenders(state: GameState, area: TacticalArea, ctx: SimCo
     const si = ov.sidx[tile]!;
     const onTower = si > 0 && defOf(state.build.structures[si - 1]!).kind === 'tower';
     const y = standHeight(state, area.map, s.pos[0], s.pos[1]) + 1.5;
-    const range = w.range * (onTower && w.range > 5 ? R.towerRange : 1);
-    const target = nearestZombie(state, area, s.pos[0], y, s.pos[1], range, w.range > 5);
-    if (!target) {
-      rt.cd.set(s.id, 0.4);
+    // A sniper (W9) is one of the best defenders, up a tower, with a firearm.
+    const sniper = onTower && w.ammo > 0 && snipers.has(s.id);
+    const range = w.range * (onTower && w.range > 5 ? towerRange : 1) * (sniper ? RESEARCH.snipers.range : 1);
+    const hitChance = w.hit + (onTower ? R.towerHit : 0) + (sniper ? RESEARCH.snipers.hit : 0);
+    rt.cd.set(s.id, shoot(s.id, s.pos[0], y, s.pos[1], w, range, hitChance, sniper ? RESEARCH.snipers.headshot : w.headshot, w.interval / defenderSkill(state, d.power)));
+  }
+
+  // Automatic turrets (F7a): no crew, but they eat ammunition and stop without fuel.
+  for (const tur of activeTurrets(state)) {
+    const key = -tur.id;
+    const cd = (rt.cd.get(key) ?? rand(rng)) - dt;
+    if (cd > 0) {
+      rt.cd.set(key, cd);
       continue;
     }
-    rt.cd.set(s.id, w.interval / defenderSkill(state, d.power));
-    if (w.ammo > 0) moveStock(ctxNow(state, ctx.grid, ctx.emit), 'ammo', -w.ammo);
-    const hit = rand(rng) < w.hit + (onTower ? R.towerHit : 0);
-    ctx.emit({ type: 'defenderFired', id: s.id, pos: [s.pos[0], y, s.pos[1]], target: [target.pos[0], target.pos[1] + 1.1, target.pos[2]], hit });
-    if (!hit) continue;
-    if (target.kind !== 'brute' && rand(rng) < w.headshot) killZombie(state, area, ctx, target, true, false, s.id);
-    else {
-      target.hp -= w.damage;
-      if (target.hp <= 0) killZombie(state, area, ctx, target, false, false, s.id);
-      else target.flinch = 0.2;
+    if (state.colony.stock.ammo < ammoPerShot(state, TURRET_WEAPON)) {
+      rt.cd.set(key, 2);
+      continue;
     }
+    const [x, z] = centreOf(tur);
+    const y = heightAt(area.map, x, z) + defOf(tur).height;
+    rt.cd.set(key, shoot(tur.id, x, y, z, TURRET_WEAPON, TURRET_WEAPON.range, TURRET_WEAPON.hit, TURRET_WEAPON.headshot, TURRET_WEAPON.interval));
   }
 
   // People in the open get bitten. Inside a building or up a tower they are safe.

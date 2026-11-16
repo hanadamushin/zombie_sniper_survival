@@ -294,3 +294,103 @@
   - イベント: `blueprintPlaced`, `structureRemoved`, `raidStarted`, `raidEnded`, `defenderFired`, `survivorHurt`, `outpostUpgraded`, `outpostSupplied` を追加。`structureDamaged`, `structureDestroyed`, `structureBuilt`, `moatBridged`, `hordeWarning`, `hordeArrived`, `outpostFounded`, `outpostLost`, `defeat{reason:'hqDestroyed'}` を発火
   - フラグ: `flags.colonyAlarm`（05 の口を使用）, `flags.skipping`, `flags.unlockAll`
 
+
+## 07 技術ツリー・進行 — 2026-11-16
+- 完了したこと:
+  - **技術データ**（`src/data/techs.ts`）: 全 56 ノード（5 カテゴリ × 4 時代、排他分岐 9 組、到達技術 3）。効果は `unlock` / `modifier` / `flag` の宣言。修飾キー（`MOD_KEYS`）とフラグ（`FLAGS`）は「どこで読むか」つきの一覧になっていて、整合性テストが未知のキー・誰も設定しないキーを落とす
+  - **修飾の解決**（`sim/research/modifiers.ts`）: `getMod(state, key, base)`（加算 → 乗算）、`hasFlag`、`techDone` / `techAvailable`。取得済み技術・建っている建物（`BuildingDef.mods / flags`）・難易度を 1 つの表にまとめてキャッシュ（`research.done`・`build.gridRev`・難易度の変化で作り直し）。特性は 1 人ごとの値なので従来の式のまま
+  - **研究の進行**（`sim/research/index.ts`）: 毎時の RP 配分（進行中のないカテゴリの取り分は再配分）、`startResearch` / `setAllocation`、棚上げしたノードの RP 保持、排他分岐の封鎖（取得時に相手側と後続を `locked`）、時代の進行（6 個）、`techCompleted` / `eraAdvanced`
+  - **研究 UI**（`ui/command/research.tsx`、指揮層の「研究」タブ）: 5 カテゴリ × 4 時代の表、前提の線（OR は破線、封鎖は点線）、状態 5 種（取得済 / 研究中 / 取得可 / 未解禁 / 封鎖＝取り消し線）、進捗バー、残り日数、配分スライダー（合計 100% を保つ）、分岐の確認ダイアログ（両者の効果と封鎖されるノードの一覧）、建国条件の進捗
+  - **勝利・敗北・難易度**（`sim/research/victory.ts`）: 建国条件の判定と進捗、政府庁舎（到達技術のいずれかで解禁）の完成で `victory`、到達技術別のエンディング文＋統計、「このまま続ける」、敗北画面にも統計。難易度 3 段階は `DIFFICULTY_MODS` として `getMod` に統合
+  - **`BUILD.unlockAllUntilTech` を廃止**。新規ゲームで建てられるのは木柵・木の門・テントだけ。F1 で土塁・堀・小屋、F3（定住期）で鉄板壁、と進む
+  - テスト 27 件追加（`tests/research.test.ts`）: データ整合性（ID・前提・循環・分岐の対称・キーとフラグ・建物 / 装備 / 仕事 / 等級との突き合わせ・文言と配置）、**分岐 9 組の全 512 通りで全時代が開き到達技術に届く**、封鎖の範囲、修飾の合成順とキャッシュ無効化、既存システムへの反映、新規ゲームから木柵 → 土塁 → 鉄板壁、装備と仕事の解禁、RP の配分・完了・端数・棚上げ・コマンドの拒否、排他分岐（セーブ往復込み）、W5 の両側（連射数・貫通・胴 1 発・弾薬 3 倍）、民兵・自動銃座・日次の効果・感染予測（本番の乱数系列とセルを変えない）、建国宣言、時代到達日数。e2e 3 件追加（`e2e/research.spec.ts`）
+- **時代への到達日数**（研究担当 4 人＝知識 6・速度 5・スタミナ 5、研究所なし、配分均等、238 RP/日。`tests/research.test.ts` の pacing が出力）: **定住期 14.6 日 / 再建期 44.3 日 / 復興期 92.5 日**。当初の費用（60〜6,000）では定住期が 3 日で来てしまうので、費用を 300〜5,000 に付け替えた（`03_tech_tree.md` と `02_systems_spec.md` §9 を更新）
+- **性能の実測**（GPU なし・SwiftShader、1280×720 等倍。sim 1 ステップと `renderer.draw` 1 回を直接計測、`e2e/research.spec.ts`）: 研究タブを開いた指揮視点で **37 ドローコール / 32.1 万三角形 / sim 0.02〜0.03 ms ＋ 描画発行 0.2〜0.6 ms**（予算 150 未満・50 万未満・4 ms 未満）。07 が描画に足したものは無い（暗視は環境光の値を変えるだけ）。`getMod` は表の参照 1 回で、06 の襲来シナリオの再計測（117 体＋生存者 30 人＋壁 587 タイル）は 24 ドローコール / 27.5 万三角形 / sim 0.46 ms ＋ 描画発行 2.41 ms で予算内（06 の記録 0.25〜0.39 ＋ 0.75〜1.04 ms より大きいが、今回は e2e 全 15 件を 2 並列で回した中での値で、単独では測り直していない）。e2e は 15 件すべて通過。感染予測は 7 日ぶんで約 7 ms（Node 実測。初回だけ隣接表の構築込みで 60 ms 台）、1 日 1 回だけ計算してキャッシュ。「内蔵 GPU で 60fps」は今回も未検証
+- 受け入れ基準は e2e とスクリーンショットで確認: 新規ゲーム（全解禁フラグなし）で木柵だけ → F1 を研究して土塁・堀 → 定住期に入って F3 で鉄板壁の設計図が置ける／W5a の確認ダイアログ（両者の効果と失うもの）→ 取得後に W5b が取り消し線・開始不可／射撃場で半自動化の連射（3 秒で 3 発 → 8 発以上）と光学の測距表示（300m の標的で「距離 300m 見越し +1.8 mil」）／`debug.fulfilVictory` → 政府庁舎 → 次の時報でエンディング（連邦憲章の文と統計）→ 続行／幅 360px
+- **`getMod` / `hasFlag` / `techUnlocked` に置き換えた箇所**:
+
+  | 場所 | 以前 | いま |
+  |---|---|---|
+  | `build/structures.ts` `maxHp` | `hasTech('F9')` | `wall.hp`（F4b）、`defense.hp`（F9） |
+  | `build/structures.ts` `refreshCapacity` | `hasTech('A2')` | `capacity.food` |
+  | `build/structures.ts` `techUnlocked` / `isUnlocked` | `BUILD.unlockAllUntilTech` | `techAvailable`（`techAny` 対応） |
+  | `build/construction.ts` `workOf` / 修理 | `hasTech('F4a')` / `('F4b')` | `moat.work` / `repair.speed` |
+  | `build/blueprints.ts` `buildRadius` | `BUILD.radiusTech` | `build.radius`（F5, F8） |
+  | `build/index.ts` `upkeep` | `hasTech('F6b')` | `wall.selfRepair` |
+  | `build/raids.ts` 警告・大群上限・夜間接近 | `done.includes('C6b')`、難易度の配列 | `horde.scout`、`raid.hordeMax`、`raid.nightSize` |
+  | `build/defense.ts` / `raids.ts`（不在時） | — | `ammo.issue`（W8）、`tower.range`（F8）、`defender.hit`（発電所）、狙撃手、自動銃座、民兵 |
+  | `world/outposts.ts` 補給 | `hasTech('S7b')` / `('C3')` | `supply.noDelay` / `outpost.supply` |
+  | `world/travel.ts` `advanceTravel` / `travelMinutesLeft` | — | `travel.time` / `travel.fast`（`travelFactor`） |
+  | `world/index.ts` 大群メーター、`world/derive.ts` 同時出現数 | — | `raid.hordeGain` / `zombie.active`（難易度、C6a） |
+  | `tactical/weapon.ts` `weaponOf` / `swayTarget` / リロード | `WEAPON_MODS`、`swayDifficulty` | `weapon.*` 12 キー、`weapon.sway`、夜の揺れ、`ammoPerShot` |
+  | `tactical/health.ts`・`colony/expeditions.ts` 感染 | 定数 | `infection.chance` / `infection.hours` |
+  | `tactical/zombies.ts` ナイフ・移動・胴ダメージ | 定数 | `knife.damage`、堀沿いの減速（`moat.slow`）、`torsoMul` |
+  | `colony/jobs.ts` `workMinute` / `defenders` | — | `jobMul`（`job.<仕事>` × `job.all` × 連邦憲章）、`farm.yield`、`farm.seasonMin`、`fighters`（民兵） |
+  | `colony/economy.ts` 価格・賃金・食事・弾薬製造 | 定数 | `food.price` / `food.priceMax`、`wage`（`wageDue`）、`food.use`、`craft.cost` |
+  | `colony/survivors.ts` 契約金・雇用 | 定数 | `hire.fee`、`colony.popCap` |
+  | `colony/morale.ts` 士気・回復・治療・離反・復帰 | 定数 | `morale.max` / `morale.hungry`、`noStarve`、`heal.rest`、`cure.medicine`、`desert.armed`、`ears.receipt` |
+  | `colony/expeditions.ts` 範囲・所要・帰還率・弾薬・武器 | `done.includes(tech)` | `expedition.radius / time / bonus / danger`、`ammo.issue`、`techUnlocked` |
+  | `colony/index.ts` `assignJob` | — | 医療は S4 から（`JOB_TECH`） |
+
+- **分岐の両側**（どちらも動く。釣り合いは未調整）:
+  - F4: 誘導築城 = 堀の工数 −40%・跳ね橋・堀沿いの減速 ／ 重層防壁 = 有刺鉄線・壁と門の耐久 +25%・修理 +50%
+  - F7: 自動防衛 = 自動銃座（燃料と弾薬を消費。不在時の数値戦闘にも参加）／ 民兵制 = 襲来時に在宅の全員が防衛 output の 50% で戦う
+  - W5: 大口径 = ダメージ ×2・貫通 4・初速 +10%／ボルト 1.8 秒・揺れ +20%・反動 +50%・弾薬 3 倍 ／ 半自動 = 弾倉 10・0.35 秒・反動 −30%／胴 −15%・貫通 1・射程 −100m（3 秒間の連射数は ボルト 3 発 / 大口径 2 発 / 半自動 8 発以上）
+  - W6: 光学 = 24 倍・測距と見越しの表示 ／ 弾薬工学 = 貫通 +2・初速 +10%・空気抵抗 −20%・製造資材 −40%
+  - A4: 畜産 = 畜舎（1.8 区画・士気 +2・夜間接近 +20%）／ 温室（季節の影響なし）
+  - A6: 携行糧食 = 遠征範囲 +2・所要 −20%・駐屯地からの食料 ／ 醸造 = 酒場（士気 +6）・酒の売上
+  - S5: 感染症学 = 感染率 ×0.4・医薬品 −50%（→ 病院・発症 7 日・感染予測・ワクチン）／ 工学 = 発電機・工作 +30%・全作業 +10%（→ 発電所・車両）。工学を選ぶと S9 は取れない（F9 か C9 を目指す。テスト済み）
+  - C4: 交易 = 市場（交易収入・価格安定）・食料 −20%／賃金 +10% ／ 規律 = 兵舎・賃金 −25%・全作業 +10%／士気上限 80・離反者が弾薬を持ち去る
+  - C6: 無線放送 = 毎日 1 人来訪／大群メーター +50% ／ 斥候網 = 24 時間前警告・周囲 6 セルの詳細・遠征の危険度 −0.1
+- **簡略化したもの**（09 が見る）:
+  - F4a「跳ね橋」は 06 の実装のまま（警報中に上がる堀の通路）。「堀沿いの速度 −20%」は堀に隣接するタイルの上にいるゾンビの減速
+  - F4b「隣接する壁同士の耐久 +25%」→ 壁と門の耐久を一律 +25%（取得前に建てた壁は修理で新しい上限まで戻る）
+  - F7a 自動銃座 = 防衛担当 1 人ぶんの固定火力（射程 45m・1.5 秒・命中 45%）。「電力を消費」は燃料 0.5/日（発電機を前提にすると感染症学ルートで建てられなくなるため）。燃料が 0 なら止まる
+  - F7b 民兵 = 警報中に防衛担当以外も射撃に加わるだけ。持ち場は 05 の避難先（司令部の周り）のままなので、実質は「壁を破られてからの戦力」
+  - F8「塔の射程ボーナス」= 塔の上の射程 ×1.25。F9「大群の規模上限を無視して耐える実績」は無し
+  - W1「ナイフ強化」= ダメージ +50%。W2 は工房の解禁だけ（手作業の製造は最初からできる）。W3「矢は回収可」= 弓は弾薬を使わない（06 のまま）
+  - W5a「肥大型も頭 1 発」「歩行型は胴 1 発」は全体のダメージ ×2 で実現。W6a「弾道補正マーカー」= 見越し量を mil の数字で出す。W6b「マッチ弾」= 初速 +10%・空気抵抗 −20%
+  - W7 = 夜のスコープ中に環境光を緑に上げる。夜の揺れペナルティ（×1.25）は 07 が新設し、W7 で消える
+  - W8「銃器配備コスト −50%」= 防衛担当・遠征隊の弾薬消費 −50%。W9 狙撃手 = 任命 UI は無く、防衛 output の上位 3 人が塔の上で銃を持っていれば自動でなる
+  - A2「腐敗なし」は腐敗の仕組みが無いので無し。A4a「飼料に農地 2 区画」は無し、「家畜の誘引」= 夜間接近 +20%。A4b「部品・電力を消費」は建設費のみ。A5「燃料消費」は無し
+  - A6a「常駐者の食料自給」= 常駐 1 人あたり 0.5 食料/日を本拠へ（常駐者はもともと食べない）。A6b「食料の 10% を消費」= 1 日の必要量の 10% を備蓄から引いて 6 耳/食料で売る
+  - A8「飢餓イベントなし」= 食事を欠いても体力が減らない（士気は下がる）
+  - S1「包帯の製造」は無し。S2 = スコープで狙った個体の種類と体力、本拠から 4 セルの概数。S4「感染の治療」は最初からできる（05 のまま）、S4 は診療所と医療の仕事の解禁
+  - S5b「道具による全作業 +10%」は修飾のみ。S6a「7 日間発症しない」= 感染の期限を 48 時間 → 168 時間。S6b「電力を要する建物すべて稼働」は無し（発電所が工作・研究 +20%、防衛の命中 +8% を持つ）
+  - S7a「大群の発生元セルが分かる」は無し（予測表示のみ）。S7b「燃料消費」は無し
+  - S8 = 学校が建っていれば 30 日ごとに在宅者の知識 +1（賃金は据え置き）。S9「支配セル」= 本拠と駐屯地のセル
+  - C1「士気の飢餓ペナルティ緩和」= 食事不足の士気低下 ×0.7。C2 を取るまで候補の能力は UI で隠れる（賃金と特性は見える）
+  - C4a 交易 = 市場があれば「農村が近い ＋ 常駐者のいる駐屯地の数」× 4 耳/日。C4b「脱走」= 離反時に弾薬 20 も持ち去る
+  - C5「人口上限の撤廃」のために上限 30 人を新設（`hire` が拒否。デバッグの `addSurvivors` と遠征の連れ帰り候補は対象外）
+  - C6a = 無線塔があれば毎日、6 セル以内で H が最も多いセルから 1 人が候補に加わる。「拠点の誘引 +50%」= 大群メーターの蓄積 ×1.5
+  - C6b「未踏セルの Z・loot・H」= 本拠と駐屯地から 6 セル以内を毎日 intel 2 に。C7「預かり証」= 死亡時に所持耳の半分が備蓄に入る
+  - C8 = 設置から 10 日ごとに無料で等級 +1（常駐者がいるとき）、毎日 等級 × 3 耳。C9 = 取得時に士気 +15（1 回）、駐屯地 1 か所につき全 output +2%（最大 +20%）
+  - 駐屯地: 「調達範囲 +1」= 等級 2 以上が 1 つでもあれば遠征範囲 +1（本拠中心のまま）、「監視」= 周囲のセルを intel 2 に、等級 3 の「農地・交易所」= 食料 3・耳 5 /日
+  - 市場「食料価格安定」= 価格係数の上限 ×0.8。発電機 = 工作 +10%（燃料 0.3/日）
+- 未完了・既知の問題:
+  - **未着手**: 車両によるファストトラベルの専用演出（数値の短縮のみ）、遠征の目的地を駐屯地中心に広げること、民兵の持ち場、狙撃手の任命 UI、電力網（建物ごとの稼働条件）、畜舎の飼料、温室の維持費、研究完了時の演出と音（イベントは出ている）、研究の予約キュー（1 カテゴリ 1 ノードを手で選び直す）
+  - **バランスは未調整**。分岐の両側は「動く」ことだけ確認した。気になる点は `prompts/09` に書いた（規律 > 交易、工学の全作業 +10%、大口径の弾薬 3 倍、半自動の胴 −15% が歩行型に無影響 など）
+  - 費用は研究担当 4 人固定で合わせた。実プレイでは人数・研究所・学校・発電所で後半ほど速くなるはず（未計測）
+  - 壁の耐久上限が上がる技術（F4b / F9）を取っても、既存の壁の現在値は上がらない（修理で上限まで戻る）。半自動化で弾倉が増えても装填済みの弾はそのまま
+  - 旧セーブ（06 以前）は読めるが、技術なしで建てた建物はそのまま残り、新しく建てるには研究が要る。`STATE_VERSION` は 5 のまま（追加は省略可能なフィールドだけ）
+  - 研究タブは横 1,270px の表を枠内スクロールで見せている（幅 360px では 3 列ぶんしか見えない）。08 で縮小表示などを検討
+  - 「実際に遊んで分岐の魅力を比べる」ことはしていない（ヘッドレスのテストとスクリーンショットのみ）
+- 仕様からの変更点（更新した docs）:
+  - `03_tech_tree.md`: 全ノードの費用と効果を実装に合わせて書き直した（冒頭に注記）
+  - `02_systems_spec.md`: §9 を書き直し（費用の帯、実装メモ、難易度、人口上限、夜の揺れ、日次の効果）、§9.1 建国宣言・エンディング・敗北を追加、§6.3 の「未実装の効果」を 07 の実装に置き換え
+  - `04_architecture.md`: §5 に 07 の追加・削除フィールドと「研究・修飾」の節、§6 のコマンド・イベント、§7 の武器定義の説明
+  - 建物の解禁を直した: 無線塔 `C6` → `C6a`、記念碑 `C6` → `C5`、政府庁舎 `C9` → 到達技術のいずれか（`techAny`）。遠征の武器に解禁技術を入れた（近接 W1 / 弓 W3 / 拳銃・小銃 W4）
+  - 既存テスト: `tests/build.test.ts` と `tests/colony.test.ts` の rig、`e2e/build.spec.ts` と `e2e/smoke.spec.ts` の共同体シナリオに `flags.unlockAll = true`、`tests/sim.test.ts` の「ハンドラのないコマンド」は研究システムを外した sim で `startResearch` を投げる形に変更（全コマンドに担当ができたため）
+  - 依存の追加なし
+- 次のセッションへの注意:
+  - **08 向け**: `prompts/08` の末尾（研究タブとエンディングの場所、イベント、チュートリアルで伝えること）
+  - **09 向け**: `prompts/09` の末尾（調整点、見てほしい分岐、pacing の雛形）
+  - 技術で数値を変える手順は `04_architecture.md`「研究・修飾」の節。`getMod` は毎フレーム呼んでよい（表の参照 1 回）
+  - テストや e2e で建物・装備を使うときは `state.flags.unlockAll = true` か `grantTech(state, ['F3', ...])`（前提ごと付与。封鎖されたノードは付与しない）
+  - デバッグ: `window.__game.debug.grantTech(ids | 'all')`、`.research(points)`（RP を足して 1 時間ぶん配分）、`.fulfilVictory('F9' | 'S9' | 'C9', capitol?)`（人口・駐屯地・時代・到達技術・政府庁舎を揃える。次の時報で建国宣言）
+- 追加した共有型・コマンド・イベント:
+  - 型: `ResearchState.progress / victory`、`Bullet.torsoMul`、`BuildingDef.techAny / mods / flags`、`WeaponDef.torsoMul / ammoPerShot`、`TechDef` / `TechEffect` / `ModKey` / `FlagId`（`data/techs.ts`）
+  - データ: `data/techs.ts`（`TECHS`, `TECH_LIST`, `GOAL_TECHS`, `MOD_KEYS`, `FLAGS`, `RESEARCH`, `DIFFICULTY_MODS`, `locksOf`）、`RENDER.sky.nightVision`
+  - コマンド: `startResearch`, `setAllocation` を実装、`dismissEnding` を追加
+  - イベント: `techCompleted`, `eraAdvanced`, `victory{tech}` を発火。`candidateFound.by: 'radio'`
+  - フラグ: `flags.endingSeen`, `flags.lostTotal`

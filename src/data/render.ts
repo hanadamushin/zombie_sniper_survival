@@ -30,6 +30,8 @@ export const RENDER = {
     twilight: { sky: 0xd98a5a, fog: 0xc08a6a, ground: 0x3a3a2c, sun: 0xff9a5a },
     night: { sky: 0x070b16, fog: 0x0a0f1a, ground: 0x10151a, sun: 0x8fa6d8 },
     ambientDay: 2.4,
+    /** Night-vision scope (W7): ambient light and its tint while looking through it in the dark. */
+    nightVision: { ambient: 2.6, color: 0x7dff8a },
     ambientNight: 0.75,
     sunDay: 2.2,
     sunNight: 0.5,

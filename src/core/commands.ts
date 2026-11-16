@@ -27,6 +27,8 @@ export type Command =
   // --- research (07) ---
   | { type: 'startResearch'; id: string }
   | { type: 'setAllocation'; allocation: Record<TechCategory, number> }
+  /** The ending screen has been read; the game goes on. */
+  | { type: 'dismissEnding' }
   // --- world / tactical (02/03/04) ---
   /** `fast` (06): fast travel — both ends must be the base or an outpost. */
   | { type: 'travel'; to: CellId; fast?: boolean }
