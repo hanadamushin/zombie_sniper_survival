@@ -6,7 +6,12 @@
 import type { GameState, StaticGrid } from '../../core/types.ts';
 import { BALANCE } from '../../data/balance.ts';
 import { GOAL_TECHS, RESEARCH } from '../../data/techs.ts';
+import { buildNow } from '../build/blueprints.ts';
 import { isBuilt, isUnlocked } from '../build/structures.ts';
+import { BUILD } from '../../data/buildings.ts';
+import { stream } from '../../core/rng.ts';
+import { generateSurvivor } from '../colony/survivors.ts';
+import { grantTech } from './index.ts';
 import { ctxNow, logEntry } from '../colony/stock.ts';
 import type { SimContext } from '../system.ts';
 
@@ -99,4 +104,33 @@ export function checkVictory(state: GameState, ctx: Pick<SimContext, 'grid' | 'e
   logEntry(ctxNow(state, ctx.grid, ctx.emit), 'research', 'log.victory', { tech: p.goal });
   ctx.emit({ type: 'victory', tech: p.goal });
   return true;
+}
+
+/**
+ * Debug / tests: put the colony where the declaration only needs its last hour — enough people,
+ * outposts in enough regions, the era, a goal technology, and (unless `capitol` is false) the
+ * capitol itself. Bypasses every rule on purpose.
+ */
+export function debugFulfilVictory(state: GameState, grid: StaticGrid, goal: 'F9' | 'S9' | 'C9' = 'F9', capitol = true): void {
+  const world = state.world;
+  grantTech(state, [goal]);
+  // The goal node alone does not open the eras on the way to it.
+  state.research.era = 3;
+  const rng = stream(state, 'debug.people');
+  while (state.colony.survivors.length < V.population) {
+    const s = generateSurvivor(state, 'rural', rng);
+    s.pos = [512, 540];
+    state.colony.survivors.push(s);
+  }
+  // One quiet cell per region until there are enough outposts.
+  const used = new Set<number>(world.outposts.map((o) => o.cell));
+  const perRegion = new Map<number, number>();
+  for (const cell of grid.landIds) {
+    if (world.outposts.length >= V.outposts) break;
+    const region = grid.cells[cell]!.region;
+    if (cell === world.homeCell || used.has(cell) || (perRegion.get(region) ?? 0) >= 2 || (world.cells.Z[cell] ?? 0) > 20) continue;
+    perRegion.set(region, (perRegion.get(region) ?? 0) + 1);
+    world.outposts.push({ id: state.nextId++, cell, tier: 1, ammo: 0, garrison: [], defense: BUILD.outpost.tiers[0].defense, foundedDay: state.time.day, convoy: null });
+  }
+  if (capitol && !state.build.structures.some((s) => s.def === 'capitol')) buildNow(state, 'capitol', BUILD.start.hq[0] - 6, BUILD.start.hq[1] + 6, 0);
 }

@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { daylight, hourFloat } from '../core/time.ts';
 import { RENDER } from '../data/render.ts';
 import type { RenderContext, SubRenderer } from './index.ts';
+import { hasFlag } from '../sim/research/modifiers.ts';
 
 const S = RENDER.sky;
 const CEL = RENDER.celestial;
@@ -109,6 +110,7 @@ export function createSkyRenderer(): SubRenderer {
   const sunDir = new THREE.Vector3();
   const moonDir = new THREE.Vector3();
   const ambientNight = new THREE.Color(CEL.ambientNightColor);
+  const nightVisionColor = new THREE.Color(S.nightVision.color);
   const zenithDay = new THREE.Color(CEL.zenithDay);
   const zenithNight = new THREE.Color(CEL.zenithNight);
   const moonColor = new THREE.Color(CEL.moon);
@@ -148,6 +150,13 @@ export function createSkyRenderer(): SubRenderer {
       hemi.color.copy(ambientNight).lerp(colors.sky, colors.light);
       hemi.groundColor.copy(colors.ground);
       hemi.intensity = THREE.MathUtils.lerp(S.ambientNight, S.ambientDay, colors.light);
+      // Night-vision scope (W7): while scoped in the dark the world is lit up in green.
+      const nv = state.mode === 'tactical' && hasFlag(state, 'scope.nightVision') ? state.player.aim.scopeT * (1 - colors.light) : 0;
+      if (nv > 0.01) {
+        hemi.color.lerp(nightVisionColor, nv);
+        hemi.groundColor.lerp(nightVisionColor, nv * 0.6);
+        hemi.intensity = THREE.MathUtils.lerp(hemi.intensity, S.nightVision.ambient, nv);
+      }
 
       celestialDirs(hour, sunDir, moonDir);
       // The light comes from the sun while it is up, otherwise from the moon; either fades out at the horizon.
