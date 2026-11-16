@@ -11,6 +11,7 @@
 | 05 | [05_colony.md](05_colony.md) | 生存者・経済 | M3 | 大 |
 | 06 | [06_building_defense.md](06_building_defense.md) | 建築・防衛・駐屯地 | M4 | 大 |
 | 07 | [07_tech_progression.md](07_tech_progression.md) | 技術ツリー・進行 | M5 | 中 |
+| 07b | [07b_playtest_fixes.md](07b_playtest_fixes.md) | 実機プレイの指摘への対応（操作・地形の遮蔽・生存者の発見・タイトル） | M5 | 中 |
 | 08 | [08_ui_audio.md](08_ui_audio.md) | UI/UX・音・チュートリアル | M6 | 中 |
 | 09 | [09_balance_qa.md](09_balance_qa.md) | バランス調整・QA | M7 | 中 |
 | 10 | [10_mobile.md](10_mobile.md) | スマホ対応（任意） | M8 | 小 |

@@ -6,6 +6,11 @@ export const KEYS = {
   left: ['KeyA', 'ArrowLeft'],
   right: ['KeyD', 'ArrowRight'],
   sprintOrBreath: ['ShiftLeft', 'ShiftRight'],
+  // Keyboard alternatives to the mouse buttons / wheel (touchpads cannot hold right + left click).
+  fire: ['KeyF'],
+  scopeToggle: ['KeyQ'],
+  zoomIn: ['Equal', 'NumpadAdd'],
+  zoomOut: ['Minus', 'NumpadSubtract'],
   reload: ['KeyR'],
   crouch: ['KeyC'],
   prone: ['KeyZ'],

@@ -29,7 +29,7 @@ export const TACTICAL = {
     /** Velocity approaches the wanted velocity at this rate (1/s). */
     accel: 12,
     /** Radians per pixel of mouse movement. */
-    lookSensitivity: 0.0022,
+    lookSensitivity: 0.0027,
     maxPitch: 1.5,
     /** Ledges up to this height are stepped onto; anything higher blocks. */
     stepUp: 0.5,

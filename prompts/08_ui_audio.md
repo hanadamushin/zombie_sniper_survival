@@ -82,3 +82,11 @@
 - 音・演出用のイベント: `hordeWarning`, `hordeArrived`, `raidStarted{kind, size, dir, away}`, `raidEnded{repelled}`, `structureDamaged`, `structureDestroyed{def}`, `structureBuilt{def}`, `blueprintPlaced`, `structureRemoved`, `moatBridged`, `defenderFired{pos, target, hit}`（曳光線は `render/tactical/structures.ts` が描いている）, `survivorHurt`, `outpostFounded`, `outpostLost`, `outpostSupplied`, `defeat{reason}`
 - 堀は地面を掘り下げていない（暗い面＋土の縁で表現）。門は格子で、開閉アニメーションはない。塔の上の防衛担当は立っているだけ（射撃の姿勢なし）
 - チュートリアルで必ず伝えること: 防衛担当は **塔の上からしか壁越しに撃てない**／司令部が壊れると敗北／堀は切れ目を 1 か所残すと列ができる
+
+### 実機プレイ（発注者）と 07b の結果を受けて
+
+- 発注者の環境はタッチパッドのノート PC。07b でキーだけの操作（Q スコープ切替、F 射撃、矢印キーで照準、`-` / `=` で倍率）が入っている。チュートリアルのヒントと操作一覧は **マウスとキーの両方** を示し、設定画面にマウス感度に加えて矢印キー照準の速さを置く
+- タイトルは未定（仮題 Zombie Sniper Survival）。「耳の国」は使わない。タイトル画面の仕上げは仮題のまま行い、表示名は `ja.ts` の 1 か所で差し替えられる状態を保つ
+- 発注者は初回プレイで生存者を見つけられなかった。07b で煙と方角表示が入っているので、ヒント 5（生存者との出会い）はそれを指し示す形にする
+- 実 GPU（RTX 5060）で屋外 165fps を確認済み。内蔵 GPU は未確認
+

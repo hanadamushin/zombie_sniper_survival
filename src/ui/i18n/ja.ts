@@ -34,7 +34,7 @@ export const ja = {
   'mode.menu': 'メニュー',
   'mode.label': 'モード',
 
-  'tactical.clickToAim': '右クリック: スコープ / ホイール: 倍率 / 左クリック: 射撃 / Shift: 息止め・走る / R: リロード / C・Z: しゃがむ・伏せる / PgUp・PgDn: ゼロイン / V: ナイフ / E長押し: 耳を回収',
+  'tactical.clickToAim': '右クリック・Q: スコープ / ホイール・＋－: 倍率 / 左クリック・F: 射撃 / Shift: 息止め・走る / R: リロード / C・Z: しゃがむ・伏せる / PgUp・PgDn: ゼロイン / V: ナイフ / E長押し: 耳を回収',
   'tactical.rangeHint': '射撃場: 標的は 100〜600m（板の横の杭の本数 × 100m）。ミル目盛り 1 つ = 100m で 10cm。身長 1.75m の標的が N ミルなら 距離 ≒ 1750 ÷ N m',
   'hud.hp': '体力',
   'hud.breath': '息',

@@ -37,6 +37,8 @@ export function createInput(deps: InputDeps): Input {
   const frame = emptyInputFrame();
   let fireHeld = false;
   let scopeHeld = false;
+  /** Scope latched on with the keyboard (Q); a right-click release or leaving the mode clears it. */
+  let scopeToggled = false;
   /** Speed to return to when un-pausing with Space. */
   let resumeSpeed: Speed = 1;
   /** Modes to return to when the world map / menu is closed. */
@@ -60,6 +62,7 @@ export function createInput(deps: InputDeps): Input {
     held.clear();
     fireHeld = false;
     scopeHeld = false;
+    scopeToggled = false;
   };
 
   const toggleMode = (target: 'command' | 'world' | 'menu'): void => {
@@ -107,6 +110,9 @@ export function createInput(deps: InputDeps): Input {
     }
     if (state.mode !== 'tactical') return;
     switch (action) {
+      case 'scopeToggle': scopeToggled = !scopeToggled; break;
+      case 'zoomIn': frame.zoomDelta += 1; break;
+      case 'zoomOut': frame.zoomDelta -= 1; break;
       case 'reload': frame.reload = true; break;
       case 'knife': frame.knife = true; break;
       case 'interact': frame.interact = true; break;
@@ -134,7 +140,10 @@ export function createInput(deps: InputDeps): Input {
   };
   const onMouseUp = (e: MouseEvent): void => {
     if (e.button === 0) fireHeld = false;
-    if (e.button === 2) scopeHeld = false;
+    if (e.button === 2) {
+      scopeHeld = false;
+      scopeToggled = false;
+    }
   };
   const onMouseMove = (e: MouseEvent): void => {
     if (!locked() || !tactical()) return;
@@ -182,8 +191,8 @@ export function createInput(deps: InputDeps): Input {
       const has = (a: Action): boolean => active && held.has(a);
       frame.moveX = (has('right') ? 1 : 0) - (has('left') ? 1 : 0);
       frame.moveZ = (has('forward') ? 1 : 0) - (has('back') ? 1 : 0);
-      frame.fire = active && fireHeld;
-      frame.scope = active && scopeHeld;
+      frame.fire = active && (fireHeld || held.has('fire'));
+      frame.scope = active && (scopeHeld || scopeToggled);
       // Shift: hold breath while scoped, sprint otherwise.
       const shift = has('sprintOrBreath');
       frame.holdBreath = shift && frame.scope;
