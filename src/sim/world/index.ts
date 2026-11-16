@@ -12,7 +12,8 @@ import { dangerOf, removeZombies } from './derive.ts';
 import { stepInfection, type InfectionExtras } from './infection.ts';
 import { ctxNow } from '../colony/stock.ts';
 import { assignGarrison, foundOutpost, isStation, outpostsDay, upgradeOutpost } from './outposts.ts';
-import { advanceTravel, findRoute } from './travel.ts';
+import { getMod } from '../research/modifiers.ts';
+import { advanceTravel, findRoute, travelFactor } from './travel.ts';
 
 /** Prey weight added by the player's settlements (spec §2.2: population x 2 counts as H). */
 export function settlementAttraction(state: GameState): InfectionExtras {
@@ -47,7 +48,7 @@ export const worldSystem: System = {
       if (!route || route.path.length < 2) return reject('noRoute');
       state.world.travel = { from: state.player.cell, to: cmd.to, path: route.path, progress: 0 };
       if (fast) state.world.travel.fast = true;
-      ctx.emit({ type: 'travelStarted', from: state.player.cell, to: cmd.to, minutes: route.minutes });
+      ctx.emit({ type: 'travelStarted', from: state.player.cell, to: cmd.to, minutes: route.minutes * travelFactor(state, fast) });
     },
     foundOutpost(state, cmd, ctx) {
       const reason = foundOutpost(ctxNow(state, ctx.grid, ctx.emit), cmd.cell);
@@ -85,7 +86,7 @@ export const worldSystem: System = {
     if (!worldReady(state, ctx.grid)) return;
     const stats = stepInfection(state.world.cells, ctx.grid, state.time.day, settlementAttraction(state), stream(state, 'world.infection'));
     const inflow = stats.inflow[0] ?? 0;
-    state.world.hordeMeter += inflow;
+    state.world.hordeMeter += getMod(state, 'raid.hordeGain', inflow); // difficulty, radio broadcasts (C6a)
     ctx.emit({ type: 'infectionStepped', day: state.time.day, homeInflow: inflow });
     outpostsDay(ctxNow(state, ctx.grid, ctx.emit), stats.inflow.slice(1));
   },

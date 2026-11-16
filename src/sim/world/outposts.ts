@@ -7,7 +7,8 @@ import type { CellId, GameState, Outpost, ResourceId, StaticGrid, Survivor } fro
 import { BALANCE } from '../../data/balance.ts';
 import { BUILD, type Cost } from '../../data/buildings.ts';
 import type { TacticalMap } from '../../gen/index.ts';
-import { hasTech, techUnlocked } from '../build/structures.ts';
+import { techUnlocked } from '../build/structures.ts';
+import { getMod, hasFlag } from '../research/modifiers.ts';
 import { aptitude } from '../colony/jobs.ts';
 import { killSurvivor } from '../colony/morale.ts';
 import { logEntry, moveEars, moveStock, type ColonyCtx } from '../colony/stock.ts';
@@ -140,7 +141,7 @@ export function assignGarrison(c: ColonyCtx, survivorId: number, outpostId: numb
 
 /** Days a convoy from the nearest supplied point takes (0 = same day). */
 export function supplyDelay(state: GameState, grid: StaticGrid, o: Outpost): number {
-  if (hasTech(state, 'S7b')) return 0;
+  if (hasFlag(state, 'supply.noDelay')) return 0; // vehicles (S7b)
   const home = state.world.homeCell;
   let dist = home === null ? 0 : cellDistance(grid, home, o.cell);
   // Other outposts that already hold ammunition can pass it on.
@@ -194,7 +195,7 @@ export function outpostsDay(c: ColonyCtx, inflow: readonly number[]): void {
     }
     if (!o.convoy && o.garrison.length > 0) {
       const short = tierOf(o.tier).ammoCap - o.ammo;
-      const rate = (O.supplyBase + O.supplyPerTier * o.tier) * (hasTech(state, 'C3') ? 1.5 : 1);
+      const rate = getMod(state, 'outpost.supply', O.supplyBase + O.supplyPerTier * o.tier);
       const want = Math.floor(Math.min(short, rate, state.colony.stock.ammo));
       if (want > 0) {
         const sent = moveStock(c, 'ammo', -want);

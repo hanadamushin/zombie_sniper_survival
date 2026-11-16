@@ -286,6 +286,8 @@ export interface Bullet {
   maxRange: number;
   /** Zombie hit last (not tested again while passing through it). */
   lastHit: EntityId | null;
+  /** Extra factor on torso hits (07: the semi-automatic's lighter round). */
+  torsoMul?: number;
 }
 
 export interface ColonyState {
@@ -425,6 +427,11 @@ export interface ResearchState {
   locked: string[]; // ids made unavailable by exclusive branches
   active: Partial<Record<TechCategory, { id: string; rp: number }>>;
   allocation: Record<TechCategory, number>; // sums to 100
+  // --- added by 07 ---
+  /** Points already put into nodes that are not in progress right now (the player switched away). */
+  progress?: Record<string, number>;
+  /** Set when the nation has been declared: when, and the goal technology that names the ending. */
+  victory?: { day: number; minute: number; tech: string } | null;
 }
 
 export interface Outpost {

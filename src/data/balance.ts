@@ -173,7 +173,6 @@ export const BALANCE = {
     swayFatigue: 0.8,
     /** Seconds until the just-moved factor has decayed to 0. */
     swayMoveDecay: 1.5,
-    swayDifficulty: [0.8, 1, 1.25],
     /** Breathing figure-eight period (s) and the share / frequencies (Hz) of the fine tremor on top. */
     swayPeriod: 4.6,
     tremorShare: 0.22,

@@ -10,7 +10,9 @@
 
 import type { GameState, JobId, ResourceId, Structure, Survivor } from '../../core/types.ts';
 import { COLONY, LOOT_TABLE } from '../../data/colony.ts';
+import { RESEARCH } from '../../data/techs.ts';
 import { traitOf } from '../../data/traits.ts';
+import { getMod, hasFlag } from '../research/modifiers.ts';
 import { bedsTotal, jobFacility, plotInfo } from '../build/structures.ts';
 import { moveStock, type ColonyCtx } from './stock.ts';
 import { isFit } from './survivors.ts';
@@ -45,7 +47,18 @@ export function facilityFactor(state: GameState, job: JobId): number {
   return f ?? 1;
 }
 
-/** Output per hour of work (spec §4.2), without the facility factor. */
+/**
+ * What technology, buildings and the difficulty do to a job's output (07): `job.<id>` x `job.all`,
+ * and with the federal charter (C9) a little for every outpost.
+ */
+export function jobMul(state: GameState, job: JobId): number {
+  if (job === 'idle') return 1;
+  let m = getMod(state, `job.${job}`, 1) * getMod(state, 'job.all', 1);
+  if (hasFlag(state, 'federation')) m *= 1 + Math.min(RESEARCH.federationMax, RESEARCH.federationPerOutpost * state.world.outposts.length);
+  return m;
+}
+
+/** Output per hour of work (spec §4.2), without the facility factor and without jobMul. */
 export function outputPerHour(s: Survivor, job: JobId): number {
   const trait = traitOf(s.trait).job;
   const traitMul = (trait?.[job] ?? 1) * (trait?.all ?? 1);
@@ -96,7 +109,20 @@ export function defenders(state: GameState): { survivor: Survivor; onDuty: boole
   const minute = state.time.minute;
   return state.colony.survivors
     .filter((s) => s.job === 'defense' && isFit(s))
-    .map((s) => ({ survivor: s, onDuty: isWorkTime(s, minute), power: outputPerHour(s, 'defense') }));
+    .map((s) => ({ survivor: s, onDuty: isWorkTime(s, minute), power: outputPerHour(s, 'defense') * jobMul(state, 'defense') }));
+}
+
+/**
+ * Everyone who fights when the dead are at the walls: the defenders, and with a militia (F7b)
+ * every other able person at home, at a share of their defence output. `alarm`: a raid is on.
+ */
+export function fighters(state: GameState, alarm: boolean = state.flags.colonyAlarm === true): { survivor: Survivor; onDuty: boolean; power: number; militia?: boolean }[] {
+  const list: { survivor: Survivor; onDuty: boolean; power: number; militia?: boolean }[] = defenders(state);
+  if (alarm && hasFlag(state, 'militia')) {
+    const mul = jobMul(state, 'defense') * RESEARCH.militiaShare;
+    for (const s of state.colony.survivors) if (s.job !== 'defense' && isFit(s)) list.push({ survivor: s, onDuty: true, power: outputPerHour(s, 'defense') * mul, militia: true });
+  }
+  return list;
 }
 
 /** Research points produced since the last call (07 calls this every hour). */
@@ -135,6 +161,11 @@ export function seasonFactor(day: number): number {
   return COLONY.farm.season[monthOf(day)]!;
 }
 
+/** The season factor with the floor that seed research (A7) puts under it. */
+export function seasonOf(state: GameState, day: number): number {
+  return Math.max(seasonFactor(day), getMod(state, 'farm.seasonMin', 0));
+}
+
 // --- one minute of work --------------------------------------------------------------------
 
 const farmers: { s: Survivor; out: number }[] = [];
@@ -149,7 +180,7 @@ export function workMinute(c: ColonyCtx): void {
   let forage = 0;
   for (const s of colony.survivors) {
     if (s.job === 'idle' || s.job === 'defense' || !isFit(s) || !isWorkTime(s, c.minute)) continue;
-    const out = (outputPerHour(s, s.job) * facilityFactor(state, s.job)) / 60;
+    const out = (outputPerHour(s, s.job) * facilityFactor(state, s.job) * jobMul(state, s.job)) / 60;
     switch (s.job) {
       case 'farming': farmers.push({ s, out }); break;
       case 'scavenging': forage += out; break;
@@ -166,8 +197,8 @@ export function workMinute(c: ColonyCtx): void {
     const plots = plotInfo(state);
     const full = Math.round(plots.plots * F.workersPerPlot);
     // Greenhouses do not care about the season.
-    const season = seasonFactor(c.day);
-    const perPoint = (F.foodPerPlotDay / F.refPoints) * (season + (1 - season) * plots.allSeason);
+    const season = seasonOf(state, c.day);
+    const perPoint = getMod(state, 'farm.yield', F.foodPerPlotDay / F.refPoints) * (season + (1 - season) * plots.allSeason);
     let food = 0;
     for (let i = 0; i < farmers.length; i++) food += farmers[i]!.out * (i < full ? 1 : F.crowdedFactor) * perPoint;
     colony.market.food += food;

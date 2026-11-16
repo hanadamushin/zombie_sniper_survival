@@ -72,7 +72,8 @@ describe('sim.tick', () => {
 
   it('warns once for commands without a handler and keeps running', () => {
     const warn = vi.fn();
-    const sim = createSim({ warn });
+    // Every command has an owner by now (07), so the check runs on a sim that lacks the research system.
+    const sim = createSim({ warn, systems: SYSTEMS.filter((s) => s.id !== 'research') });
     const state = createInitialState(1, 1);
     const cmd: Command = { type: 'startResearch', id: 'x' };
     sim.dispatch(cmd);

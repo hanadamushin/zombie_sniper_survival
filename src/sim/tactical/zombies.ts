@@ -13,7 +13,9 @@ import { rand, randInt, randRange, stream, type RngState } from '../../core/rng.
 import { addMinutes, isNight } from '../../core/time.ts';
 import type { GameState, StaticGrid, TacticalState, Zombie, ZombieKind } from '../../core/types.ts';
 import { BALANCE } from '../../data/balance.ts';
+import { RESEARCH } from '../../data/techs.ts';
 import { KILL, ZOMBIES, type ZombieDef } from '../../data/zombies.ts';
+import { getMod } from '../research/modifiers.ts';
 import type { TacticalMap } from '../../gen/index.ts';
 import type { SimContext } from '../system.ts';
 import { BUILD } from '../../data/buildings.ts';
@@ -229,11 +231,11 @@ export function killZombie(state: GameState, area: TacticalArea, ctx: Pick<SimCo
  * Apply one hit. `mul` scales the damage table (pierced bullets, weapon). Returns true when it killed.
  * `amount` overrides the table (knife).
  */
-export function damageZombie(state: GameState, area: TacticalArea, ctx: SimContext, z: Zombie, part: 'head' | 'torso' | 'legs', mul: number, _dir?: Readonly<Vec3>, amount?: number): boolean {
+export function damageZombie(state: GameState, area: TacticalArea, ctx: SimContext, z: Zombie, part: 'head' | 'torso' | 'legs', mul: number, _dir?: Readonly<Vec3>, amount?: number, torsoMul = 1): boolean {
   if (z.state === 'down') return false;
   const def = ZOMBIES[z.kind];
   const base = amount ?? def[part];
-  z.hp -= base >= KILL ? KILL : base * mul;
+  z.hp -= base >= KILL ? KILL : base * mul * (part === 'torso' ? torsoMul : 1);
   if (z.hp <= 0) {
     killZombie(state, area, ctx, z, part === 'head' && amount === undefined, amount !== undefined);
     return true;
@@ -250,7 +252,7 @@ export function damageZombie(state: GameState, area: TacticalArea, ctx: SimConte
 
 /** Knife: kills outright from behind an unaware zombie, otherwise fixed damage. */
 export function knifeZombie(state: GameState, area: TacticalArea, ctx: SimContext, z: Zombie, backstab: boolean): boolean {
-  return damageZombie(state, area, ctx, z, 'torso', 1, undefined, backstab ? KILL : BALANCE.combat.knife.damage);
+  return damageZombie(state, area, ctx, z, 'torso', 1, undefined, backstab ? KILL : getMod(state, 'knife.damage', BALANCE.combat.knife.damage));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -362,7 +364,8 @@ function moveToward(state: GameState, area: TacticalArea, z: Zombie, tx: number,
     const turn = Z.turnRate * dt * (z.kind === 'runner' ? 1.6 : 1);
     z.yaw += Math.abs(diff) <= turn ? diff : Math.sign(diff) * turn;
   }
-  let step = Math.min(dist, speed * dt * (overlay && overlay.wire[tileOf(pos[0], pos[2])] ? BUILD.wireSlow : 1));
+  const here = overlay ? tileOf(pos[0], pos[2]) : 0;
+  let step = Math.min(dist, speed * dt * (overlay && overlay.wire[here] ? BUILD.wireSlow : overlay && overlay.slow[here] ? RESEARCH.moatSlow : 1));
   if (z.flinch > 0) step = 0;
   if (step > 0) {
     if (z.detourT > 0) {

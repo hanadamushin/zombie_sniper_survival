@@ -13,6 +13,7 @@ import { COLONY } from '../../data/colony.ts';
 import { TACTICAL } from '../../data/tactical.ts';
 import type { Ladder, Solid, TacticalMap } from '../../gen/index.ts';
 import { ctxNow, logEntry } from '../colony/stock.ts';
+import { getMod, hasFlag, techAvailable, techDone } from '../research/modifiers.ts';
 import { heightAt } from '../tactical/collision.ts';
 
 export const TILE = TACTICAL.tile;
@@ -23,26 +24,29 @@ export function defOf(st: Structure): BuildingDef {
   return BUILDINGS[st.def] ?? BUILDINGS.palisade!;
 }
 
-/** A tech the colony really has (bonuses). Availability goes through isUnlocked. */
+/** A tech the colony really has. Numbers go through getMod, switches through hasFlag (sim/research/modifiers.ts). */
 export function hasTech(state: GameState, id: string): boolean {
-  return state.research.done.includes(id);
+  return techDone(state, id);
 }
 
 /**
  * THE one place that decides whether something tech-gated is available (buildings, defender
- * weapons, outpost tiers). 07 only has to fill state.research.done and set BUILD.unlockAllUntilTech
- * to false; `flags.unlockAll` stays as the debug override.
+ * weapons, expedition gear, jobs, outpost tiers). `flags.unlockAll` is the debug override.
  */
-export function techUnlocked(state: GameState, tech: string | undefined): boolean {
-  return tech === undefined || BUILD.unlockAllUntilTech || state.flags.unlockAll === true || hasTech(state, tech);
+export function techUnlocked(state: GameState, tech: string | readonly string[] | undefined): boolean {
+  return techAvailable(state, tech);
 }
 export function isUnlocked(defId: string, state: GameState): boolean {
   const def = BUILDINGS[defId];
-  return def !== undefined && techUnlocked(state, def.tech);
+  return def !== undefined && techUnlocked(state, def.techAny ?? def.tech);
 }
 
+/** Durability of a finished structure: walls and gates gain from layered walls (F4b), all defences from the fortress city (F9). */
 export function maxHp(state: GameState, def: BuildingDef): number {
-  return def.hp * (hasTech(state, 'F9') && def.category === 'defense' ? BUILD.hpMulF9 : 1);
+  let hp = def.hp;
+  if (def.kind === 'wall' || def.kind === 'gate') hp = getMod(state, 'wall.hp', hp);
+  if (def.category === 'defense') hp = getMod(state, 'defense.hp', hp);
+  return hp;
 }
 
 export const isRuin = (st: Structure): boolean => st.ruinUntil !== undefined;
@@ -94,6 +98,8 @@ export interface Overlay {
   sblock: Uint8Array;
   /** 1 = barbed wire. */
   wire: Uint8Array;
+  /** 1 = open ground beside a moat where zombies are slowed (guided fortification, F4a). */
+  slow: Uint8Array;
 }
 
 const LINKS = new Set(['wall', 'gate', 'tower']);
@@ -121,13 +127,14 @@ export function overlayOf(state: GameState, walk: Uint8Array | null): Overlay {
   const cached = overlays.get(build);
   if (cached && cached.ov.rev === build.gridRev && cached.walk === walk && cached.alarm === alarm) return cached.ov;
   const n = TILES * TILES;
-  const ov: Overlay = cached?.ov ?? { rev: 0, occ: new Int16Array(n), sidx: new Int16Array(n), cost: new Float32Array(n), zblock: new Uint8Array(n), sblock: new Uint8Array(n), wire: new Uint8Array(n), links: new Uint8Array(n) };
+  const ov: Overlay = cached?.ov ?? { rev: 0, occ: new Int16Array(n), sidx: new Int16Array(n), cost: new Float32Array(n), zblock: new Uint8Array(n), sblock: new Uint8Array(n), wire: new Uint8Array(n), slow: new Uint8Array(n), links: new Uint8Array(n) };
   ov.rev = build.gridRev;
   ov.occ.fill(0);
   ov.sidx.fill(0);
   ov.zblock.fill(0);
   ov.sblock.fill(0);
   ov.wire.fill(0);
+  ov.slow.fill(0);
   ov.links.fill(0);
   if (walk) for (let i = 0; i < n; i++) ov.cost[i] = walk[i] ? 1 : Infinity;
   else ov.cost.fill(1);
@@ -166,6 +173,18 @@ export function overlayOf(state: GameState, walk: Uint8Array | null): Overlay {
     ov.links[t] = (l[0] ? 1 : 0) | (l[1] ? 2 : 0) | (l[2] ? 4 : 0) | (l[3] ? 8 : 0) | (ew ? 16 : 0);
     if (kind === 'gate') ov.zblock[t] = ew ? 2 : 3;
   });
+  // Third pass (F4a): the ground along the moats is churned mud — the dead wade through it slowly.
+  if (hasFlag(state, 'moat.slow')) {
+    for (const st of build.structures) {
+      if (!isBuilt(st) || defOf(st).kind !== 'moat' || moatFilled(st)) continue;
+      forTiles(st, (t, tx, ty) => {
+        if (tx > 0) ov.slow[t - 1] = 1;
+        if (tx < TILES - 1) ov.slow[t + 1] = 1;
+        if (ty > 0) ov.slow[t - TILES] = 1;
+        if (ty < TILES - 1) ov.slow[t + TILES] = 1;
+      });
+    }
+  }
   overlays.set(build, { walk, alarm, ov });
   return ov;
 }
@@ -333,7 +352,7 @@ export function refreshCapacity(state: GameState): void {
     const add = defOf(st).capacity;
     if (add) for (const res of Object.keys(add) as ResourceId[]) cap[res] += add[res] ?? 0;
   }
-  if (hasTech(state, 'A2')) cap.food *= 1.5;
+  cap.food = getMod(state, 'capacity.food', cap.food);
   state.colony.capacity = cap;
 }
 

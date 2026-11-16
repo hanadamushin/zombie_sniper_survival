@@ -5,13 +5,14 @@
 import type { GameState, ResourceId, Structure } from '../../core/types.ts';
 import { BUILD, type BuildingDef } from '../../data/buildings.ts';
 import { logEntry, moveStock, type ColonyCtx } from '../colony/stock.ts';
-import { defOf, hasTech, isBuilt, maxHp, moatFilled, refreshCapacity } from './structures.ts';
+import { getMod } from '../research/modifiers.ts';
+import { defOf, isBuilt, maxHp, moatFilled, refreshCapacity } from './structures.ts';
 
 type Res = Exclude<ResourceId, 'ears'>;
 
 /** Construction output a structure needs in total. */
 export function workOf(state: GameState, def: BuildingDef): number {
-  return Math.max(1e-6, def.work * (def.kind === 'moat' && hasTech(state, 'F4a') ? BUILD.moatWorkF4a : 1));
+  return Math.max(1e-6, def.kind === 'moat' ? getMod(state, 'moat.work', def.work) : def.work);
 }
 
 /** Share of the materials that has arrived on site (1 when nothing is needed). */
@@ -71,7 +72,7 @@ export function construct(c: ColonyCtx, points: number): number {
 
   // 2. repairs, the most battered first
   if (left > 1e-9) {
-    const speed = hasTech(state, 'F4b') ? BUILD.repairSpeedF4b : 1;
+    const speed = getMod(state, 'repair.speed', 1);
     const damaged = list.filter((s) => isBuilt(s) && defOf(s).hp > 0 && s.hp < maxHp(state, defOf(s)) - 1e-6)
       .sort((a, b) => b.priority - a.priority || a.hp / maxHp(state, defOf(a)) - b.hp / maxHp(state, defOf(b)) || a.id - b.id);
     for (const st of damaged) {

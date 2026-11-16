@@ -7,15 +7,14 @@ import { BUILD, BUILDINGS, footprint, type BuildingDef } from '../../data/buildi
 import { TACTICAL } from '../../data/tactical.ts';
 import type { TacticalMap } from '../../gen/index.ts';
 import { ctxNow, moveStock } from '../colony/stock.ts';
-import { defOf, hasTech, hqOf, isBuilt, isRuin, isUnlocked, maxHp, overlayOf, refreshCapacity, TILE, TILES } from './structures.ts';
+import { getMod } from '../research/modifiers.ts';
+import { defOf, hqOf, isBuilt, isRuin, isUnlocked, maxHp, overlayOf, refreshCapacity, TILE, TILES } from './structures.ts';
 
 type Emit = (e: GameEvent) => void;
 
 /** Buildable radius around the headquarters (m). */
 export function buildRadius(state: GameState): number {
-  let r: number = BUILD.radius;
-  for (const tech of Object.keys(BUILD.radiusTech)) if (hasTech(state, tech)) r += BUILD.radiusTech[tech]!;
-  return r;
+  return getMod(state, 'build.radius', BUILD.radius);
 }
 
 /** Centre of the base in metres: the headquarters, or the middle of the map before there is one. */

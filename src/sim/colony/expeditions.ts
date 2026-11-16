@@ -5,11 +5,14 @@ import { chance, randInt, randRange, stream } from '../../core/rng.ts';
 import { addMinutes, hasReached } from '../../core/time.ts';
 import { allocId, type CellId, type Expedition, type GameState, type ResourceId, type StaticGrid, type Survivor } from '../../core/types.ts';
 import { COLONY, expeditionWeapon, LOOT_TABLE, type ExpeditionWeapon } from '../../data/colony.ts';
+import { RESEARCH } from '../../data/techs.ts';
 import { traitOf } from '../../data/traits.ts';
+import { techUnlocked } from '../build/structures.ts';
+import { getMod } from '../research/modifiers.ts';
 import { dangerOf, removeZombies } from '../world/derive.ts';
 import { cellDistance, cellsWithin } from '../world/grid.ts';
 import { findRoute } from '../world/travel.ts';
-import { outputPerHour } from './jobs.ts';
+import { jobMul, outputPerHour } from './jobs.ts';
 import { killSurvivor } from './morale.ts';
 import { itemsParam, logEntry, moveEars, moveStock, type ColonyCtx } from './stock.ts';
 import { addCandidates, isFit } from './survivors.ts';
@@ -17,13 +20,29 @@ import { addCandidates, isFit } from './survivors.ts';
 const X = COLONY.expedition;
 
 /** Chance that one member comes back unharmed (spec §4.4). */
-export function returnChance(s: Pick<Survivor, 'ath' | 'spd' | 'trait'>, weapon: ExpeditionWeapon, partySize: number, danger: number): number {
-  const p = X.base + X.perAth * s.ath + X.perSpd * s.spd + weapon.bonus + X.perMember * (partySize - 1) - X.dangerWeight * danger + (traitOf(s.trait).returnBonus ?? 0);
+export function returnChance(s: Pick<Survivor, 'ath' | 'spd' | 'trait'>, weapon: ExpeditionWeapon, partySize: number, danger: number, bonus = 0): number {
+  const p = X.base + X.perAth * s.ath + X.perSpd * s.spd + weapon.bonus + bonus + X.perMember * (partySize - 1) - X.dangerWeight * danger + (traitOf(s.trait).returnBonus ?? 0);
   return Math.min(X.max, Math.max(X.min, p));
 }
 
 export function weaponAvailable(state: GameState, w: ExpeditionWeapon): boolean {
-  return !w.tech || state.research.done.includes(w.tech);
+  return techUnlocked(state, w.tech);
+}
+
+/** How far a party may go (cells): field rations (A6a) and a tier-2 outpost extend it. */
+export function expeditionRadius(state: GameState): number {
+  return getMod(state, 'expedition.radius', X.radius) + (state.world.outposts.some((o) => o.tier >= 2) ? RESEARCH.outpostReach : 0);
+}
+/** Danger of a target as the party meets it (scouts, C6b, take the edge off) and what technology adds to the return chance. */
+export function expeditionDanger(state: GameState, cell: CellId): number {
+  return Math.min(1, Math.max(0, getMod(state, 'expedition.danger', dangerOf(state.world.cells.Z[cell] ?? 0))));
+}
+export function expeditionBonus(state: GameState): number {
+  return getMod(state, 'expedition.bonus', 0);
+}
+/** Rounds a party draws from the stores. */
+export function expeditionAmmo(state: GameState, weapon: ExpeditionWeapon, members: number): number {
+  return Math.ceil(getMod(state, 'ammo.issue', weapon.ammo) * members);
 }
 
 export interface ExpeditionTarget {
@@ -39,11 +58,12 @@ export function expeditionTargets(state: GameState, grid: StaticGrid): Expeditio
   const home = state.world.homeCell;
   if (home === null) return [];
   const out: ExpeditionTarget[] = [];
-  for (const cell of cellsWithin(grid, home, X.radius)) {
+  const timeMul = getMod(state, 'expedition.time', 1);
+  for (const cell of cellsWithin(grid, home, expeditionRadius(state))) {
     if (cell === home) continue;
     const route = findRoute(grid, home, cell);
     if (!route) continue;
-    out.push({ cell, travelMinutes: route.minutes, totalMinutes: 2 * route.minutes + X.searchHours * 60, danger: dangerOf(state.world.cells.Z[cell] ?? 0) });
+    out.push({ cell, travelMinutes: route.minutes, totalMinutes: Math.round((2 * route.minutes + X.searchHours * 60) * timeMul), danger: expeditionDanger(state, cell) });
   }
   return out.sort((a, b) => a.travelMinutes - b.travelMinutes || a.cell - b.cell);
 }
@@ -59,14 +79,14 @@ export function sendExpedition(c: ColonyCtx, memberIds: number[], target: CellId
   if (members.some((s) => !s || !isFit(s))) return 'memberUnavailable';
   const weapon = expeditionWeapon(weaponId);
   if (!weapon || !weaponAvailable(state, weapon)) return 'weapon';
-  if (!grid.cells[target] || target === home || cellDistance(grid, home, target) > X.radius) return 'tooFar';
+  if (!grid.cells[target] || target === home || cellDistance(grid, home, target) > expeditionRadius(state)) return 'tooFar';
   const route = findRoute(grid, home, target);
   if (!route) return 'noRoute';
-  const ammo = weapon.ammo * ids.length;
+  const ammo = expeditionAmmo(state, weapon, ids.length);
   if (state.colony.stock.ammo < ammo) return 'noAmmo';
   if (ammo > 0) moveStock(c, 'ammo', -ammo);
 
-  const back = addMinutes({ day: c.day, minute: c.minute }, 2 * route.minutes + X.searchHours * 60);
+  const back = addMinutes({ day: c.day, minute: c.minute }, Math.round((2 * route.minutes + X.searchHours * 60) * getMod(state, 'expedition.time', 1)));
   const exp: Expedition = {
     id: allocId(state), members: ids, target, from: home, weapon: weapon.id,
     departDay: c.day, departMinute: c.minute, returnDay: back.day, returnMinute: back.minute, resolved: false,
@@ -101,21 +121,22 @@ function resolve(c: ColonyCtx, exp: Expedition): void {
   const cells = state.world.cells;
   const party = exp.members.map((id) => state.colony.survivors.find((s) => s.id === id)).filter((s): s is Survivor => !!s);
   const weapon = expeditionWeapon(exp.weapon) ?? expeditionWeapon('unarmed')!;
-  const danger = dangerOf(cells.Z[exp.target] ?? 0);
+  const danger = expeditionDanger(state, exp.target);
+  const bonus = expeditionBonus(state);
   const land = grid?.cells[exp.target]?.land ?? 'rural';
 
   const fine: Survivor[] = [];
   const hurt: Survivor[] = [];
   const dead: Survivor[] = [];
   for (const s of party) {
-    if (chance(rng, returnChance(s, weapon, party.length, danger))) fine.push(s);
+    if (chance(rng, returnChance(s, weapon, party.length, danger, bonus))) fine.push(s);
     else if (chance(rng, X.deathShare)) dead.push(s);
     else hurt.push(s);
   }
 
   // What they carry home: scavenging output over the search hours, scaled by what the cell still holds.
   const loot = Math.max(0, cells.loot[exp.target] ?? 0);
-  const pointsOf = (s: Survivor): number => outputPerHour({ ...s, status: 'ok' }, 'scavenging') * X.searchHours;
+  const pointsOf = (s: Survivor): number => outputPerHour({ ...s, status: 'ok' }, 'scavenging') * jobMul(state, 'scavenging') * X.searchHours;
   let points = 0;
   let best: Survivor | null = null;
   for (const s of fine) {
@@ -159,9 +180,9 @@ function resolve(c: ColonyCtx, exp: Expedition): void {
   }
   for (const s of hurt) {
     s.hp = Math.min(s.hp, randInt(rng, X.injuredHp[0], X.injuredHp[1]));
-    if (chance(rng, X.infectedShare)) {
+    if (chance(rng, getMod(state, 'infection.chance', X.infectedShare))) {
       s.status = 'infected';
-      const until = addMinutes({ day: c.day, minute: c.minute }, COLONY.health.infectionHours * 60);
+      const until = addMinutes({ day: c.day, minute: c.minute }, getMod(state, 'infection.hours', COLONY.health.infectionHours) * 60);
       s.infectedUntil = { day: until.day, minute: until.minute };
       logEntry(c, 'expedition', 'log.expBitten', { name: s.name });
     } else {

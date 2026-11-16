@@ -13,21 +13,23 @@ import type { GameState, RaidState, StaticGrid, Structure, Zombie, ZombieKind } 
 import { BALANCE } from '../../data/balance.ts';
 import { BUILD } from '../../data/buildings.ts';
 import { TACTICAL } from '../../data/tactical.ts';
+import { RESEARCH } from '../../data/techs.ts';
 import { ZOMBIES } from '../../data/zombies.ts';
 import { setAlarm } from '../colony/ai.ts';
-import { defenders } from '../colony/jobs.ts';
+import { defenders, fighters } from '../colony/jobs.ts';
 import { changeMorale, killSurvivor } from '../colony/morale.ts';
 import { ctxNow, logEntry, moveEars, moveStock } from '../colony/stock.ts';
 import { isHome } from '../colony/survivors.ts';
+import { getMod, hasFlag } from '../research/modifiers.ts';
 import type { SimContext } from '../system.ts';
 import { areaOf, type TacticalArea } from '../tactical/area.ts';
 import { isDead } from '../tactical/health.ts';
 import { addZombie } from '../tactical/zombies.ts';
 import { activeCap, kindMix, removeZombies } from '../world/derive.ts';
 import { baseCentre } from './blueprints.ts';
-import { defenderSkill, defenderWeapon, killsPerShot, towers } from './defense.ts';
+import { activeTurrets, ammoPerShot, defenderSkill, defenderWeapon, killsPerShot, sniperIds, towers, TURRET_WEAPON } from './defense.ts';
 import { FIELD_UNREACHED, raidField, tileOf } from './flowfield.ts';
-import { damageStructure, defOf, hqOf, isBuilt, moatFilled, overlayOf, techUnlocked, TILE, TILES } from './structures.ts';
+import { damageStructure, defOf, hqOf, isBuilt, moatFilled, overlayOf, TILE, TILES } from './structures.ts';
 
 const R = BUILD.raid;
 type Ctx = Pick<SimContext, 'emit' | 'grid'>;
@@ -64,7 +66,7 @@ const raiders = (state: GameState): Zombie[] => (state.tactical?.zombies ?? []).
 
 /** Hours of warning the colony gets: a manned tower sees a horde coming, scouts hear of it a day ahead. */
 function warningHours(state: GameState): number {
-  if (techUnlocked(state, 'C6b') && state.research.done.includes('C6b')) return R.warnScoutHours;
+  if (hasFlag(state, 'horde.scout')) return R.warnScoutHours; // scout network (C6b)
   const manned = towers(state).length > 0 && defenders(state).length > 0;
   return manned ? R.warnTowerHours : R.warnBlindHours;
 }
@@ -95,7 +97,7 @@ export function raidMinute(state: GameState, ctx: Ctx): void {
 
   // The meter has run over: a horde forms and sets out.
   if (!world.pendingHorde && world.hordeMeter >= hordeThreshold(state)) {
-    const size = Math.round(Math.min(world.hordeMeter, R.hordeMax[state.difficulty]));
+    const size = Math.round(Math.min(world.hordeMeter, getMod(state, 'raid.hordeMax', R.hordeMax)));
     world.hordeMeter = Math.max(0, world.hordeMeter - size);
     const at = addMinutes({ day: state.time.day, minute }, R.leadHours * 60);
     world.pendingHorde = { arrivesDay: at.day, arrivesMinute: at.minute, size, dir: rand(stream(state, 'build.raid')) * Math.PI * 2 };
@@ -104,7 +106,7 @@ export function raidMinute(state: GameState, ctx: Ctx): void {
   // The nightly approach.
   if (minute === R.nightHour * 60 && !state.build.raid) {
     const z = Math.max(0, world.cells.Z[home] ?? 0);
-    const size = Math.min(z, Math.max(R.nightMin, Math.round(activeCap(z) * R.nightShare * Math.min(1, population(state) / R.nightFullPop))));
+    const size = Math.min(z, Math.max(R.nightMin, Math.round(getMod(state, 'raid.nightSize', activeCap(z) * R.nightShare * Math.min(1, population(state) / R.nightFullPop)))));
     // They come for people: an empty base draws nobody.
     if (size > 0 && (playerPresent(state) || population(state) > 1)) startRaid(state, ctx, 'night', size, rand(stream(state, 'build.raid')) * Math.PI * 2);
   }
@@ -330,8 +332,15 @@ export function resolveAway(state: GameState, ctx: Ctx, kind: 'night' | 'horde',
 
   const { route, reachable } = breachRoute(state, dir);
   const hq = hqOf(state);
-  const guards = defenders(state);
+  // Everyone who fights: defenders, the militia (F7b), and automatic turrets (F7a) as tireless tower guards.
+  const people = fighters(state, true);
+  const snipers = sniperIds(state, people);
   const towerCount = towers(state).length;
+  const hitBonus = getMod(state, 'defender.hit', 0);
+  type Gun = { g: (typeof people)[number] | null; tower: boolean; sniper: boolean };
+  const guns: Gun[] = people.map((g, i) => ({ g, tower: i < towerCount && !g.militia, sniper: i < towerCount && snipers.has(g.survivor.id) }));
+  for (let i = activeTurrets(state).length; i > 0; i--) guns.push({ g: null, tower: true, sniper: false });
+  const guards = people;
   const ruinsBefore = ruinCount(state);
   const deadBefore = state.colony.memorial.length;
 
@@ -357,17 +366,22 @@ export function resolveAway(state: GameState, ctx: Ctx, kind: 'night' | 'horde',
 
     // defenders
     let ammoLeft = state.colony.stock.ammo - shots;
-    guards.forEach((g, i) => {
-      const w = defenderWeapon(state, ammoLeft);
-      const onTower = i < towerCount;
+    for (const gun of guns) {
+      const turret = gun.g === null;
+      if (turret && ammoLeft < 1) continue;
+      let w = turret ? TURRET_WEAPON : defenderWeapon(state, ammoLeft);
+      const sniper = gun.sniper && w.ammo > 0;
+      if (sniper) w = { ...w, headshot: RESEARCH.snipers.headshot };
+      const onTower = gun.tower;
       // Without a tower there is nothing to shoot over the walls with until the dead are inside.
       const breached = stage >= route.length - 1;
       const share = w.range > 5 ? (onTower || breached || route.length <= 1 ? R.engageShare : 0.15) : breached ? 0.6 : 0.3;
-      const n = (dt / (w.interval / defenderSkill(state, g.power))) * share;
-      ammoLeft -= n * w.ammo;
-      shots += n * w.ammo;
-      killCarry += n * killsPerShot(w, w.hit + (onTower ? R.towerHit : 0), softHp, mix.brute);
-    });
+      const n = (dt / (turret ? w.interval : w.interval / defenderSkill(state, gun.g!.power))) * share;
+      const rounds = n * ammoPerShot(state, w);
+      ammoLeft -= rounds;
+      shots += rounds;
+      killCarry += n * killsPerShot(w, w.hit + hitBonus + (onTower && !turret ? R.towerHit : 0) + (sniper ? RESEARCH.snipers.hit : 0), softHp, mix.brute);
+    }
     const shot = Math.min(alive, Math.floor(killCarry));
     killCarry -= shot;
     alive -= shot;

@@ -2,6 +2,7 @@
 
 import type { CellId, GameState, Land, StaticGrid, ZombieKind } from '../../core/types.ts';
 import { BALANCE } from '../../data/balance.ts';
+import { getMod } from '../research/modifiers.ts';
 
 const W = BALANCE.world;
 
@@ -66,7 +67,7 @@ export function cellTactical(state: GameState, grid: StaticGrid, cell: CellId): 
     cell,
     land: info.land,
     z,
-    active: activeCap(z),
+    active: Math.min(W.active.max, Math.round(getMod(state, 'zombie.active', activeCap(z)))),
     danger: dangerOf(z),
     cleared: isCleared(z),
     kinds: kindMix(info.land),

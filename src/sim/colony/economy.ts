@@ -4,6 +4,7 @@
 import { foodSaving } from '../build/structures.ts';
 import type { GameState, StaticGrid } from '../../core/types.ts';
 import { COLONY } from '../../data/colony.ts';
+import { getMod } from '../research/modifiers.ts';
 import { cellsWithin } from '../world/grid.ts';
 import { facilityFactor, mealPerDay } from './jobs.ts';
 import { logEntry, moveEars, moveStock, type ColonyCtx } from './stock.ts';
@@ -25,15 +26,23 @@ export function foodDays(state: GameState): number {
 }
 
 /** Price of one food in ears (spec §5). */
-export function foodPriceFor(days: number): number {
-  return E.foodBasePrice * Math.min(E.priceMax, Math.max(E.priceMin, E.priceTop - E.pricePerDay * days));
+export function foodPriceFor(days: number, state?: GameState): number {
+  // Trade (C4a) lowers the price, a market and food security (A8) cap its swings.
+  const max = state ? Math.max(E.priceMin, getMod(state, 'food.priceMax', E.priceMax)) : E.priceMax;
+  const price = E.foodBasePrice * Math.min(max, Math.max(E.priceMin, E.priceTop - E.pricePerDay * days));
+  return state ? getMod(state, 'food.price', price) : price;
+}
+
+/** What a survivor is paid per day: the agreed wage as the colony's institutions bend it (trade, discipline, currency). */
+export function wageDue(state: GameState, s: { wage: number }): number {
+  return Math.round(getMod(state, 'wage', s.wage) * 10) / 10;
 }
 
 /** Every hour: new price, the community buys from its farmers, surplus produce rots. */
 export function marketHour(c: ColonyCtx): void {
   const { state } = c;
   const colony = state.colony;
-  colony.foodPrice = foodPriceFor(foodDays(state));
+  colony.foodPrice = foodPriceFor(foodDays(state), state);
   const want = E.targetFoodDays * foodNeedPerDay(state) - colony.stock.food;
   const room = colony.capacity.food - colony.stock.food;
   const qty = Math.min(want, room, colony.market.food, colony.stock.ears / colony.foodPrice);
@@ -64,15 +73,16 @@ export function villageNear(state: GameState, grid: StaticGrid | null): boolean 
   return false;
 }
 
-export function villagePrice(): number {
-  return E.foodBasePrice * E.villageFactor;
+export function villagePrice(state?: GameState): number {
+  const price = E.foodBasePrice * E.villageFactor;
+  return state ? getMod(state, 'food.price', price) : price;
 }
 
 /** Buy food from the village (spec §5). Returns a rejection reason, or null when something was bought. */
 export function buyFromVillage(c: ColonyCtx, amount: number, quiet = false): string | null {
   const colony = c.state.colony;
   if (!villageNear(c.state, c.grid)) return 'noVillage';
-  const price = villagePrice();
+  const price = villagePrice(c.state);
   const left = E.villageDailyCap - colony.villageBought;
   const qty = Math.min(amount, left, colony.capacity.food - colony.stock.food, Math.floor((colony.stock.ears / price) * 10) / 10);
   if (left <= 0) return 'dailyCap';
@@ -95,8 +105,9 @@ export function payWages(c: ColonyCtx): void {
   let total = 0;
   const unpaid: string[] = [];
   for (const s of due) {
-    if (colony.stock.ears >= s.wage) {
-      total += moveEars(c, 'wages', s.wage);
+    const wage = wageDue(c.state, s);
+    if (colony.stock.ears >= wage) {
+      total += moveEars(c, 'wages', wage);
       s.unpaidDays = 0;
     } else {
       s.unpaidDays += 1;
@@ -111,7 +122,7 @@ export function payWages(c: ColonyCtx): void {
 /** One of the three meals: farmers eat their own produce first, everyone else from the stores. */
 export function serveMeal(c: ColonyCtx): void {
   const colony = c.state.colony;
-  const saving = 1 - foodSaving(c.state); // a canteen wastes less (06)
+  const saving = (1 - foodSaving(c.state)) * getMod(c.state, 'food.use', 1); // a canteen wastes less (06), rationing (C1)
   let missed = 0;
   for (const s of colony.survivors) {
     if (!isHome(s)) continue;
@@ -142,8 +153,11 @@ export function serveMeal(c: ColonyCtx): void {
 export function craftMinute(c: ColonyCtx): void {
   const colony = c.state.colony;
   const K = COLONY.craft;
+  const cost = getMod(c.state, 'craft.cost', 1); // ammunition engineering (W6b)
+  const metal = K.metal * cost;
+  const parts = K.parts * cost;
   while (colony.work.craft >= K.work) {
-    if (colony.stock.metal < K.metal || colony.stock.parts < K.parts) {
+    if (colony.stock.metal < metal || colony.stock.parts < parts) {
       // Idle hands: the crafters cannot bank more than one batch of work.
       if (colony.work.craft > K.work) {
         colony.work.craft = K.work;
@@ -155,8 +169,8 @@ export function craftMinute(c: ColonyCtx): void {
       return;
     }
     colony.work.craft -= K.work;
-    moveStock(c, 'metal', -K.metal);
-    moveStock(c, 'parts', -K.parts);
+    moveStock(c, 'metal', -metal);
+    moveStock(c, 'parts', -parts);
     moveStock(c, 'ammo', K.ammo);
   }
 }
