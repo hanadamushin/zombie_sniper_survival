@@ -6,6 +6,9 @@ export default defineConfig({
   testDir: 'e2e',
   timeout: 60_000,
   retries: 0,
+  // 07c: one at a time. Two workers on a CPU-only (SwiftShader) machine made the per-frame
+  // timings and the timing-dependent scenarios flaky.
+  workers: 1,
   reporter: 'list',
   use: {
     baseURL: `http://localhost:${PORT}`,
