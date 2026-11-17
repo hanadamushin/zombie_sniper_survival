@@ -355,3 +355,78 @@ test('game over hands the cursor back: the pointer lock is released and clicks d
   await expect(page.getByTestId('title-screen')).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+// ---------------------------------------------------------------------------------------------
+// 07c: the land goes on — walk over the edge of the area into the next cell
+// ---------------------------------------------------------------------------------------------
+
+test('walking east over the edge of the area: the next cell takes over, the land around stays drawn, within budget', async ({ page }) => {
+  test.setTimeout(240_000);
+  const errors = trackErrors(page);
+  await page.goto('/?seed=12&scenario=0&res=fixed');
+  await startNewGame(page);
+  const home = await page.evaluate(() => {
+    const g = window.__game!;
+    const s = g.state!;
+    g.debug.setClock(11);
+    s.world.cells.Z[s.player.cell] = 0;
+    s.tactical!.zombies.length = 0;
+    g.debug.teleport(1000, 512, -Math.PI / 2, 0);
+    return s.player.cell;
+  });
+  // The neighbours arrive from the worker and are drawn: more than the current map's meshes.
+  await expect.poll(() => page.evaluate(() => window.__game!.renderer.ctx.scene.children.filter((o) => o.type === 'Group').length), { timeout: 60_000 }).toBeGreaterThanOrEqual(5);
+  await page.screenshot({ path: 'test-results/07c-edge-before.png' });
+
+  /** Budget at a spot: draw calls, triangles, and one sim step + one draw submission, measured directly. */
+  const sample = () => page.evaluate(async () => {
+    const g = window.__game!;
+    const s = g.state!;
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const info = g.debug.renderInfo();
+    let t0 = performance.now();
+    for (let i = 0; i < 300; i++) g.sim.tick(s, 1 / 60, { ...g.debug.noInput });
+    const tick = (performance.now() - t0) / 300;
+    t0 = performance.now();
+    for (let i = 0; i < 20; i++) g.renderer.draw(s, 0, 0);
+    const draw = (performance.now() - t0) / 20;
+    return { calls: info.calls, triangles: info.triangles, tick, draw };
+  });
+  const lines: string[] = [];
+  const check = async (where: string) => {
+    const perf = await sample();
+    lines.push(`${where}: ${perf.calls} draw calls, ${perf.triangles} triangles, sim step ${perf.tick.toFixed(3)} ms + draw submission ${perf.draw.toFixed(2)} ms`);
+    expect(perf.calls, where).toBeLessThan(150);
+    expect(perf.triangles, where).toBeLessThan(500_000);
+    expect(perf.tick + perf.draw, where).toBeLessThan(4);
+  };
+  await check('12 m from the east edge, looking across');
+
+  // Walk over (the debug input stands in for the keys: no pointer lock headless).
+  await page.evaluate(() => window.__game!.debug.setInput({ moveZ: 1, sprint: true }));
+  await page.waitForFunction((h) => window.__game!.state!.player.cell !== h, home, { timeout: 60_000 });
+  await page.evaluate(() => window.__game!.debug.setInput(null));
+  const after = await page.evaluate(() => {
+    const s = window.__game!.state!;
+    return { cell: s.player.cell, x: s.player.pos[0], tcell: s.tactical!.cell, home: window.__game!.map!.params.isHome };
+  });
+  expect(after.cell).toBe(home + 1);
+  expect(after.tcell).toBe(home + 1);
+  expect(after.x).toBeLessThan(20);
+  expect(after.home).toBe(false);
+  // Looking back: the base's headquarters is still drawn (structures offset by one map).
+  await page.evaluate(() => {
+    window.__game!.state!.player.yaw = Math.PI / 2;
+  });
+  await page.waitForTimeout(1500);
+  await page.screenshot({ path: 'test-results/07c-edge-after-looking-back.png' });
+  await check('just over the border, looking back at the base');
+
+  // A corner: four maps meet.
+  await page.evaluate(() => window.__game!.debug.teleport(20, 20, Math.PI / 4, 0));
+  await page.waitForTimeout(4000);
+  await check('at a corner where four cells meet');
+  await page.screenshot({ path: 'test-results/07c-corner.png' });
+  console.log(lines.join('\n'));
+  expect(errors).toEqual([]);
+});

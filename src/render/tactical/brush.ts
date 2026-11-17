@@ -90,7 +90,12 @@ function fill(br: Brush, spacing: number, salt: number, seed: number, fn: (x: nu
   }
 }
 
-export function buildBrush(map: TacticalMap): Built {
+export interface BrushPart extends Built {
+  /** Camera position in the map's own frame: the fine undergrowth is only drawn close by (07c). */
+  update(x: number, z: number): void;
+}
+
+export function buildBrush(map: TacticalMap): BrushPart {
   const seed = map.params.mapSeed;
   const ground = (x: number, z: number): number => sampleHeight(map.height, map.n, map.tile, x, z);
   const boxes: Box[] = [];
@@ -201,40 +206,46 @@ export function buildBrush(map: TacticalMap): Built {
   const up = new THREE.Vector3(0, 1, 0);
   const xAxis = new THREE.Vector3(1, 0, 0);
   const color = new THREE.Color();
-  const add = (name: string, geo: THREE.BufferGeometry, material: THREE.Material, count: number, each: (mesh: THREE.InstancedMesh, i: number) => void): void => {
+  /** Fine undergrowth is split into the four 512 m quadrants of the map, so that far ones can be hidden (07c). */
+  const half = map.size / 2;
+  const quadrants: { mesh: THREE.InstancedMesh; x0: number; z0: number }[] = [];
+  const add = <T extends { x: number; z: number }>(name: string, geo: THREE.BufferGeometry, material: THREE.Material, list: T[], each: (mesh: THREE.InstancedMesh, k: number, item: T) => void): void => {
     disposables.push(geo, material);
-    if (count === 0) return;
-    const mesh = new THREE.InstancedMesh(geo, material, count);
-    for (let i = 0; i < count; i++) each(mesh, i);
-    mesh.computeBoundingSphere();
-    mesh.name = name;
-    group.add(mesh);
-    disposables.push(mesh);
+    const split = name !== 'brush-boxes';
+    for (let qd = 0; qd < (split ? 4 : 1); qd++) {
+      const x0 = (qd % 2) * half;
+      const z0 = Math.floor(qd / 2) * half;
+      const items = split ? list.filter((it) => (it.x >= half ? half : 0) === x0 && (it.z >= half ? half : 0) === z0) : list;
+      if (items.length === 0) continue;
+      const mesh = new THREE.InstancedMesh(geo, material, items.length);
+      items.forEach((it, k) => each(mesh, k, it));
+      mesh.computeBoundingSphere();
+      mesh.name = name;
+      group.add(mesh);
+      disposables.push(mesh);
+      if (split) quadrants.push({ mesh, x0, z0 });
+    }
   };
 
-  add('brush-boxes', new THREE.BoxGeometry(1, 1, 1), new THREE.MeshLambertMaterial(), boxes.length, (mesh, i) => {
-    const bx = boxes[i]!;
+  add('brush-boxes', new THREE.BoxGeometry(1, 1, 1), new THREE.MeshLambertMaterial(), boxes, (mesh, i, bx) => {
     q.setFromAxisAngle(up, bx.yaw);
     if (bx.roll !== 0) q.multiply(q2.setFromAxisAngle(xAxis, bx.roll));
     mesh.setMatrixAt(i, m.compose(v.set(bx.x, bx.y, bx.z), q, s.set(bx.sx, bx.sy, bx.sz)));
     mesh.setColorAt(i, color.setHex(bx.color).multiplyScalar(bx.shade));
   });
-  add('brush-blobs', new THREE.IcosahedronGeometry(1, 0), new THREE.MeshLambertMaterial({ flatShading: true }), blobs.length, (mesh, i) => {
-    const bl = blobs[i]!;
+  add('brush-blobs', new THREE.IcosahedronGeometry(1, 0), new THREE.MeshLambertMaterial({ flatShading: true }), blobs, (mesh, i, bl) => {
     q.setFromAxisAngle(up, hash01(bl.k, 7, seed) * Math.PI * 2);
     mesh.setMatrixAt(i, m.compose(v.set(bl.x, bl.y + bl.h * 0.42, bl.z), q, s.set(bl.r * 1.08, bl.h * 0.64, bl.r * 1.08)));
     const shade = 0.75 + 0.45 * hash01(bl.k, 8, seed);
     mesh.setColorAt(i, color.setHex(bl.color).multiplyScalar(shade));
   });
-  add('brush-reeds', gradient(new THREE.ConeGeometry(0.5, 1, 4, 1, true).translate(0, 0.5, 0), P.reedRoot, P.reedTip), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), reeds.length, (mesh, i) => {
-    const r = reeds[i]!;
+  add('brush-reeds', gradient(new THREE.ConeGeometry(0.5, 1, 4, 1, true).translate(0, 0.5, 0), P.reedRoot, P.reedTip), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), reeds, (mesh, i, r) => {
     q.setFromAxisAngle(up, hash01(r.k, 7, seed) * Math.PI * 2);
     mesh.setMatrixAt(i, m.compose(v.set(r.x, r.y - 0.1, r.z), q, s.set(r.w, r.h, r.w)));
     const shade = 0.8 + 0.4 * hash01(r.k, 8, seed);
     mesh.setColorAt(i, color.setRGB(shade, shade, shade * 0.92));
   });
-  add('brush-culms', culmGeometry(), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), culms.length, (mesh, i) => {
-    const c = culms[i]!;
+  add('brush-culms', culmGeometry(), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), culms, (mesh, i, c) => {
     q.setFromAxisAngle(up, hash01(c.k, 7, seed) * Math.PI * 2);
     mesh.setMatrixAt(i, m.compose(v.set(c.x, c.y - 0.1, c.z), q, s.set(1, c.h, 1)));
     const shade = 0.8 + 0.4 * hash01(c.k, 8, seed);
@@ -243,6 +254,13 @@ export function buildBrush(map: TacticalMap): Built {
 
   return {
     object: group,
+    update(x, z) {
+      // Hedges and wrecks always; reeds, bushes and bamboo only in the quadrants within reach (they are most of the triangles).
+      for (const qd of quadrants) {
+        const d = Math.hypot(Math.max(qd.x0 - x, 0, x - qd.x0 - half), Math.max(qd.z0 - z, 0, z - qd.z0 - half));
+        qd.mesh.visible = d < P.fineRange;
+      }
+    },
     dispose() {
       for (const d of disposables) d.dispose();
     },

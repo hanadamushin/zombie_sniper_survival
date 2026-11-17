@@ -15,6 +15,7 @@ import { continuationFrame, createInitialState, emptyInputFrame, type CellId, ty
 import { BALANCE } from './data/balance.ts';
 import { createInput } from './input/index.ts';
 import { createRenderer } from './render/index.ts';
+import { setRenderGrid } from './render/tactical/neighbours.ts';
 import { worldBuildMs } from './render/tactical/index.ts';
 import { createSim } from './sim/index.ts';
 import { areaOf, areaPending, clearParked, ensureArea, mapOf } from './sim/tactical/area.ts';
@@ -62,6 +63,7 @@ async function ensureGrid(): Promise<StaticGrid> {
   if (!grid) {
     grid = await loadGrid();
     sim.setGrid(grid);
+    setRenderGrid(grid); // 07c: the renderer draws the neighbouring cells
     ui.setGrid(grid);
   }
   return grid;

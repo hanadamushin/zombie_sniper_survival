@@ -15,6 +15,7 @@ import { RENDER } from '../../data/render.ts';
 import type { TacticalMap } from '../../gen/index.ts';
 import { defOf, isRuin, maxHp, moatFilled, overlayOf, TILE, TILES, towerLadderDir, type Overlay } from '../../sim/build/structures.ts';
 import { mapOf } from '../../sim/tactical/area.ts';
+import { cellOffset, neighbourMap } from './neighbours.ts';
 import { heightAt } from '../../sim/tactical/collision.ts';
 import { outpostAt, outpostPrefab } from '../../sim/world/outposts.ts';
 import type { FrameInfo, RenderContext, SubRenderer } from '../index.ts';
@@ -71,6 +72,9 @@ export function createStructureRenderer(): SubRenderer {
   /** Number of ghost instances that belong to the structures (the cursor's follow). */
   let ghostBase = 0;
   let sinceBuild = 1;
+  /** Shift of everything drawn (07c: the home base seen from a neighbouring cell). */
+  let ox = 0;
+  let oz = 0;
 
   /** A box standing on y0: centre (x, z), size (sx, sy, sz), optional yaw and lean (radians about x / z). */
   const box = (x: number, y0: number, z: number, sx: number, sy: number, sz: number, hex: number, yaw = 0, leanX = 0, leanZ = 0, shade = 1): void => {
@@ -78,7 +82,7 @@ export function createStructureRenderer(): SubRenderer {
     e.set(leanX, yaw, leanZ, 'YXZ');
     q.setFromEuler(e);
     // Lean about the foot, not the middle.
-    p.set(0, sy / 2, 0).applyQuaternion(q).add(s.set(x, y0, z));
+    p.set(0, sy / 2, 0).applyQuaternion(q).add(s.set(x + ox, y0, z + oz));
     m.compose(p, q, s.set(sx, sy, sz));
     solid.setMatrixAt(n, m);
     color.set(hex);
@@ -88,7 +92,7 @@ export function createStructureRenderer(): SubRenderer {
   };
   const ghostBox = (x: number, y0: number, z: number, sx: number, sy: number, sz: number, hex: number): void => {
     if (g >= R.ghostMax) return;
-    m.compose(p.set(x, y0 + sy / 2, z), q.identity(), s.set(sx, sy, sz));
+    m.compose(p.set(x + ox, y0 + sy / 2, z + oz), q.identity(), s.set(sx, sy, sz));
     ghost.setMatrixAt(g, m);
     ghost.setColorAt(g, color.set(hex));
     g++;
@@ -391,10 +395,15 @@ export function createStructureRenderer(): SubRenderer {
     }
   };
 
-  const rebuild = (state: GameState, map: TacticalMap): void => {
+  const rebuild = (state: GameState, here: TacticalMap, home: { map: TacticalMap; off: [number, number] } | null): void => {
     n = 0;
     g = 0;
-    if (map.params.isHome) {
+    ox = 0;
+    oz = 0;
+    const map = home ? home.map : here;
+    if (home) {
+      ox = home.off[0];
+      oz = home.off[1];
       const ov = overlayOf(state, map.walk);
       const raised = state.flags.colonyAlarm === true;
       for (const st of state.build.structures) {
@@ -416,14 +425,17 @@ export function createStructureRenderer(): SubRenderer {
         }
         if (commandView.highlight === st.id) ghostBox((st.tx + w / 2) * TILE, y, (st.ty + d / 2) * TILE, w * TILE + 0.3, Math.max(1, def.height) + 0.4, d * TILE + 0.3, R.bad);
       }
-    } else {
+      ox = 0;
+      oz = 0;
+    }
+    if (!here.params.isHome) {
       const o = state.tactical ? outpostAt(state, state.tactical.cell) : undefined;
-      const prefab = o ? outpostPrefab(map, o.tier) : null;
+      const prefab = o ? outpostPrefab(here, o.tier) : null;
       if (prefab) {
-        const y0 = heightAt(map, prefab.site[0], prefab.site[1]);
+        const y0 = heightAt(here, prefab.site[0], prefab.site[1]);
         for (const b of prefab.boxes) {
           const cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2;
-          const y = heightAt(map, cx, cz);
+          const y = heightAt(here, cx, cz);
           const hex = b.look === 'cloth' ? R.look.cloth.body : b.look === 'crate' ? R.crate : b.look === 'flag' ? R.flag : b.look === 'steel' ? R.look.steel.body : R.look.wood.body;
           if (b.look === 'flag') box(cx, y0 + 5, cz, b.x1 - b.x0, b.h, b.z1 - b.z0, hex);
           else box(cx, y, cz, b.x1 - b.x0, b.h, b.z1 - b.z0, hex);
@@ -438,11 +450,10 @@ export function createStructureRenderer(): SubRenderer {
   };
 
   /** Everything that changes what is drawn, as one string. */
-  const keyOf = (state: GameState, map: TacticalMap): string => {
-    if (!map.params.isHome) {
-      const o = state.tactical ? outpostAt(state, state.tactical.cell) : undefined;
-      return `o:${map.params.mapSeed}:${o ? `${o.id}:${o.tier}` : ''}`;
-    }
+  const keyOf = (state: GameState, map: TacticalMap, home: { map: TacticalMap; off: [number, number] } | null): string => {
+    const o = !map.params.isHome && state.tactical ? outpostAt(state, state.tactical.cell) : undefined;
+    const outpost = `o:${map.params.mapSeed}:${o ? `${o.id}:${o.tier}` : ''}`;
+    if (!map.params.isHome && !home) return outpost;
     let wear = 0;
     let progress = 0;
     for (const st of state.build.structures) {
@@ -451,7 +462,7 @@ export function createStructureRenderer(): SubRenderer {
       else if (def.hp > 0) wear = (wear * 4 + wearOf(state, st, def)) % 1000003;
       wear = (wear + Math.floor(st.corpsesInMoat ?? 0)) % 1000003;
     }
-    return `h:${map.params.mapSeed}:${state.build.gridRev}:${wear}:${progress}:${state.flags.colonyAlarm === true ? 1 : 0}:${commandView.highlight ?? ''}`;
+    return `h:${map.params.mapSeed}:${state.build.gridRev}:${wear}:${progress}:${state.flags.colonyAlarm === true ? 1 : 0}:${commandView.highlight ?? ''}:${home ? `${home.off.join(',')}:${outpost}` : ''}`;
   };
 
   const drawCursor = (state: GameState, map: TacticalMap): void => {
@@ -511,12 +522,20 @@ export function createStructureRenderer(): SubRenderer {
         return;
       }
       sinceBuild += frame.realDt;
-      const next = keyOf(state, map);
+      // 07c: standing in a cell next to the base, the base is still in view.
+      let home: { map: TacticalMap; off: [number, number] } | null = null;
+      const homeCell = state.world.homeCell;
+      if (!map.params.isHome && homeCell !== null && map.params.world) {
+        const off = cellOffset(state, homeCell, map.size);
+        const homeMap = off ? neighbourMap(state, homeCell) : null;
+        if (off && homeMap) home = { map: homeMap, off };
+      }
+      const next = keyOf(state, map, home);
       // Damage during a fight changes the key often: rebuild at most a few times a second.
       if (next !== key && (sinceBuild > 0.2 || key === '' || next.split(':')[2] !== key.split(':')[2])) {
         key = next;
         sinceBuild = 0;
-        rebuild(state, map);
+        rebuild(state, map, map.params.isHome ? { map, off: [0, 0] } : home);
         cursorKey = '';
       }
       const pv = commandView.preview;

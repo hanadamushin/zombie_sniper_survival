@@ -15,52 +15,118 @@ export interface Built {
 
 let detailTexture: THREE.DataTexture | null = null;
 
-function terrainGeometry(map: TacticalMap): THREE.BufferGeometry {
+/**
+ * Terrain mesh with level of detail (07c): all 257 × 257 samples are in the vertex buffer, and the
+ * index buffer is rebuilt when the camera moves far enough that a 256 m chunk changes level —
+ * every sample (4 m), every 2nd (8 m) or every 4th (16 m), or left out beyond the fog. Each chunk
+ * has a skirt hanging below its edges, which hides the cracks between chunks (and maps) of
+ * different levels. One draw call per map.
+ */
+interface LodTerrain {
+  geometry: THREE.BufferGeometry;
+  /** Choose the levels for a camera at (x, z) in the map's own frame. Returns true when the index buffer changed. */
+  update(x: number, z: number): boolean;
+}
+
+const CHUNK = 64; // samples per chunk side (256 m)
+const SKIRT = 3; // m
+
+function lodTerrain(map: TacticalMap): LodTerrain {
   const n = map.n;
   const tile = map.tile;
-  const pos = new Float32Array(n * n * 3);
-  const nor = new Float32Array(n * n * 3);
-  const uv = new Float32Array(n * n * 2);
+  const chunks = (n - 1) / CHUNK;
+  // Main samples, then skirt copies of the samples on chunk boundary lines (lowered).
+  const onLine = (i: number): boolean => i % CHUNK === 0;
+  const skirtIndex = new Int32Array(n * n).fill(-1);
+  let extra = 0;
+  for (let iz = 0; iz < n; iz++) for (let ix = 0; ix < n; ix++) if (onLine(ix) || onLine(iz)) skirtIndex[iz * n + ix] = n * n + extra++;
+  const total = n * n + extra;
+  const pos = new Float32Array(total * 3);
+  const nor = new Float32Array(total * 3);
+  const uv = new Float32Array(total * 2);
   const h = (ix: number, iz: number): number => map.height[Math.min(n - 1, Math.max(0, iz)) * n + Math.min(n - 1, Math.max(0, ix))]!;
   for (let iz = 0; iz < n; iz++) {
     for (let ix = 0; ix < n; ix++) {
       const i = iz * n + ix;
-      pos[i * 3] = ix * tile;
-      pos[i * 3 + 1] = map.height[i]!;
-      pos[i * 3 + 2] = iz * tile;
       const gx = (h(ix + 1, iz) - h(ix - 1, iz)) / (2 * tile);
       const gz = (h(ix, iz + 1) - h(ix, iz - 1)) / (2 * tile);
       const inv = 1 / Math.hypot(gx, 1, gz);
-      nor[i * 3] = -gx * inv;
-      nor[i * 3 + 1] = inv;
-      nor[i * 3 + 2] = -gz * inv;
-      uv[i * 2] = ix / (n - 1);
-      uv[i * 2 + 1] = iz / (n - 1);
+      const write = (k: number, y: number): void => {
+        pos[k * 3] = ix * tile;
+        pos[k * 3 + 1] = y;
+        pos[k * 3 + 2] = iz * tile;
+        nor[k * 3] = -gx * inv;
+        nor[k * 3 + 1] = inv;
+        nor[k * 3 + 2] = -gz * inv;
+        uv[k * 2] = ix / (n - 1);
+        uv[k * 2 + 1] = iz / (n - 1);
+      };
+      write(i, map.height[i]!);
+      const sk = skirtIndex[i]!;
+      if (sk >= 0) write(sk, map.height[i]! - SKIRT);
     }
   }
-  // Same diagonal as gen/height.ts: (ix, iz + 1) -> (ix + 1, iz).
-  const index = new Uint32Array((n - 1) * (n - 1) * 6);
-  let k = 0;
-  for (let iz = 0; iz < n - 1; iz++) {
-    for (let ix = 0; ix < n - 1; ix++) {
-      const a = iz * n + ix;
-      const b = a + n;
-      index[k++] = a;
-      index[k++] = b;
-      index[k++] = a + 1;
-      index[k++] = b;
-      index[k++] = b + 1;
-      index[k++] = a + 1;
-    }
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
-  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-  geo.setIndex(new THREE.BufferAttribute(index, 1));
-  geo.computeBoundingSphere();
-  geo.computeBoundingBox();
-  return geo;
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geometry.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+  geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(map.size / 2, 0, map.size / 2), map.size * 0.75 + 200);
+  geometry.boundingSphere.center.y = map.height[Math.floor(n * n / 2)]!;
+
+  const L = RENDER.terrainLod;
+  let signature = '';
+  const levels = new Int8Array(chunks * chunks);
+  return {
+    geometry,
+    update(x, z) {
+      // Level per chunk from the distance between the camera and the chunk's square.
+      let sig = '';
+      for (let cz = 0; cz < chunks; cz++) {
+        for (let cx = 0; cx < chunks; cx++) {
+          const x0 = cx * CHUNK * tile;
+          const z0 = cz * CHUNK * tile;
+          const span = CHUNK * tile;
+          const d = Math.hypot(Math.max(x0 - x, 0, x - x0 - span), Math.max(z0 - z, 0, z - z0 - span));
+          const level = d < L.full ? 1 : d < L.half ? 2 : d < L.far ? 4 : 0;
+          levels[cz * chunks + cx] = level;
+          sig += level;
+        }
+      }
+      if (sig === signature) return false;
+      signature = sig;
+      const idx: number[] = [];
+      for (let cz = 0; cz < chunks; cz++) {
+        for (let cx = 0; cx < chunks; cx++) {
+          const st = levels[cz * chunks + cx]!;
+          if (st === 0) continue;
+          const ix0 = cx * CHUNK;
+          const iz0 = cz * CHUNK;
+          // Same diagonal as gen/height.ts: (ix, iz + 1) -> (ix + 1, iz).
+          for (let iz = iz0; iz < iz0 + CHUNK; iz += st) {
+            for (let ix = ix0; ix < ix0 + CHUNK; ix += st) {
+              const a = iz * n + ix;
+              const b = a + n * st;
+              idx.push(a, b, a + st, b, b + st, a + st);
+            }
+          }
+          // Skirts on the four edges (both windings: seen from either side).
+          const edge = (i0: number, i1: number): void => {
+            const s0 = skirtIndex[i0]!;
+            const s1 = skirtIndex[i1]!;
+            idx.push(i0, s0, i1, s0, s1, i1, i1, s1, i0, s1, s0, i0);
+          };
+          for (let k = 0; k < CHUNK; k += st) {
+            edge(iz0 * n + ix0 + k, iz0 * n + ix0 + k + st);
+            edge((iz0 + CHUNK) * n + ix0 + k, (iz0 + CHUNK) * n + ix0 + k + st);
+            edge((iz0 + k) * n + ix0, (iz0 + k + st) * n + ix0);
+            edge((iz0 + k) * n + ix0 + CHUNK, (iz0 + k + st) * n + ix0 + CHUNK);
+          }
+        }
+      }
+      geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(idx), 1));
+      return true;
+    },
+  };
 }
 
 /** Ring of coarse terrain outside the map: a stitching strip per side, then 64 m cells. */
@@ -144,10 +210,19 @@ function apronGeometry(map: TacticalMap): THREE.BufferGeometry {
   return geo;
 }
 
-export function buildTerrain(map: TacticalMap, renderer: THREE.WebGLRenderer): Built {
+export interface TerrainPart extends Built {
+  /** Camera position in this map's own frame: picks the level of detail of each chunk. */
+  update(x: number, z: number): void;
+}
+
+/**
+ * Terrain of one map. `apron`: also the coarse ground around it (stand-alone maps; inside a world
+ * the neighbouring maps are drawn instead). `pixels`: ground colours built by the worker.
+ */
+export function buildTerrain(map: TacticalMap, renderer: THREE.WebGLRenderer, opts: { apron?: boolean; pixels?: Uint8Array } = {}): TerrainPart {
   detailTexture ??= buildDetailTexture();
   const detail = detailTexture;
-  const texture = buildGroundTexture(map, Math.min(RENDER.groundAnisotropy, renderer.capabilities.getMaxAnisotropy()));
+  const texture = buildGroundTexture(map, Math.min(RENDER.groundAnisotropy, renderer.capabilities.getMaxAnisotropy()), opts.pixels);
   const material = new THREE.MeshLambertMaterial({ map: texture });
   // Close-up detail: modulate the 1 m/texel colour map with a tiling noise that fades with distance.
   material.onBeforeCompile = (shader) => {
@@ -158,20 +233,30 @@ export function buildTerrain(map: TacticalMap, renderer: THREE.WebGLRenderer): B
         float detailNear = texture2D( tDetail, vMapUv * 341.0 ).r * 0.6 + texture2D( tDetail, vMapUv * 73.0 ).r * 0.4;
         diffuseColor.rgb *= mix( 1.0, 0.78 + 0.44 * detailNear, 1.0 - smoothstep( 30.0, 220.0, length( vViewPosition ) ) );`);
   };
-  const ground = new THREE.Mesh(terrainGeometry(map), material);
+  const lod = lodTerrain(map);
+  lod.update(map.size / 2, map.size / 2);
+  const ground = new THREE.Mesh(lod.geometry, material);
   ground.name = 'terrain';
-  const apronMaterial = new THREE.MeshLambertMaterial({ vertexColors: true });
-  const apron = new THREE.Mesh(apronGeometry(map), apronMaterial);
-  apron.name = 'apron';
   const group = new THREE.Group();
-  group.add(ground, apron);
+  group.add(ground);
+  let apron: THREE.Mesh | null = null;
+  let apronMaterial: THREE.Material | null = null;
+  if (opts.apron !== false) {
+    apronMaterial = new THREE.MeshLambertMaterial({ vertexColors: true });
+    apron = new THREE.Mesh(apronGeometry(map), apronMaterial);
+    apron.name = 'apron';
+    group.add(apron);
+  }
   return {
     object: group,
+    update(x, z) {
+      lod.update(x, z);
+    },
     dispose() {
       ground.geometry.dispose();
-      apron.geometry.dispose();
+      apron?.geometry.dispose();
       material.dispose();
-      apronMaterial.dispose();
+      apronMaterial?.dispose();
       texture.dispose();
     },
   };

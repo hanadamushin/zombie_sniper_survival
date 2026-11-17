@@ -351,6 +351,7 @@ export interface InputFrame { moveX: number; moveZ: number; lookDX: number; look
 
 ## 7. 戦術マップと当たり判定
 
+- **地続き（07c）**: `GenParams.world`（`WorldContext`: ゲームのシード・セルの格子位置・周囲 3×3 の土地区分と `mapSeed`）があると、地形は世界座標で計算され隣と境界でつながり（`gen/world.ts` の `terrainFunction`、`cellHills`）、道は関所（`gatesOf`）を通る。`sim/tactical/area.ts` の `areaParams` が必ず付ける（テスト・射撃場の単独マップには無い）。プレイヤーが開いた端を越えると、戦術システムのステップ内で `walkAcross` が現在セルを切り替える（座標を 1,024m ずらす、離れた区域は `parked` に最大 4 つ、近くのゾンビを連れていく、`cellEntered{walked}`）。地図のキャッシュは 14 枚。描画側は `render/tactical/neighbours.ts`（`setRenderGrid` / `cellOffset` / `neighbourMap`、Worker `mapWorker.ts` で地図と地面の画素を生成して `provideMap`）
 - 作戦区域: 1024m × 1024m、ハイトマップ 257×257（4m 間隔）。`gen/` の `generateTacticalMap({ mapSeed, land, isHome, lootSpots })` が決定的に生成:
   地形、道路、建物（軸平行の箱）、外階段・はしご・鉄塔、樹木、草むら、岩、探索ポイント、高所の射点、開始位置、4m 通行グリッド。本拠セルでは中央 半径120m を平坦化して空ける
 - **座標系**: x = 東、z = 南、y = 上（m）。プレイ範囲は `[0, 1024]²`、北は −z。ハイトマップの標本 (ix, iz) は (4·ix, 4·iz)、タイル (tx, ty) は `[4tx, 4tx+4) × [4ty, 4ty+4)`。ヨー 0 は北向きで、正のヨーは左（西）へ回る。前方ベクトルは `(−sin yaw·cos pitch, sin pitch, −cos yaw·cos pitch)`
@@ -396,6 +397,9 @@ export interface InputFrame { moveX: number; moveZ: number; lookDX: number; look
 - 構造物（06、`render/tactical/structures.ts`）: 箱の InstancedMesh 2 つ（不透明・半透明）＋カーソル周りのグリッド線 1 ＋防衛担当の曳光線 1 の最大 4 ドローコール。木柵 = 高さの揃わない杭、土塁 = 幅広の二段の盛り土、鉄板壁 = 柱と板と錆の帯、コンクリート壁 = 厚い淡色の塊と笠。耐久 75 / 50 / 25% で暗くなり、傾き、杭が抜け、ひびが入る。設計図は半透明の箱＋進捗ぶんの実体＋足場の柱、堀は暗い面と土の縁と死体の山、破壊後は瓦礫。再構築は `gridRev`・損傷の段階・進捗が変わったときだけ（最短 0.2 秒間隔）。壁 587 タイル＋堀 207 タイルで 1.2 万箱ほど
 - 指揮層のカメラ（06）: `core/view.ts` の `commandView`（注視点・距離・向き）に従う俯瞰。`commandView.pick(clientX, clientY)` で画面の点を地面の点に変換する
 - 他セルの出来事（遠征・駐屯地・感染）は一切描画しない（数値のみ）。駐屯地セルに入ったときのプレハブだけは描く
+
+- 地続きの描画（07c、`render/tactical/index.ts`）: 現在の区域と、霧の範囲にかかる隣の区域を、それぞれのメッシュを位置だけずらして描く（作り直さない。3×3 から外れたら破棄、新しい区域は 1 フレームに 1 つだけ構築）。地形は 256m 区画ごとに 4m / 8m / 16m の 3 段階（`RENDER.terrainLod`、カメラから 200 / 480 / 900m）で、区画の縁に 3m のスカートを下げて段差の隙間を隠す（1 区域 1 ドローコール、索引だけ組み直す）。葦・藪・竹は 512m の 4 区画に分け、カメラから 350m 以内の区画だけ描く（`RENDER.brush.fineRange`）。草むらはカメラから 150m 以内の区域だけ。単独マップ（射撃場など）だけ外周の粗い地形（apron）を描く。実測（SwiftShader）で 69〜72 ドローコール・28.6〜38.9 万三角形・sim＋描画発行 0.7〜2.1 ms
+- 本拠の構造物・生存者は、隣のセルにいるときも本拠の地図（`neighbourMap`）の高さで、ずらして描く（`structures.ts` / `survivors.ts` の `ox` / `oz`）
 
 ## 9. UI 方針
 

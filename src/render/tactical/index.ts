@@ -1,39 +1,63 @@
-// Draws the operation area: terrain, buildings, vegetation. The map comes from
-// sim/tactical/area.ts (mapOf); meshes are rebuilt whenever a different map becomes current
-// (new game, load, arrival in another cell) and hidden while there is none (on the road).
+// Draws the operation area and, inside a world (07c), the neighbouring cells' areas around it, so
+// that the land goes on past the edge and the player can walk into it. Every map's meshes are
+// built once and moved when the current cell changes (walking across); maps that drop out of the
+// 3 × 3 neighbourhood are disposed. Neighbours come from the background worker
+// (neighbours.ts); at most one new map's meshes are built per frame.
 //
-// Draw calls: terrain 1 + apron 1 + boxes 1 + roofs 1 + rocks 1 + grass 1 + trees (2 kinds x
-// visible chunks, at most 32) + brush 4 (07b: boxes, blobs, reeds, bamboo) — well inside the budget
-// of 100 for this layer.
+// Draw calls per map: terrain 1 (+ apron 1 for stand-alone maps) + boxes 1 + roofs 1 + rocks 1
+// + grass 1 (current map only) + brush 4 + trees (2 kinds x visible chunks). Maps whose square is
+// further than RENDER.terrainLod.neighbours from the camera are hidden, and their terrain chunks
+// beyond the fog are left out.
 
 import type { GameState } from '../../core/types.ts';
 import { RENDER } from '../../data/render.ts';
 import type { TacticalMap } from '../../gen/index.ts';
 import { mapOf } from '../../sim/tactical/area.ts';
 import type { RenderContext, SubRenderer } from '../index.ts';
-import { buildBrush } from './brush.ts';
+import { buildBrush, type BrushPart } from './brush.ts';
 import { buildBuildings } from './buildings.ts';
-import { buildTerrain, type Built } from './terrain.ts';
+import { around, cellOffset, groundPixelsOf, neighbourMap } from './neighbours.ts';
+import { buildTerrain, type Built, type TerrainPart } from './terrain.ts';
 import { buildVegetation, type Vegetation } from './vegetation.ts';
+import * as THREE from 'three';
 
 let lastBuildMs = 0;
-/** How long the last rebuild of the world meshes took (ms) — perf checks. */
+/** How long the last rebuild of the current map's meshes took (ms) — perf checks. */
 export const worldBuildMs = (): number => lastBuildMs;
+
+interface Entry {
+  map: TacticalMap;
+  group: THREE.Group;
+  parts: Built[];
+  terrain: TerrainPart;
+  vegetation: Vegetation;
+  brush: BrushPart;
+}
 
 export function createTacticalRenderer(): SubRenderer {
   let ctx: RenderContext;
-  let current: TacticalMap | null = null;
-  let parts: Built[] = [];
-  let vegetation: Vegetation | null = null;
+  const entries = new Map<TacticalMap, Entry>();
+  const local = new THREE.Vector3();
 
+  const build = (map: TacticalMap, apron: boolean): Entry => {
+    const vegetation = buildVegetation(map);
+    const terrain = buildTerrain(map, ctx.renderer, { apron, pixels: groundPixelsOf(map) });
+    const brush = buildBrush(map);
+    const parts: Built[] = [terrain, buildBuildings(map), vegetation, brush];
+    const group = new THREE.Group();
+    for (const p of parts) group.add(p.object);
+    ctx.scene.add(group);
+    const entry: Entry = { map, group, parts, terrain, vegetation, brush };
+    entries.set(map, entry);
+    return entry;
+  };
+  const drop = (e: Entry): void => {
+    e.group.removeFromParent();
+    for (const p of e.parts) p.dispose();
+    entries.delete(e.map);
+  };
   const clear = (): void => {
-    for (const p of parts) {
-      p.object.removeFromParent();
-      p.dispose();
-    }
-    parts = [];
-    vegetation = null;
-    current = null;
+    for (const e of [...entries.values()]) drop(e);
   };
 
   return {
@@ -41,20 +65,52 @@ export function createTacticalRenderer(): SubRenderer {
     init(c) {
       ctx = c;
     },
+    reset() {
+      clear();
+    },
     update(state: GameState) {
-      const map = mapOf(state);
-      if (map !== current) {
+      const current = mapOf(state);
+      if (!current) {
         clear();
-        if (map) {
-          const t0 = performance.now();
-          vegetation = buildVegetation(map);
-          parts = [buildTerrain(map, ctx.renderer), buildBuildings(map), vegetation, buildBrush(map)];
-          for (const p of parts) ctx.scene.add(p.object);
-          current = map;
-          lastBuildMs = performance.now() - t0;
+        return;
+      }
+      const L = RENDER.terrainLod;
+      const cam = ctx.camera.position;
+      // Which maps belong around the player now, and where.
+      const wanted = new Map<TacticalMap, [number, number]>([[current, [0, 0]]]);
+      if (current.params.world && !state.flags.range) {
+        for (const cell of around(state)) {
+          if (cell === null || cell === state.player.cell) continue;
+          const off = cellOffset(state, cell, current.size);
+          if (!off) continue;
+          // Only what the fog lets through.
+          const dx = Math.max(off[0] - cam.x, 0, cam.x - off[0] - current.size);
+          const dz = Math.max(off[1] - cam.z, 0, cam.z - off[1] - current.size);
+          if (Math.hypot(dx, dz) > L.neighbours) continue;
+          const map = neighbourMap(state, cell);
+          if (map) wanted.set(map, off);
         }
       }
-      vegetation?.update(ctx.camera.position, RENDER.fog.far);
+      for (const e of [...entries.values()]) if (!wanted.has(e.map)) drop(e);
+      let built = false;
+      for (const [map, off] of wanted) {
+        let e = entries.get(map);
+        if (!e) {
+          // The current map at once (it is what the player stands on); neighbours one per frame.
+          if (map !== current && built) continue;
+          const t0 = performance.now();
+          e = build(map, !map.params.world);
+          if (map === current) lastBuildMs = performance.now() - t0;
+          built = true;
+        }
+        e.group.position.set(off[0], 0, off[1]);
+        local.set(cam.x - off[0], cam.y, cam.z - off[1]);
+        e.terrain.update(local.x, local.z);
+        // Tall grass only near the camera (on a neighbour: when standing close to its edge).
+        const away = Math.hypot(Math.max(-local.x, 0, local.x - map.size), Math.max(-local.z, 0, local.z - map.size));
+        e.vegetation.update(local, RENDER.fog.far, away < RENDER.flora.grassRange);
+        e.brush.update(local.x, local.z);
+      }
     },
     dispose: clear,
   };

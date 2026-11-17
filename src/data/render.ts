@@ -21,6 +21,13 @@ export const RENDER = {
    * again; a raise that fails within `failSeconds` doubles the wait before the next try.
    */
   resolution: { slowMs: 20, fastMs: 17.5, step: 0.125, min: 0.5, smooth: 0.5, downSeconds: 1, upSeconds: 3, failSeconds: 4, maxBackoff: 16 },
+  /**
+   * Terrain level of detail (07c): a 256 m chunk of ground is drawn with every 4 m sample when the
+   * camera is closer than `full`, every 8 m closer than `half`, every 16 m closer than `far`, and not
+   * at all beyond (the fog has hidden it). Neighbouring maps are drawn when the camera is within
+   * `neighbours` of their square.
+   */
+  terrainLod: { full: 200, half: 480, far: 900, neighbours: 860 },
   /** Anisotropic filtering of the ground texture (keeps roads sharp at grazing angles). */
   groundAnisotropy: 4,
   /** Operation area edge length (m). */
@@ -132,8 +139,10 @@ export const RENDER = {
     sheet: 0xd4d6cc,
     /** Length of one hedge box, spacing of reed spikes / bamboo stems / the bamboo undergrowth (m), width of a reed spike. */
     hedgePiece: 2.6,
-    reedSpacing: 1.0,
-    reedWidth: 1.05,
+    reedSpacing: 1.5,
+    reedWidth: 1.55,
+    /** Reeds, bushes and bamboo of a neighbouring map are drawn when the camera is within this distance of its square (07c). */
+    fineRange: 350,
     bambooSpacing: 1.6,
     bambooUnder: 3.2,
   },

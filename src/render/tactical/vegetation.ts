@@ -81,8 +81,11 @@ function grassGeometry(): THREE.BufferGeometry {
 }
 
 export interface Vegetation extends Built {
-  /** Call every frame with the camera position: refreshes the grass around it and culls far chunks. */
-  update(camera: THREE.Vector3, viewDistance: number): void;
+  /**
+   * Call every frame with the camera position in this map's own frame: refreshes the grass around
+   * it and culls far chunks. `grass` false hides the tall grass (a neighbouring map seen from afar, 07c).
+   */
+  update(camera: THREE.Vector3, viewDistance: number, grass?: boolean): void;
 }
 
 export function buildVegetation(map: TacticalMap): Vegetation {
@@ -191,8 +194,9 @@ export function buildVegetation(map: TacticalMap): Vegetation {
 
   return {
     object: group,
-    update(camera, viewDistance) {
-      if (Math.hypot(camera.x - lastX, camera.z - lastZ) > 12) {
+    update(camera, viewDistance, grass = true) {
+      grassMesh.visible = grass;
+      if (grass && Math.hypot(camera.x - lastX, camera.z - lastZ) > 12) {
         lastX = camera.x;
         lastZ = camera.z;
         refreshGrass(camera.x, camera.z);

@@ -5,9 +5,11 @@
 // each job with its own colour and something to carry.
 
 import * as THREE from 'three';
+import type { TacticalMap } from '../../gen/index.ts';
 import type { GameState, JobId, Survivor } from '../../core/types.ts';
 import { RENDER } from '../../data/render.ts';
 import { mapOf } from '../../sim/tactical/area.ts';
+import { cellOffset, neighbourMap } from './neighbours.ts';
 import { standHeight } from '../../sim/build/defense.ts';
 import { heightAt } from '../../sim/tactical/collision.ts';
 import type { FrameInfo, RenderContext, SubRenderer } from '../index.ts';
@@ -59,6 +61,9 @@ export function createSurvivorRenderer(): SubRenderer {
   };
 
   /** One person. `kind`: what they are doing (task kind) — decides the pose. */
+  /** Shift of what is drawn (07c: the people at the base seen from a neighbouring cell). */
+  let ox = 0;
+  let oz = 0;
   const figure = (x: number, y: number, z: number, yaw: number, kind: string, job: JobId | 'hidden', seed: number, phase: number, t: number): void => {
     const pal = job === 'hidden' ? R.hidden : R.job[job];
     const skin = R.skin[seed % R.skin.length]!;
@@ -67,7 +72,7 @@ export function createSurvivorRenderer(): SubRenderer {
     const hip = 0.86;
     const W = 0.44;
     let lean = 0, armL = 0, armR = 0, legL = 0, legR = 0, drop = 0;
-    root.makeRotationY(yaw).setPosition(x, y, z);
+    root.makeRotationY(yaw).setPosition(x + ox, y, z + oz);
     const swing = Math.sin(phase);
     if (kind === 'sleep' || kind === 'rest') {
       a.makeRotationX(-Math.PI / 2);
@@ -159,18 +164,28 @@ export function createSurvivorRenderer(): SubRenderer {
       }
       const blob = (x: number, y: number, z: number, lying: boolean): void => {
         b.makeScale(lying ? 0.5 : 0.42, 1, lying ? 1 : 0.42);
-        b.setPosition(x, y + 0.05, z);
+        b.setPosition(x + ox, y + 0.05, z + oz);
         blobs.setMatrixAt(nb++, b);
       };
-      if (map.params.isHome) {
+      // At the base — or next to it (07c): the people there are still in view (they only move while the player is home).
+      let homeMap: TacticalMap | null = map.params.isHome ? map : null;
+      const homeCell = state.world.homeCell;
+      if (!homeMap && homeCell !== null && map.params.world) {
+        const off = cellOffset(state, homeCell, map.size);
+        homeMap = off ? neighbourMap(state, homeCell) : null;
+        if (homeMap && off) [ox, oz] = off;
+      }
+      if (homeMap) {
         for (const s of state.colony.survivors) {
           if (s.location.kind !== 'home' || s.status === 'dead' || nb >= R.max) continue;
           // Guards who have reached their tower stand on its deck (06).
-          const y = s.task?.target != null && s.task.kind === 'work' ? standHeight(state, map, s.pos[0], s.pos[1]) : heightAt(map, s.pos[0], s.pos[1]);
+          const y = s.task?.target != null && s.task.kind === 'work' ? standHeight(state, homeMap, s.pos[0], s.pos[1]) : heightAt(homeMap, s.pos[0], s.pos[1]);
           drawSurvivor(s, y, frame.realDt);
           blob(s.pos[0], y, s.pos[1], s.task?.kind === 'sleep' || s.task?.kind === 'rest');
         }
       }
+      ox = 0;
+      oz = 0;
       for (const h of t.hideouts ?? []) {
         if (h.met || nb >= R.max) continue;
         const y = heightAt(map, h.pos[0], h.pos[1]);
