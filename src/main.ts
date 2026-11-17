@@ -16,7 +16,7 @@ import { BALANCE } from './data/balance.ts';
 import { createInput } from './input/index.ts';
 import { createRenderer } from './render/index.ts';
 import { setRenderGrid } from './render/tactical/neighbours.ts';
-import { worldBuildMs } from './render/tactical/index.ts';
+import { worldBuildMs, worldPending } from './render/tactical/index.ts';
 import { createSim } from './sim/index.ts';
 import { areaOf, areaPending, clearParked, ensureArea, mapOf } from './sim/tactical/area.ts';
 import { addZombie } from './sim/tactical/zombies.ts';
@@ -289,8 +289,8 @@ interface DebugApi {
   /** Put the player at (x, z) on the ground (or at height y) and look along yaw / pitch (radians). */
   teleport(x: number, z: number, yaw?: number, pitch?: number, y?: number): void;
   setClock(hour: number): void;
-  /** Last frame's draw calls / triangles, cumulative main-thread ms and frame count, and how long the last world build took. */
-  renderInfo(): { calls: number; triangles: number; cpuMs: number; frames: number; buildMs: number };
+  /** Last frame's draw calls / triangles, cumulative main-thread ms and frame count, how long the last world build took, and neighbour parts still to build (07c). */
+  renderInfo(): { calls: number; triangles: number; cpuMs: number; frames: number; buildMs: number; pending: number };
   /** Hold these controls from now on (one-shot fields apply once); null releases them. */
   setInput(input: Partial<InputFrame> | null): void;
   /** Open the firing range (flat map, targets at 100..600 m). `noSway` holds the rifle perfectly still. */
@@ -420,6 +420,6 @@ window.__game = {
     give(res, amount) {
       if (state) state.colony.stock[res] += amount;
     },
-    renderInfo: () => ({ calls: renderer.ctx.renderer.info.render.calls, triangles: renderer.ctx.renderer.info.render.triangles, cpuMs, frames, buildMs: worldBuildMs() }),
+    renderInfo: () => ({ calls: renderer.ctx.renderer.info.render.calls, triangles: renderer.ctx.renderer.info.render.triangles, cpuMs, frames, buildMs: worldBuildMs(), pending: worldPending() }),
   },
 };

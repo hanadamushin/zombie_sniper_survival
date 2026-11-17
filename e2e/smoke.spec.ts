@@ -312,6 +312,8 @@ test('firing range: scope, a zeroed head shot at 300 m, ears, and 600 zombies wi
     // The budget is judged on one sim step + one draw submission measured directly (CLAUDE.md);
     // the frame average depends on the software-rendered frame rate and is printed for reference.
     const s = g.state!;
+    // 07c: steady frames only — wait until the neighbouring areas are built.
+    for (let w = 0; w < 600 && g.debug.renderInfo().pending > 0; w++) await new Promise((r) => setTimeout(r, 50));
     let t0 = performance.now();
     for (let i = 0; i < 300; i++) g.sim.tick(s, 1 / 60, { ...g.debug.noInput });
     const tick = (performance.now() - t0) / 300;
@@ -451,6 +453,8 @@ test('colony: meet someone, hire, assign jobs, days pass — food and materials 
     const a = g.debug.renderInfo();
     await new Promise((r) => setTimeout(r, 4000));
     const b = g.debug.renderInfo();
+    // 07c: steady frames only — wait until the neighbouring areas are built.
+    for (let w = 0; w < 600 && g.debug.renderInfo().pending > 0; w++) await new Promise((r) => setTimeout(r, 50));
     let t0 = performance.now();
     for (let i = 0; i < 600; i++) g.sim.tick(s, 1 / 60, { ...g.debug.noInput });
     const tick = (performance.now() - t0) / 600;

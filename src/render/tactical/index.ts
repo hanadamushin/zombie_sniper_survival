@@ -2,7 +2,8 @@
 // that the land goes on past the edge and the player can walk into it. Every map's meshes are
 // built once and moved when the current cell changes (walking across); maps that drop out of the
 // 3 × 3 neighbourhood are disposed. Neighbours come from the background worker
-// (neighbours.ts); at most one new map's meshes are built per frame.
+// (neighbours.ts). A neighbour's meshes are built one part per frame (terrain, buildings, trees,
+// brush), so that no single frame carries a whole map; the current map is built at once.
 //
 // Draw calls per map: terrain 1 (+ apron 1 for stand-alone maps) + boxes 1 + roofs 1 + rocks 1
 // + grass 1 (current map only) + brush 4 + trees (2 kinds x visible chunks). Maps whose square is
@@ -29,27 +30,40 @@ interface Entry {
   map: TacticalMap;
   group: THREE.Group;
   parts: Built[];
-  terrain: TerrainPart;
-  vegetation: Vegetation;
-  brush: BrushPart;
+  terrain: TerrainPart | null;
+  vegetation: Vegetation | null;
+  brush: BrushPart | null;
+  /** Parts still to build, in order. */
+  todo: ('terrain' | 'buildings' | 'vegetation' | 'brush')[];
 }
+
+let pendingWork = 0;
+/** Neighbour maps still being built or awaited (perf checks wait for 0: steady frames only). */
+export const worldPending = (): number => pendingWork;
 
 export function createTacticalRenderer(): SubRenderer {
   let ctx: RenderContext;
   const entries = new Map<TacticalMap, Entry>();
   const local = new THREE.Vector3();
 
-  const build = (map: TacticalMap, apron: boolean): Entry => {
-    const vegetation = buildVegetation(map);
-    const terrain = buildTerrain(map, ctx.renderer, { apron, pixels: groundPixelsOf(map) });
-    const brush = buildBrush(map);
-    const parts: Built[] = [terrain, buildBuildings(map), vegetation, brush];
+  const start = (map: TacticalMap): Entry => {
     const group = new THREE.Group();
-    for (const p of parts) group.add(p.object);
     ctx.scene.add(group);
-    const entry: Entry = { map, group, parts, terrain, vegetation, brush };
+    const entry: Entry = { map, group, parts: [], terrain: null, vegetation: null, brush: null, todo: ['terrain', 'buildings', 'vegetation', 'brush'] };
     entries.set(map, entry);
     return entry;
+  };
+  /** Build the next part of an entry. */
+  const step = (e: Entry): void => {
+    const what = e.todo.shift();
+    let part: Built;
+    if (what === 'terrain') part = e.terrain = buildTerrain(e.map, ctx.renderer, { apron: !e.map.params.world, pixels: groundPixelsOf(e.map) });
+    else if (what === 'buildings') part = buildBuildings(e.map);
+    else if (what === 'vegetation') part = e.vegetation = buildVegetation(e.map);
+    else if (what === 'brush') part = e.brush = buildBrush(e.map);
+    else return;
+    e.parts.push(part);
+    e.group.add(part.object);
   };
   const drop = (e: Entry): void => {
     e.group.removeFromParent();
@@ -78,6 +92,7 @@ export function createTacticalRenderer(): SubRenderer {
       const cam = ctx.camera.position;
       // Which maps belong around the player now, and where.
       const wanted = new Map<TacticalMap, [number, number]>([[current, [0, 0]]]);
+      let missing = 0;
       if (current.params.world && !state.flags.range) {
         for (const cell of around(state)) {
           if (cell === null || cell === state.player.cell) continue;
@@ -90,27 +105,35 @@ export function createTacticalRenderer(): SubRenderer {
           if (Math.hypot(dx, dz) > (state.mode === 'command' ? L.neighboursFromAbove : L.neighbours)) continue;
           const map = neighbourMap(state, cell);
           if (map) wanted.set(map, off);
+          else missing++; // asked of the worker
         }
       }
       for (const e of [...entries.values()]) if (!wanted.has(e.map)) drop(e);
-      let built = false;
+      let budget = 1; // neighbour parts built this frame
+      pendingWork = missing;
       for (const [map, off] of wanted) {
         let e = entries.get(map);
         if (!e) {
-          // The current map at once (it is what the player stands on); neighbours one per frame.
-          if (map !== current && built) continue;
-          const t0 = performance.now();
-          e = build(map, !map.params.world);
-          if (map === current) lastBuildMs = performance.now() - t0;
-          built = true;
+          e = start(map);
+          if (map === current) {
+            // What the player stands on: all of it at once.
+            const t0 = performance.now();
+            while (e.todo.length > 0) step(e);
+            lastBuildMs = performance.now() - t0;
+          }
         }
+        if (e.todo.length > 0 && budget > 0) {
+          step(e);
+          budget--;
+        }
+        pendingWork += e.todo.length;
         e.group.position.set(off[0], 0, off[1]);
         local.set(cam.x - off[0], cam.y, cam.z - off[1]);
-        e.terrain.update(local.x, local.z);
+        e.terrain?.update(local.x, local.z);
         // Tall grass only near the camera (on a neighbour: when standing close to its edge).
         const away = Math.hypot(Math.max(-local.x, 0, local.x - map.size), Math.max(-local.z, 0, local.z - map.size));
-        e.vegetation.update(local, RENDER.fog.far, away < RENDER.flora.grassRange);
-        e.brush.update(local.x, local.z);
+        e.vegetation?.update(local, RENDER.fog.far, away < RENDER.flora.grassRange);
+        e.brush?.update(local.x, local.z);
       }
     },
     dispose: clear,

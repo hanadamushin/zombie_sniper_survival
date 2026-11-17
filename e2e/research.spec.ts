@@ -140,6 +140,8 @@ test('research: from the palisade to earthworks to steel walls, an exclusive bra
     const s = g.state!;
     await new Promise((r) => setTimeout(r, 2500));
     const info = g.debug.renderInfo();
+    // 07c: steady frames only — wait until the neighbouring areas are built.
+    for (let w = 0; w < 600 && g.debug.renderInfo().pending > 0; w++) await new Promise((r) => setTimeout(r, 50));
     let t0 = performance.now();
     for (let i = 0; i < 600; i++) g.sim.tick(s, 1 / 60, { ...g.debug.noInput });
     const tick = (performance.now() - t0) / 600;

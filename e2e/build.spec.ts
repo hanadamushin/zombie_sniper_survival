@@ -242,15 +242,28 @@ test('a moat with one opening: the horde files through it; 120 raiders, 30 survi
     const info = g.debug.renderInfo();
     const raiders = s.tactical!.zombies.filter((z) => z.raid && z.state !== 'down').length;
     const all = s.tactical!.zombies.length;
+    // 07c: steady frames only — wait until the neighbouring areas are built.
+    for (let w = 0; w < 600 && g.debug.renderInfo().pending > 0; w++) await new Promise((r) => setTimeout(r, 50));
     let t0 = performance.now();
     for (let i = 0; i < 600; i++) g.sim.tick(s, 1 / 60, { ...g.debug.noInput });
     const tick = (performance.now() - t0) / 600;
-    t0 = performance.now();
-    for (let i = 0; i < 20; i++) g.renderer.draw(s, 0, 1 / 60);
-    const draw = (performance.now() - t0) / 20;
-    return { calls: info.calls, triangles: info.triangles, tick, draw, raiders, all, survivors: s.colony.survivors.filter((x) => x.location.kind === 'home').length };
+    const times: number[] = [];
+    const pend: number[] = [];
+    for (let i = 0; i < 20; i++) {
+      t0 = performance.now();
+      g.renderer.draw(s, 0, 1 / 60);
+      times.push(performance.now() - t0);
+      pend.push(g.debug.renderInfo().pending);
+    }
+    // One draw = the median: during a fight the walls' damage is redrawn now and then (06), and a
+    // single garbage collection can dwarf twenty frames; the worst one is reported as well.
+    const sorted = times.slice().sort((a, b) => a - b);
+    const draw = sorted[10]!;
+    const worst = sorted[19]!;
+    void pend;
+    return { calls: info.calls, triangles: info.triangles, tick, draw, worst, raiders, all, survivors: s.colony.survivors.filter((x) => x.location.kind === 'home').length };
   });
-  console.log(`horde at the walls (tactical): ${perf.raiders} raiders (${perf.all} zombies), ${perf.survivors} survivors, ${setup.walls} wall tiles: ${perf.calls} draw calls, ${perf.triangles} triangles, sim step ${perf.tick.toFixed(3)} ms + draw submission ${perf.draw.toFixed(2)} ms`);
+  console.log(`horde at the walls (tactical): ${perf.raiders} raiders (${perf.all} zombies), ${perf.survivors} survivors, ${setup.walls} wall tiles: ${perf.calls} draw calls, ${perf.triangles} triangles, sim step ${perf.tick.toFixed(3)} ms + draw submission ${perf.draw.toFixed(2)} ms (median of 20; worst ${perf.worst.toFixed(1)} ms)`);
   expect(perf.raiders).toBeGreaterThanOrEqual(100);
   expect(perf.survivors).toBeGreaterThanOrEqual(28);
   expect(perf.calls).toBeLessThan(150);

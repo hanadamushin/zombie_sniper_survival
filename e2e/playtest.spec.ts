@@ -294,6 +294,8 @@ test('rural and forest stay within budget with the new cover, from a firing posi
         const s = g.state!;
         await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
         const info = g.debug.renderInfo();
+        // 07c: steady frames only — wait until the neighbouring areas are built.
+        for (let w = 0; w < 600 && g.debug.renderInfo().pending > 0; w++) await new Promise((r) => setTimeout(r, 50));
         let t0 = performance.now();
         for (let i = 0; i < 600; i++) g.sim.tick(s, 1 / 60, { ...g.debug.noInput });
         const tick = (performance.now() - t0) / 600;
@@ -384,6 +386,8 @@ test('walking east over the edge of the area: the next cell takes over, the land
     const s = g.state!;
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     const info = g.debug.renderInfo();
+    // 07c: steady frames only — wait until the neighbouring areas are built.
+    for (let w = 0; w < 600 && g.debug.renderInfo().pending > 0; w++) await new Promise((r) => setTimeout(r, 50));
     let t0 = performance.now();
     for (let i = 0; i < 300; i++) g.sim.tick(s, 1 / 60, { ...g.debug.noInput });
     const tick = (performance.now() - t0) / 300;
@@ -406,6 +410,23 @@ test('walking east over the edge of the area: the next cell takes over, the land
   await page.evaluate(() => window.__game!.debug.setInput({ moveZ: 1, sprint: true }));
   await page.waitForFunction((h) => window.__game!.state!.player.cell !== h, home, { timeout: 60_000 });
   await page.evaluate(() => window.__game!.debug.setInput(null));
+  // The frames that build the newly needed neighbours, one part each: the worst one is the hitch.
+  const hitch = await page.evaluate(async () => {
+    const g = window.__game!;
+    const s = g.state!;
+    let worst = 0;
+    let frames = 0;
+    for (let w = 0; w < 400; w++) {
+      const t0 = performance.now();
+      g.renderer.draw(s, 0, 1 / 60);
+      worst = Math.max(worst, performance.now() - t0);
+      frames++;
+      if (g.debug.renderInfo().pending === 0 && w > 5) break;
+      await new Promise((r) => setTimeout(r, 30));
+    }
+    return { worst, frames };
+  });
+  lines.push(`after crossing: neighbours built over ${hitch.frames} frames, worst frame ${hitch.worst.toFixed(1)} ms (software rendering)`);
   const after = await page.evaluate(() => {
     const s = window.__game!.state!;
     return { cell: s.player.cell, x: s.player.pos[0], tcell: s.tactical!.cell, home: window.__game!.map!.params.isHome };
