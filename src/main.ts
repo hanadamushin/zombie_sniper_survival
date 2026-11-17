@@ -17,7 +17,7 @@ import { createInput } from './input/index.ts';
 import { createRenderer } from './render/index.ts';
 import { worldBuildMs } from './render/tactical/index.ts';
 import { createSim } from './sim/index.ts';
-import { areaOf, areaPending, ensureArea, mapOf } from './sim/tactical/area.ts';
+import { areaOf, areaPending, clearParked, ensureArea, mapOf } from './sim/tactical/area.ts';
 import { addZombie } from './sim/tactical/zombies.ts';
 import type { InputFrame, JobId, ResourceId, ZombieKind } from './core/types.ts';
 import { arrivalPos, generateSurvivor } from './sim/colony/survivors.ts';
@@ -49,6 +49,7 @@ const input = createInput({ canvas, dispatch: sim.dispatch, getState: () => stat
 // ---------------------------------------------------------------------------------------------
 
 function start(next: GameState): void {
+  if (next !== suspended) clearParked(); // areas walked out of belong to the game that is ending
   state = next;
   stepper.reset();
   renderer.reset(next);

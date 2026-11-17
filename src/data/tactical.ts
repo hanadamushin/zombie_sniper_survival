@@ -70,7 +70,15 @@ export const TACTICAL = {
    * shared edge (between two forest / mountain cells: a track); gateMargin: gates stay this far from
    * the corners. editFade: road beds, dikes and creeks fade out over this distance from the edge (m).
    */
-  world: { blend: 120, seaDrop: 7, gateChance: 0.65, gateWild: 0.45, gateMargin: 170, editFade: 40 },
+  world: {
+    blend: 120, seaDrop: 7, gateChance: 0.65, gateWild: 0.45, gateMargin: 170, editFade: 40,
+    /** Walking over an open edge: how far past it the player may stand before the handoff (m). */
+    crossOver: 0.5,
+    /** Zombies within this distance of the player (or chasing) follow across the border (m). */
+    carry: 70,
+    /** Areas just left are kept in memory (zombies, bodies, searched spots) this many at a time, so stepping back finds them as they were. */
+    parked: 4,
+  },
 
   /** Tiles steeper than this (rise / run) are not walkable for the nav grid. */
   navMaxSlope: 0.9,

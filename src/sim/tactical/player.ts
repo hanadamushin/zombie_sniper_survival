@@ -105,13 +105,19 @@ export function updatePlayer(player: PlayerState, map: TacticalMap, input: Input
   else player.stamina = Math.min(P.staminaMax, player.stamina + (moving ? P.staminaRegenMoving : P.staminaRegenIdle) * dt);
 
   // --- horizontal move + collision ---
-  const lo = P.edgeMargin;
-  const hi = map.size - P.edgeMargin;
-  xz[0] = Math.min(hi, Math.max(lo, pos[0] + vel[0] * dt));
-  xz[1] = Math.min(hi, Math.max(lo, pos[2] + vel[2] * dt));
+  // 07c: where a land cell lies beyond the edge the player may step over it (sim/tactical/area.ts
+  // walkAcross then moves them into that cell's area); towards the sea or off the grid the edge stays shut.
+  const around = map.params.world?.around;
+  const over = TACTICAL.world.crossOver;
+  const loX = around?.[3] ? -over : P.edgeMargin;
+  const hiX = around?.[5] ? map.size + over : map.size - P.edgeMargin;
+  const loZ = around?.[1] ? -over : P.edgeMargin;
+  const hiZ = around?.[7] ? map.size + over : map.size - P.edgeMargin;
+  xz[0] = Math.min(hiX, Math.max(loX, pos[0] + vel[0] * dt));
+  xz[1] = Math.min(hiZ, Math.max(loZ, pos[2] + vel[2] * dt));
   pushOut(map, xz, P.radius, pos[1], height);
-  xz[0] = Math.min(hi, Math.max(lo, xz[0]));
-  xz[1] = Math.min(hi, Math.max(lo, xz[1]));
+  xz[0] = Math.min(hiX, Math.max(loX, xz[0]));
+  xz[1] = Math.min(hiZ, Math.max(loZ, xz[1]));
   pos[0] = xz[0];
   pos[2] = xz[1];
 

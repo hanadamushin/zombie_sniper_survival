@@ -87,3 +87,93 @@ describe('neighbouring areas meet (07c)', () => {
     expect(crossings).toBeGreaterThan(5);
   });
 });
+
+// ---------------------------------------------------------------------------------------------
+// Walking across (07c)
+// ---------------------------------------------------------------------------------------------
+
+import { emptyInputFrame, type GameState, type InputFrame } from '../src/core/types.ts';
+import type { GameEvent } from '../src/core/events.ts';
+import { BALANCE } from '../src/data/balance.ts';
+import { createSim } from '../src/sim/index.ts';
+import { areaOf, mapOf } from '../src/sim/tactical/area.ts';
+import { addZombie } from '../src/sim/tactical/zombies.ts';
+import { beginAt } from '../src/sim/world/start.ts';
+
+const DT = BALANCE.time.fixedStep;
+
+function gameAt(cell: number): { s: GameState; sim: ReturnType<typeof createSim>; events: GameEvent[] } {
+  const s = createInitialState(12, 1);
+  initWorld(s, grid, scenario);
+  beginAt(s, grid, cell);
+  const sim = createSim({ grid });
+  const events: GameEvent[] = [];
+  sim.events.onAny((e) => events.push(e));
+  sim.tick(s, DT, emptyInputFrame());
+  s.mode = 'tactical';
+  s.tactical!.zombies.length = 0;
+  areaOf(s)!.dynamic.clear();
+  return { s, sim, events };
+}
+
+/** Face along (dx, dz) and walk until the cell changes or `seconds` pass. */
+function walk(g: ReturnType<typeof gameAt>, dx: number, dz: number, seconds: number): void {
+  g.s.player.yaw = Math.atan2(-dx, -dz);
+  const input: InputFrame = { ...emptyInputFrame(), moveZ: 1, sprint: true };
+  const start = g.s.player.cell;
+  for (let i = 0; i < seconds / DT && g.s.player.cell === start; i++) {
+    g.s.player.stamina = 100;
+    g.sim.tick(g.s, DT, input);
+  }
+}
+
+describe('walking into the next cell (07c)', () => {
+  const w = grid.gridW;
+  // A rural or forest cell with land to the east, and one with the sea to the east.
+  const inland = grid.landIds.find((id) => ['rural', 'forest'].includes(grid.cells[id]!.land) && grid.cells[id + 1] && grid.cells[id - 1] && grid.cells[id + w] && grid.cells[id - w] && grid.cells[id + 1 + w] && grid.cells[id + 1 - w])!;
+  const coast = grid.landIds.find((id) => ['rural', 'forest'].includes(grid.cells[id]!.land) && !grid.cells[id + 1] && id % w !== w - 1 && grid.cells[id - 1])!;
+
+  it('walking east over the edge puts the player in the east neighbour, on the same ground, and back again', { timeout: 120_000 }, () => {
+    const g = gameAt(inland);
+    const p = g.s.player;
+    const S = TACTICAL.size;
+    // Next to the east edge, on walkable ground.
+    const map = mapOf(g.s)!;
+    let z0 = 500;
+    while (z0 < 900 && !map.walk[Math.floor(z0 / 4) * 256 + 254]) z0 += 4;
+    p.pos = [S - 6, heightAt(map, S - 6, z0), z0];
+    const firstArea = g.s.tactical!;
+    // A zombie chasing the player comes along.
+    const chaser = addZombie(g.s, areaOf(g.s)!, 'walker', S - 30, z0, -Math.PI / 2)!;
+    chaser.state = 'chase';
+    chaser.target = 'player';
+    walk(g, 1, 0, 20);
+    expect(p.cell).toBe(inland + 1);
+    expect(g.s.tactical!.cell).toBe(inland + 1);
+    expect(mapOf(g.s)!.params.mapSeed).toBe(areaParams(g.s, grid, inland + 1)!.mapSeed);
+    expect(p.pos[0]).toBeGreaterThanOrEqual(-0.01);
+    expect(p.pos[0]).toBeLessThan(2);
+    // Same ground: the height under the feet did not jump.
+    expect(Math.abs(p.pos[1] - heightAt(mapOf(g.s)!, p.pos[0], p.pos[2]))).toBeLessThan(0.6);
+    expect(g.events.some((e) => e.type === 'cellEntered' && e.cell === inland + 1 && e.from === inland && e.walked === true)).toBe(true);
+    expect(g.s.world.cells.visited[inland + 1]).toBe(true);
+    expect(g.s.tactical!.zombies.some((z) => z.id === chaser.id)).toBe(true);
+    expect(firstArea.zombies.some((z) => z.id === chaser.id)).toBe(false);
+    // Turn round: back in the first cell, the very same area (bodies, searched spots) as it was left.
+    g.s.tactical!.zombies.length = 0;
+    walk(g, -1, 0, 20);
+    expect(p.cell).toBe(inland);
+    expect(g.s.tactical).toBe(firstArea);
+    expect(p.pos[0]).toBeGreaterThan(S - 2);
+  });
+
+  it('the edge towards the sea stays shut', { timeout: 60_000 }, () => {
+    const g = gameAt(coast);
+    const p = g.s.player;
+    const map = mapOf(g.s)!;
+    p.pos = [TACTICAL.size - 8, heightAt(map, TACTICAL.size - 8, 512), 512];
+    walk(g, 1, 0, 15);
+    expect(p.cell).toBe(coast);
+    expect(p.pos[0]).toBeLessThanOrEqual(TACTICAL.size - TACTICAL.player.edgeMargin + 1e-6);
+  });
+});

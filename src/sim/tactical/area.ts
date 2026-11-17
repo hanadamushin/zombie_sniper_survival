@@ -13,6 +13,9 @@ import { generateTacticalMap, mapSeedFor, type GenParams, type TacticalMap, type
 import { cellTactical } from '../world/derive.ts';
 import { createSpatialHash, type SpatialHash } from './collision.ts';
 import { placePlayer } from './player.ts';
+import type { GameEvent } from '../../core/events.ts';
+import { reveal } from '../world/travel.ts';
+import { TACTICAL } from '../../data/tactical.ts';
 import { rangeMap } from './range.ts';
 import { BALANCE } from '../../data/balance.ts';
 
@@ -25,7 +28,8 @@ export interface TacticalArea {
 const areas = new WeakMap<TacticalState, TacticalArea>();
 /** Last generated maps by parameters, so that re-entering a cell or reloading is instant. */
 const cache = new Map<string, TacticalMap>();
-const CACHE_SIZE = 3;
+/** 07c: the 3 × 3 neighbourhood the renderer shows, plus a few just left. */
+const CACHE_SIZE = 14;
 
 const keyOf = (p: GenParams): string => `${p.mapSeed}:${p.land}:${p.isHome ? 1 : 0}:${p.lootSpots}`;
 
@@ -142,4 +146,131 @@ export function ensureArea(state: GameState, grid: StaticGrid | null): TacticalA
   if (params.isHome) placePlayer(state.player, map, map.spawn.home[0], map.spawn.home[1], 0);
   else placePlayer(state.player, map, map.spawn.edge[0], map.spawn.edge[1], map.spawn.edgeYaw);
   return area;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Walking into the next cell (07c)
+// ---------------------------------------------------------------------------------------------
+
+/** Areas the player walked out of, by cell, most recent last: stepping back finds them as they were. Not saved. */
+const parked = new Map<CellId, { tactical: TacticalState; area: TacticalArea }>();
+
+/** Generated map of a cell if it is already in the cache (render: neighbours), without generating it. */
+export function cachedMap(params: GenParams): TacticalMap | null {
+  return cache.get(keyOf(params)) ?? null;
+}
+
+/** Put a map generated elsewhere (a worker) into the cache, so that walking into its cell is instant. */
+export function provideMap(params: GenParams, map: TacticalMap): void {
+  const key = keyOf(params);
+  if (cache.has(key)) return;
+  cache.set(key, map);
+  while (cache.size > CACHE_SIZE) cache.delete(cache.keys().next().value!);
+}
+
+/** Map of a cell for this game, generating it if needed (the renderer's neighbours, tests). */
+export function mapForCell(state: GameState, grid: StaticGrid, cell: CellId): TacticalMap | null {
+  const params = areaParams(state, grid, cell);
+  return params ? mapFor(params) : null;
+}
+
+/**
+ * The player has stepped over the edge of the area onto the next cell's ground: make that cell
+ * the current one. Coordinates move by one map size; the area left behind is parked; zombies
+ * close by or chasing come along (put down just inside the new edge). Returns the new area, or
+ * null when nothing happened.
+ */
+export function walkAcross(state: GameState, grid: StaticGrid | null, emit: (e: GameEvent) => void): TacticalArea | null {
+  const t = state.tactical;
+  if (!grid || !t || state.flags.range || state.world.travel) return null;
+  const old = areas.get(t);
+  if (!old) return null;
+  const S = old.map.size;
+  const p = state.player.pos;
+  let dx = p[0] < 0 ? -1 : p[0] > S ? 1 : 0;
+  let dz = p[2] < 0 ? -1 : p[2] > S ? 1 : 0;
+  if (dx === 0 && dz === 0) return null;
+  const w = grid.gridW;
+  const gx = t.cell % w;
+  const gy = Math.floor(t.cell / w);
+  const land = (x: number, y: number): boolean => x >= 0 && y >= 0 && x < w && y < grid.gridH && Boolean(grid.cells[y * w + x]);
+  // Through a corner onto the sea: cross on one axis only (the one stepped further over).
+  if (dx !== 0 && dz !== 0 && !land(gx + dx, gy + dz)) {
+    const overX = dx < 0 ? -p[0] : p[0] - S;
+    const overZ = dz < 0 ? -p[2] : p[2] - S;
+    if (overX >= overZ) {
+      p[2] = Math.min(S, Math.max(0, p[2]));
+      dz = 0;
+    } else {
+      p[0] = Math.min(S, Math.max(0, p[0]));
+      dx = 0;
+    }
+  }
+  if (!land(gx + dx, gy + dz)) {
+    p[0] = Math.min(S, Math.max(0, p[0]));
+    p[2] = Math.min(S, Math.max(0, p[2]));
+    return null;
+  }
+  const from = t.cell;
+  const to = (gy + dz) * w + gx + dx;
+  const shiftX = -dx * S;
+  const shiftZ = -dz * S;
+
+  // Who comes along: anything close, and whatever is after the player.
+  const carry = TACTICAL.world.carry;
+  const coming = t.zombies.filter((z) => z.state !== 'down' && !z.dummy && (z.target === 'player' || Math.hypot(z.pos[0] - p[0], z.pos[2] - p[2]) < carry));
+  t.zombies = t.zombies.filter((z) => !coming.includes(z));
+  for (const z of coming) old.dynamic.remove(z.id);
+  t.bullets.length = 0;
+
+  // Park the area left behind (most recent last), then take the next one: parked, or new.
+  parked.delete(from);
+  parked.set(from, { tactical: t, area: old });
+  while (parked.size > TACTICAL.world.parked) parked.delete(parked.keys().next().value!);
+
+  state.player.cell = to;
+  p[0] += shiftX;
+  p[2] += shiftZ;
+  reveal(state, grid, to);
+  let next = parked.get(to);
+  parked.delete(to);
+  if (next) {
+    state.tactical = next.tactical;
+    areas.set(next.tactical, next.area);
+  } else {
+    const params = areaParams(state, grid, to);
+    if (!params) return null;
+    const map = mapFor(params);
+    const tactical: TacticalState = {
+      cell: to,
+      mapSeed: params.mapSeed,
+      zombies: [],
+      corpses: [],
+      bullets: [],
+      reserve: Math.max(0, state.world.cells.Z[to] ?? 0),
+      wind: [0, 0],
+      lootSpots: map.lootSpots.map((s) => ({ id: s.id, pos: [s.pos[0], s.pos[1]], taken: false })),
+    };
+    next = { tactical, area: { map, dynamic: createSpatialHash() } };
+    state.tactical = tactical;
+    areas.set(tactical, next.area);
+  }
+  // Followers step over too, just inside the new edge where they were along it.
+  const nt = state.tactical!;
+  const inside = (v: number): number => Math.min(S - 3, Math.max(3, v));
+  for (const z of coming) {
+    z.pos[0] = inside(z.pos[0] + shiftX);
+    z.pos[2] = inside(z.pos[2] + shiftZ);
+    z.goal[0] = inside(z.goal[0] + shiftX);
+    z.goal[1] = inside(z.goal[1] + shiftZ);
+    nt.zombies.push(z);
+    next.area.dynamic.set(z.id, z.pos[0], z.pos[2]);
+  }
+  emit({ type: 'cellEntered', cell: to, from, walked: true });
+  return next.area;
+}
+
+/** Forget the parked areas (new game, load, quitting). */
+export function clearParked(): void {
+  parked.clear();
 }

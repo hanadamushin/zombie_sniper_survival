@@ -73,7 +73,8 @@ export type GameEvent =
   | { type: 'outpostLost'; id: EntityId; cell: CellId }
   // --- world: travel and infection (02) ---
   | { type: 'travelStarted'; from: CellId; to: CellId; minutes: number }
-  | { type: 'cellEntered'; cell: CellId; from: CellId }
+  /** `walked` (07c): crossed the edge of the operation area on foot rather than on the road. */
+  | { type: 'cellEntered'; cell: CellId; from: CellId; walked?: boolean }
   | { type: 'travelArrived'; cell: CellId }
   /** Placeholder: rolled when entering a cell on the road; no effect yet (later sessions). */
   | { type: 'travelEncounter'; cell: CellId; danger: number }

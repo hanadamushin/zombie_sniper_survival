@@ -8,7 +8,7 @@
 // combat.ts (knife, ears, falls, death), health.ts (damage to the player), range.ts (debug firing range).
 import { emptyInputFrame } from '../../core/types.ts';
 import type { System } from '../system.ts';
-import { ensureArea } from './area.ts';
+import { ensureArea, walkAcross } from './area.ts';
 import { updateBullets } from './ballistics.ts';
 import { updateCombat } from './combat.ts';
 import { checkInfection, isDead } from './health.ts';
@@ -22,11 +22,13 @@ export const tacticalSystem: System = {
   id: 'tactical',
   // `resupply` (stock -> carried ammunition) is handled by the colony system (sim/colony/encounters.ts).
   step(state, ctx) {
-    const area = ensureArea(state, ctx.grid);
+    let area = ensureArea(state, ctx.grid);
     if (!area) return;
     // 1. player. Controls only arrive in the tactical mode; elsewhere the player stands still.
     const dead = isDead(state);
     updatePlayer(state.player, area.map, dead ? NO_CONTROLS : ctx.input, ctx.dt, lookScale(state.player));
+    // 07c: stepped over the edge into the next cell -> that cell's area from here on.
+    area = walkAcross(state, ctx.grid, ctx.emit) ?? area;
     // 2. rifle: scope, sway, trigger -> new bullets
     updateWeapon(state, dead ? { ...ctx, input: NO_CONTROLS } : ctx);
     // 3. bullets  4. zombies  5. knife, ears, falls, death
