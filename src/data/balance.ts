@@ -99,6 +99,9 @@ export const BALANCE = {
      * The night approach on the base keeps the old scale (`nightActive`, used by sim/build/raids.ts).
      */
     active: { base: 20, perLog: 20, min: 5, max: 120 },
+    /** 07c (playtest: "five times as many"): the area holds this many times `active` (up to activeMax). */
+    activeMul: 5,
+    activeMax: 600,
     nightActive: { base: 8, perLog: 14, min: 5, max: 120 },
     /**
      * The operation area is populated as if the cell held this many times its Z (07b+, playtest:
@@ -220,7 +223,8 @@ export const BALANCE = {
 
   // --- docs/02_systems_spec.md §3.4 zombie behaviour (owner: 04; per-kind numbers are in data/zombies.ts) ---
   zombie: {
-    max: 150,
+    /** Zombies alive in an area at once (07c: 150 -> 750, so that a raid of 120 still fits beside 600 roaming). */
+    max: 750,
     /** Sight: distance by day / night multiplier, half field of view (radians), eye height share of the body. */
     viewDist: 40,
     nightView: 1.5,

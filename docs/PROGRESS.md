@@ -548,3 +548,13 @@
   - データ: `TACTICAL.world`（`blend` / `seaDrop` / `gateChance` / `gateWild` / `gateMargin` / `editFade` / `crossOver` / `carry` / `parked`）、`RENDER.terrainLod`、`RENDER.brush.fineRange`
   - 関数: `terrainFunction`, `cellHills`, `gatesOf`, `editFade`（gen/world.ts）、`walkAcross`, `worldContext`, `cachedMap`, `provideMap`, `mapForCell`, `clearParked`（area.ts）
   - コマンドの追加なし。`STATE_VERSION` は 5 のまま（地形は再生成。旧セーブも同じ seed から新しい地形で読める）
+
+### 07c 追補: 補給場所の表示とゾンビ 5 倍 — 2026-11-17
+- 発注者の評価: 地続きの制限（隣のセルのゾンビは入るまで動かない等）は「軽量化の工夫として妥当」。プレイ感は良好
+- **補給場所の表示**（`02_systems_spec.md` §3.9）: 戦略地図の本拠・駐屯地に「弾」の札と残弾数、凡例。戦術画面の右上に最寄りの補給場所の方角と距離（`sim/world/outposts.ts` の `supplyPoints` / `nearestSupply`）。司令部と駐屯地の上に青い光の柱（`render/tactical/beacons.ts`、1 ドローコール）
+- **ゾンビ 5 倍**: 区域の同時出現を 5 倍（`BALANCE.world.activeMul = 5`、上限 `activeMax = 600`、襲来込みの上限 `BALANCE.zombie.max` 150 → 750）。夜間接近の規模は変えていない。`CLAUDE.md` の性能予算を「ゾンビ同時 600 体まで」に更新した（発注者の要望による変更）
+  - 実測（18 ゲーム、開始 3 分後）: 地図上 89 → 445 体、最良の射点から見える数 27 → 141 体、本拠の中心から 12 → 74 体（本拠の 150m 以内には入らない）
+  - 性能を保つために: 木の遠景用の簡略形（260m より遠い区画は幹なしの円錐・八面体、`RENDER.flora.treeNear`）、ゾンビは霧の外と視野の外を描かない（手足の姿勢計算も省く）
+  - 性能（SwiftShader、直接計測）: 射撃場 600 体 7 ドローコール / 10.1 万三角形 / sim 0.27 ＋ 描画発行 1.50 ms。森の地上 31.4 万（以前 46.9 万）・射点 32.6 万。境界 72 / 25.2 万 / 2.2 ms、角 67 / 27.1 万 / 1.3 ms。sim 単体で 600 体 0.23 ms/ステップ（Node）
+- テスト: 単体 1 件（隣のセルから本拠の方角と距離）、e2e 1 件（地図の札と凡例、隣のセルで HUD と光の柱）、負荷試験を 150 → 600 体に、開始セルの数の検査を 5 倍に合わせた
+- 09 向け: 耳の入りが大きく増え、地上で囲まれやすくなる（バランス全体は未調整）。射撃場の性能テストは 600 体で sim＋描画発行 1.8 ms だが、実機の内蔵 GPU では未確認。ゾンビ 1 体 84 三角形 × 600 体の頂点処理が重ければ、遠くの個体の簡略形を検討（頭の当たり判定と見た目を揃える制約に注意）

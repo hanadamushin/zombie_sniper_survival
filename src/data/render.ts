@@ -102,7 +102,12 @@ export const RENDER = {
     grassMax: 5000,
     /** Tree chunks per side (frustum / distance culling granularity). */
     treeChunks: 4,
+    /** 07c: chunks further than this from the camera (beyond their own half size) draw the simple far trees. */
+    treeNear: 260,
   },
+
+  // --- supply beacons (07c): a faint column over the headquarters and the outposts ---
+  beacons: { color: 0x4f8fff, opacity: 0.32, radius: 2.4, height: 110 },
 
   // --- signs of people (07b): smoke over a hideout by day, a small fire light at night ---
   signals: {

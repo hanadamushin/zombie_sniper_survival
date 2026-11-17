@@ -430,3 +430,47 @@ test('walking east over the edge of the area: the next cell takes over, the land
   console.log(lines.join('\n'));
   expect(errors).toEqual([]);
 });
+
+test('where to get ammunition: the strategic map marks it, and next door the HUD and a beacon point the way back', async ({ page }) => {
+  test.setTimeout(240_000);
+  const errors = trackErrors(page);
+  await page.goto('/?seed=12&scenario=0&res=fixed');
+  await startNewGame(page);
+  // Strategic map: the base carries the ammunition badge and the legend explains it.
+  await expect(page.getByTestId('mode-tactical')).toBeVisible();
+  await expect(async () => {
+    if ((await page.getByTestId('mode-world').count()) === 0) await page.keyboard.press('KeyM');
+    await expect(page.getByTestId('map-supply-legend')).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 30_000 });
+  await expect(page.getByTestId('map-supply-legend')).toContainText('弾薬を補給できる場所');
+  await page.screenshot({ path: 'test-results/07c-map-supply.png' });
+  await page.keyboard.press('KeyM');
+  await expect(page.getByTestId('mode-tactical')).toBeVisible();
+  // At the base: no hint (B works here).
+  await expect(page.getByTestId('hud-supply')).toHaveCount(0);
+  // Walk into the east neighbour and look back.
+  const home = await page.evaluate(() => {
+    const g = window.__game!;
+    const s = g.state!;
+    g.debug.setClock(16);
+    s.world.cells.Z[s.player.cell] = 0;
+    s.tactical!.zombies.length = 0;
+    g.debug.teleport(1018, 512, -Math.PI / 2, 0);
+    g.debug.setInput({ moveZ: 1, sprint: true });
+    return s.player.cell;
+  });
+  await page.waitForFunction((h) => window.__game!.state!.player.cell !== h, home, { timeout: 60_000 });
+  await page.evaluate(() => {
+    const g = window.__game!;
+    g.debug.setInput(null);
+    g.state!.tactical!.zombies.length = 0;
+    g.debug.teleport(150, 512, Math.PI / 2, 0.05); // facing west, towards the base
+  });
+  await expect(page.getByTestId('hud-supply')).toBeVisible();
+  await expect(page.getByTestId('hud-supply')).toHaveAttribute('data-dir', 'W');
+  await expect(page.getByTestId('hud-supply')).toContainText('本拠');
+  await expect.poll(() => page.evaluate(() => (window.__game!.renderer.ctx.scene.children.find((o) => o.renderOrder === 4) as { count?: number } | undefined)?.count ?? 0)).toBeGreaterThanOrEqual(1);
+  await page.waitForTimeout(3000);
+  await page.screenshot({ path: 'test-results/07c-supply-beacon.png' });
+  expect(errors).toEqual([]);
+});

@@ -9,13 +9,13 @@ import { forecastInfection } from '../../sim/research/forecast.ts';
 import { hasFlag } from '../../sim/research/modifiers.ts';
 import { BUILD } from '../../data/buildings.ts';
 import { isFit } from '../../sim/colony/survivors.ts';
-import { foundError, garrisonOf, isStation, outpostAt, outpostDefense, upgradeError } from '../../sim/world/outposts.ts';
+import { foundError, garrisonOf, isStation, outpostAt, outpostDefense, supplyPoints, upgradeError } from '../../sim/world/outposts.ts';
 import { costText } from '../command/build.tsx';
 import { tk } from '../command/format.ts';
 import { t, type TextKey } from '../i18n/ja.ts';
 import type { UiActions } from '../store.ts';
 import { cellName, fmt, formatDuration, intelOf, knownCount, roughly, zBand, zBandValue } from './info.ts';
-import { MapCanvas, type MapFocus, type MapMarker } from './MapCanvas.tsx';
+import { MapCanvas, SUPPLY_COLOR, setSupplyGlyph, type MapFocus, type MapMarker } from './MapCanvas.tsx';
 import { legendGradient, lootColor, popColor, UNKNOWN, zColor } from './palette.ts';
 
 type ViewMode = 'z' | 'loot' | 'pop';
@@ -62,12 +62,20 @@ export function WorldMap({ state, grid, actions }: Props) {
     return zColor(intel >= 2 ? z : intel === 1 ? roughly(z) : zBandValue(z));
   };
 
+  // 07c: the base and every outpost are where ammunition is taken (B): badge + the rounds there.
+  setSupplyGlyph(t('world.supplyGlyph'));
   const markers: MapMarker[] = [];
-  if (state.world.homeCell !== null && state.world.homeCell !== here) markers.push({ cell: state.world.homeCell, kind: 'home', label: t('world.home') });
-  for (const o of state.world.outposts) if (o.cell !== here) markers.push({ cell: o.cell, kind: 'outpost', label: t(`world.outpost.tier.${o.tier}` as TextKey) });
+  let hereLabel = t('world.here');
+  for (const sp of supplyPoints(state)) {
+    const o = sp.kind === 'outpost' ? outpostAt(state, sp.cell) : undefined;
+    const name = sp.kind === 'home' ? t('world.home') : t(`world.outpost.tier.${o?.tier ?? 1}` as TextKey);
+    const label = t('world.supplyLabel', { name, n: sp.ammo });
+    if (sp.cell === here) hereLabel = t('world.hereAt', { place: label });
+    markers.push({ cell: sp.cell, kind: sp.kind, label: sp.cell === here ? undefined : label, supply: true });
+  }
   if (selected !== null && selected !== here) markers.push({ cell: selected, kind: 'target' });
   if (travel) markers.push({ cell: travel.to, kind: 'target' });
-  markers.push({ cell: here, kind: 'player', label: t('world.here') });
+  markers.push({ cell: here, kind: 'player', label: hereLabel });
 
   const shown = hover ?? selected ?? here;
   const info = grid.cells[shown]!;
@@ -119,6 +127,10 @@ export function WorldMap({ state, grid, actions }: Props) {
           <span class="legend-bar" style={{ background: legendGradient(mode) }} />
           <span>{t('world.legend.high')}</span>
         </div>
+        <p class="legend supply-legend" data-testid="map-supply-legend">
+          <span class="supply-badge" style={{ background: SUPPLY_COLOR }}>{t('world.supplyGlyph')}</span>
+          <span>{t('world.supplyLegend')}</span>
+        </p>
         <div class="row">
           <button class="chip" onClick={() => setFocus({ key: `fit${Date.now()}` })}>{t('world.fit')}</button>
           <button class="chip" onClick={() => setFocus({ key: `here${Date.now()}`, cell: here, scale: 14 })}>{t('world.locate')}</button>

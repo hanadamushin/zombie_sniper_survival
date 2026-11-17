@@ -763,15 +763,16 @@ describe('zombie behaviour', () => {
     expect(state.player.aim.deadT).toBe(0);
   });
 
-  it('stays cheap with 150 zombies', () => {
+  it('stays cheap with 600 zombies (07c: five times the earlier 150)', () => {
     const rig = arena();
     const { state, area } = rig;
-    for (let i = 0; i < 150; i++) addZombie(state, area, i % 7 === 0 ? 'runner' : 'walker', 200 + (i % 15) * 40, 200 + Math.floor(i / 15) * 60, i);
-    expect(aliveCount(state.tactical!)).toBe(150);
+    for (let i = 0; i < 600; i++) addZombie(state, area, i % 7 === 0 ? 'runner' : 'walker', 40 + (i % 30) * 31, 40 + Math.floor(i / 30) * 47, i);
+    expect(aliveCount(state.tactical!)).toBe(600);
     rig.run(1);
     const t0 = performance.now();
     rig.run(10);
     const perStep = (performance.now() - t0) / 600;
+    console.log(`600 zombies: ${perStep.toFixed(3)} ms per sim step`);
     expect(perStep).toBeLessThan(1.5); // ms per fixed step (budget: 4 ms per frame with rendering)
   });
 });
@@ -813,7 +814,8 @@ describe('zombies in the world', () => {
     const t = state.tactical!;
     expect(t.populated).toBe(true);
     expect(t.zombies.length).toBeGreaterThanOrEqual(10);
-    expect(t.zombies.length).toBeLessThanOrEqual(Math.min(activeCap(z0 * BALANCE.world.tacticalZScale), BALANCE.zombie.max));
+    expect(t.zombies.length).toBeLessThanOrEqual(Math.min(activeCap(z0 * BALANCE.world.tacticalZScale) * BALANCE.world.activeMul, BALANCE.world.activeMax));
+    expect(t.zombies.length).toBeGreaterThan(300); // 07c: five times the earlier crowd
     expect(t.zombies.length).toBeGreaterThan(z0 > 60 ? 60 : 40); // 07b+: more than the cell's own Z on a quiet start
     for (const z of t.zombies) expect(Math.hypot(z.pos[0] - 512, z.pos[2] - 512)).toBeGreaterThan(BALANCE.zombie.homeKeepOut - 1);
     // Deterministic for a seed.
@@ -910,7 +912,7 @@ describe('zombies in the world', () => {
     state.time.minute = 21 * 60; // night: faster, sharper-eyed
     g.run(DT);
     const t = state.tactical!;
-    expect(t.zombies.length).toBe(activeCap(state.world.cells.Z[urban]! * BALANCE.world.tacticalZScale));
+    expect(t.zombies.length).toBe(Math.min(BALANCE.world.activeMax, activeCap(state.world.cells.Z[urban]! * BALANCE.world.tacticalZScale) * BALANCE.world.activeMul));
     expect(t.zombies.length).toBeGreaterThan(70);
     // Walk into the nearest group and stand there.
     const p = state.player;

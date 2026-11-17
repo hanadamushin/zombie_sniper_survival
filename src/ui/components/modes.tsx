@@ -18,7 +18,7 @@ import { WorldMap } from '../world/WorldMap.tsx';
 import { slotLabel } from './TitleScreen.tsx';
 import { BuildGround, NO_TOOL, type BuildTool } from '../command/build.tsx';
 import { CommandPanel } from '../command/CommandPanel.tsx';
-import { outpostAt } from '../../sim/world/outposts.ts';
+import { nearestSupply, outpostAt } from '../../sim/world/outposts.ts';
 import { logText } from '../command/format.ts';
 import { interactionAt, nearestHideout } from '../../sim/colony/encounters.ts';
 import { playerAtHome } from '../../sim/colony/morale.ts';
@@ -82,6 +82,8 @@ export function TacticalLayer({ state, grid }: ModeProps) {
   const someone = dead || act ? null : nearestHideout(state);
   // First steps (07b): somebody is willing to join but nobody has been hired yet — say where to do that.
   const hireHint = !dead && !state.flags.range && state.colony.candidates.length > 0 && state.colony.survivors.length === 0;
+  // 07c: where to get ammunition, when it cannot be had right here.
+  const supplyAt = dead || state.flags.range || state.world.travel ? null : nearestSupply(state, TACTICAL.size);
   const post = playerAtHome(state) || state.world.travel ? undefined : outpostAt(state, p.cell);
   const supply = playerAtHome(state) ? state.colony.stock.ammo : (post?.ammo ?? 0);
   const canResupply = !dead && supply >= 1 && (p.inv.ammo ?? 0) < BALANCE.player.maxAmmo;
@@ -117,6 +119,16 @@ export function TacticalLayer({ state, grid }: ModeProps) {
         <div class={`ear-hint${ears && !reach ? ' second' : ''}`} data-testid="hud-someone" data-dir={someone.dir}>
           <span class="arrow" style={{ transform: `rotate(${(-someone.turn).toFixed(2)}rad)` }}>▲</span>
           <span>{t('hud.someone', { dir: t(`compass.${someone.dir}` as TextKey), m: Math.round(someone.dist) })}</span>
+        </div>
+      )}
+      {supplyAt && (
+        <div class="supply-hint" data-testid="hud-supply" data-dir={supplyAt.dir} data-kind={supplyAt.point.kind}>
+          <span class="arrow" style={{ transform: `rotate(${(-supplyAt.turn).toFixed(2)}rad)` }}>▲</span>
+          <span>{t(supplyAt.point.ammo > 0 ? 'hud.supply' : 'hud.supplyNone', {
+            name: supplyAt.point.kind === 'home' ? t('world.home') : t(`world.outpost.tier.${outpostAt(state, supplyAt.point.cell)?.tier ?? 1}` as TextKey),
+            dir: t(`compass.${supplyAt.dir}` as TextKey),
+            dist: supplyAt.dist < 1000 ? `${Math.round(supplyAt.dist / 10) * 10}m` : `${(supplyAt.dist / 1000).toFixed(1)}km`,
+          })}</span>
         </div>
       )}
       {hireHint && <div class="guide" data-testid="hud-hire-hint">{t('hud.hireHint', { n: state.colony.candidates.length })}</div>}

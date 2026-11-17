@@ -8,6 +8,8 @@ import { SEA } from './palette.ts';
 export interface MapMarker {
   cell: CellId;
   kind: 'player' | 'home' | 'target' | 'candidate' | 'source' | 'outpost';
+  /** 07c: ammunition can be taken here — drawn as a badge beside the ring. */
+  supply?: boolean;
   label?: string;
   active?: boolean;
 }
@@ -43,6 +45,12 @@ interface View {
 
 const MAX_SCALE = 48;
 const MAJOR = new Set(['札幌', '仙台', '東京', '新潟', '名古屋', '金沢', '大阪', '広島', '高知', '福岡', '鹿児島', '那覇']);
+/** Ammunition badge (07c). The glyph comes from ja.ts via setSupplyGlyph so that the text stays in one place. */
+export const SUPPLY_COLOR = '#3b7fe0';
+let SUPPLY_GLYPH = '';
+export function setSupplyGlyph(glyph: string): void {
+  SUPPLY_GLYPH = glyph;
+}
 const MARKER_COLOR: Record<MapMarker['kind'], string> = { player: '#ffffff', home: '#c9a24a', target: '#7fd4ff', candidate: '#ffffff', source: '#ff5a4a', outpost: '#8fd48a' };
 
 export function MapCanvas(props: Props) {
@@ -185,6 +193,22 @@ export function MapCanvas(props: Props) {
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.stroke();
+      if (m.supply) {
+        // Ammunition badge: a blue square with 弾 at the upper left of the ring.
+        const bx = x - r - 12;
+        const by = y - r - 12;
+        ctx.fillStyle = SUPPLY_COLOR;
+        ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+        ctx.lineWidth = 2;
+        ctx.fillRect(bx, by, 14, 14);
+        ctx.strokeRect(bx, by, 14, 14);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 11px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(SUPPLY_GLYPH, bx + 7, by + 7.5);
+        ctx.textAlign = 'left';
+      }
       if (m.kind === 'player') {
         ctx.fillStyle = MARKER_COLOR.player;
         ctx.beginPath();

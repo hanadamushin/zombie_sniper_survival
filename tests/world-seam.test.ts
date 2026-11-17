@@ -177,3 +177,27 @@ describe('walking into the next cell (07c)', () => {
     expect(p.pos[0]).toBeLessThanOrEqual(TACTICAL.size - TACTICAL.player.edgeMargin + 1e-6);
   });
 });
+
+import { nearestSupply, supplyPoints } from '../src/sim/world/outposts.ts';
+
+describe('where to get ammunition (07c)', () => {
+  it('points from the next cell back to the headquarters: direction and distance on foot', { timeout: 60_000 }, () => {
+    const w = grid.gridW;
+    const inland = grid.landIds.find((id) => ['rural', 'forest'].includes(grid.cells[id]!.land) && grid.cells[id + 1] && grid.cells[id - 1] && grid.cells[id + w] && grid.cells[id - w])!;
+    const g = gameAt(inland);
+    const home = supplyPoints(g.s).find((p) => p.kind === 'home')!;
+    expect(home.cell).toBe(inland);
+    expect(home.ammo).toBe(Math.floor(g.s.colony.stock.ammo));
+    // In the base cell: B works here, no hint.
+    expect(nearestSupply(g.s)).toBeNull();
+    // 200 m into the east neighbour: the headquarters lies to the west, a little over 200 m + the rest of the area away.
+    g.s.player.cell = inland + 1;
+    g.s.player.pos = [200, 0, home.pos[1]];
+    g.s.player.yaw = 0; // looking north
+    const hint = nearestSupply(g.s)!;
+    expect(hint.point.kind).toBe('home');
+    expect(hint.dir).toBe('W');
+    expect(hint.dist).toBeCloseTo(TACTICAL.size + 200 - home.pos[0], 6);
+    expect(hint.turn).toBeCloseTo(Math.PI / 2, 6); // to the left
+  });
+});

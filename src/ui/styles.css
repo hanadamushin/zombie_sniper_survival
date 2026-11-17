@@ -387,3 +387,10 @@ ul.help { padding: 0; list-style: none; }
 .stat-list { flex-direction: column; text-align: left; }
 .ending .panel { text-align: center; max-width: min(92vw, 520px); }
 .scope-info { position: absolute; left: 50%; top: 62%; transform: translateX(-50%); display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 12px; padding: 2px 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; font-size: 12px; font-variant-numeric: tabular-nums; }
+
+/* 07c: ammunition badge on the strategic map and its legend */
+.supply-legend { display: flex; align-items: center; gap: 6px; margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+.supply-badge { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 2px; color: #fff; font-size: 11px; font-weight: bold; }
+.supply-hint { position: absolute; right: 12px; top: 96px; padding: 4px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; font-size: 13px; display: flex; gap: 6px; align-items: center; }
+.supply-hint .arrow { display: inline-block; color: #6fa8ff; }
+@media (max-width: 480px) { .supply-hint { top: 128px; font-size: 12px; } }

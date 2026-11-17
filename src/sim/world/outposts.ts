@@ -308,3 +308,59 @@ export function outpostPrefab(map: TacticalMap, tier: number): Prefab | null {
   add(cx + 0.08, cz + 3.04, cx + 1.5, cz + 3.1, 0.9, 'flag', false); // (drawn at the top of the pole)
   return { site, boxes };
 }
+
+// ---------------------------------------------------------------------------------------------
+// Where to get ammunition (07c: map markers, the HUD hint and the beacons)
+// ---------------------------------------------------------------------------------------------
+
+export interface SupplyPoint {
+  cell: CellId;
+  kind: 'home' | 'outpost';
+  /** Rounds there now. */
+  ammo: number;
+  /** Where in the cell's area to head for (m, the area's own frame): the headquarters, or the compound's site when `map` is known (else the middle). */
+  pos: [number, number];
+}
+
+/** The base and the outposts: everywhere B takes ammunition (anywhere in that cell). */
+export function supplyPoints(state: GameState, mapOfCell?: (cell: CellId) => TacticalMap | null): SupplyPoint[] {
+  const out: SupplyPoint[] = [];
+  const home = state.world.homeCell;
+  if (home !== null) {
+    const hq = state.build.structures.find((s) => s.def === 'hq');
+    const pos: [number, number] = hq ? [(hq.tx + 1.5) * 4, (hq.ty + 1.5) * 4] : [512, 512];
+    out.push({ cell: home, kind: 'home', ammo: Math.floor(state.colony.stock.ammo), pos });
+  }
+  for (const o of state.world.outposts) {
+    const map = mapOfCell?.(o.cell) ?? null;
+    out.push({ cell: o.cell, kind: 'outpost', ammo: Math.floor(o.ammo), pos: (map && outpostSite(map)) ?? [512, 512] });
+  }
+  return out;
+}
+
+const DIRS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'] as const;
+
+/**
+ * Nearest supply point to the player on foot (07c: the world is continuous, an area is 1,024 m):
+ * straight-line distance in metres, compass direction, and the turn from the view for an arrow.
+ * Null when the player already stands in a supply cell, or there is none.
+ */
+export function nearestSupply(state: GameState, size = 1024, mapOfCell?: (cell: CellId) => TacticalMap | null): { point: SupplyPoint; dist: number; dir: (typeof DIRS)[number]; turn: number } | null {
+  const w = state.world.gridW;
+  if (!w) return null;
+  const here = state.player.cell;
+  const points = supplyPoints(state, mapOfCell);
+  if (points.some((p) => p.cell === here)) return null;
+  const px = (here % w) * size + state.player.pos[0];
+  const pz = Math.floor(here / w) * size + state.player.pos[2];
+  let best: { point: SupplyPoint; dist: number; dir: (typeof DIRS)[number]; turn: number } | null = null;
+  for (const p of points) {
+    const dx = (p.cell % w) * size + p.pos[0] - px;
+    const dz = Math.floor(p.cell / w) * size + p.pos[1] - pz;
+    const dist = Math.hypot(dx, dz);
+    if (best && dist >= best.dist) continue;
+    const bearing = (Math.atan2(dx, -dz) + Math.PI * 2) % (Math.PI * 2);
+    best = { point: p, dist, dir: DIRS[Math.round(bearing / (Math.PI / 4)) % 8]!, turn: Math.atan2(-dx, -dz) - state.player.yaw };
+  }
+  return best;
+}

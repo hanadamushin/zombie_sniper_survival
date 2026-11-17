@@ -70,7 +70,7 @@ export function cellTactical(state: GameState, grid: StaticGrid, cell: CellId): 
     land: info.land,
     z,
     localZ,
-    active: Math.min(W.active.max, Math.round(getMod(state, 'zombie.active', activeCap(localZ)))),
+    active: Math.min(W.activeMax, Math.round(getMod(state, 'zombie.active', activeCap(localZ)) * W.activeMul)),
     danger: dangerOf(z),
     cleared: isCleared(z),
     kinds: kindMix(info.land),

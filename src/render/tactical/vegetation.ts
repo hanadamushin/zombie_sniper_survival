@@ -112,8 +112,13 @@ export function buildVegetation(map: TacticalMap): Vegetation {
   const material = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide });
   disposables.push(material);
   const treeGeo = [coniferGeometry(), broadleafGeometry()];
-  disposables.push(...treeGeo);
-  const treeMeshes: { mesh: THREE.InstancedMesh; x: number; z: number }[] = [];
+  // 07c: far chunks use a much simpler tree (a cone / a flattened octahedron, no trunk).
+  const farGeo = [
+    paint(new THREE.ConeGeometry(0.85, 0.78, 5, 1, true).translate(0, 0.6, 0), F.conifer),
+    paint(new THREE.OctahedronGeometry(1, 0).scale(1, 0.4, 1).translate(0, 0.7, 0), F.broadleaf),
+  ];
+  disposables.push(...treeGeo, ...farGeo);
+  const treeMeshes: { mesh: THREE.InstancedMesh; far: THREE.InstancedMesh; x: number; z: number }[] = [];
   lists.forEach((list, li) => {
     if (list.length === 0) return;
     const kind = Math.floor(li / (chunks * chunks));
@@ -127,8 +132,14 @@ export function buildVegetation(map: TacticalMap): Vegetation {
     });
     mesh.computeBoundingSphere();
     const c = li % (chunks * chunks);
-    treeMeshes.push({ mesh, x: ((c % chunks) + 0.5) * chunkSize, z: (Math.floor(c / chunks) + 0.5) * chunkSize });
-    group.add(mesh);
+    // The far version shares the instances (same matrices and colours).
+    const far = new THREE.InstancedMesh(farGeo[kind]!, material, list.length);
+    far.instanceMatrix = mesh.instanceMatrix;
+    far.instanceColor = mesh.instanceColor;
+    far.boundingSphere = mesh.boundingSphere;
+    far.visible = false;
+    treeMeshes.push({ mesh, far, x: ((c % chunks) + 0.5) * chunkSize, z: (Math.floor(c / chunks) + 0.5) * chunkSize });
+    group.add(mesh, far);
     disposables.push(mesh);
   });
 
@@ -202,7 +213,13 @@ export function buildVegetation(map: TacticalMap): Vegetation {
         refreshGrass(camera.x, camera.z);
       }
       const reach = viewDistance + chunkSize * 0.75;
-      for (const t of treeMeshes) t.mesh.visible = Math.hypot(t.x - camera.x, t.z - camera.z) < reach;
+      for (const t of treeMeshes) {
+        const d = Math.hypot(t.x - camera.x, t.z - camera.z);
+        const shown = d < reach;
+        const near = d < F.treeNear + chunkSize * 0.75;
+        t.mesh.visible = shown && near;
+        t.far.visible = shown && !near;
+      }
     },
     dispose() {
       for (const d of disposables) d.dispose();

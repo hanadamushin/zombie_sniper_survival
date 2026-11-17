@@ -46,6 +46,10 @@ const a = new THREE.Matrix4();
 const b = new THREE.Matrix4();
 const out = new THREE.Matrix4();
 const color = new THREE.Color();
+const frustum = new THREE.Frustum();
+const viewProj = new THREE.Matrix4();
+/** Bounding sphere of a figure (also lying down or lunging). */
+const sphere = new THREE.Sphere(new THREE.Vector3(), 2);
 
 function pick(list: readonly number[], seed: number): number {
   return list[seed % list.length]!;
@@ -187,10 +191,12 @@ export function createZombieRenderer(): SubRenderer {
   blobs.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   blobs.renderOrder = 2;
   let deadKey = '';
+  let ctx: RenderContext;
 
   return {
     id: 'zombies',
-    init(ctx: RenderContext) {
+    init(c: RenderContext) {
+      ctx = c;
       ctx.scene.add(live.mesh, dead.mesh, blobs);
     },
     reset() {
@@ -208,7 +214,16 @@ export function createZombieRenderer(): SubRenderer {
       // --- the living (and the falling) ---
       live.begin();
       let nb = 0;
+      // 07c: with hundreds about, those beyond the fog or outside the view are not posed at all.
+      const camera = ctx.camera;
+      const cam = camera.position;
+      const farSq = (RENDER.fog.far + 20) ** 2;
+      camera.updateMatrixWorld();
+      frustum.setFromProjectionMatrix(viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
       for (const z of t.zombies) {
+        if ((z.pos[0] - cam.x) ** 2 + (z.pos[2] - cam.z) ** 2 > farSq) continue;
+        sphere.center.set(z.pos[0], z.pos[1] + 0.9, z.pos[2]);
+        if (!frustum.intersectsSphere(sphere)) continue;
         const def = ZOMBIES[z.kind];
         const prone = z.crippled || def.prone;
         const seed = z.id * 7 + 3;

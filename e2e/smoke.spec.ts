@@ -248,7 +248,7 @@ test('every land class renders within the draw-call budget', async ({ page }) =>
 // 04: sniping
 // ---------------------------------------------------------------------------------------------
 
-test('firing range: scope, a zeroed head shot at 300 m, ears, and 150 zombies within budget', async ({ page }) => {
+test('firing range: scope, a zeroed head shot at 300 m, ears, and 600 zombies within budget', async ({ page }) => {
   test.setTimeout(180_000);
   const errors = trackErrors(page);
   await page.goto('/?range=1');
@@ -296,14 +296,14 @@ test('firing range: scope, a zeroed head shot at 300 m, ears, and 150 zombies wi
   await expect(page.getByTestId('hud-ears')).toHaveAttribute('data-ears', '2', { timeout: 20_000 });
   await page.evaluate(() => window.__game!.debug.setInput(null));
 
-  // 150 zombies on screen: draw calls, triangles and main-thread time (no GPU here; see docs/PROGRESS.md).
+  // 600 zombies on screen (07c: five times the earlier 150): draw calls, triangles and main-thread time (no GPU here; see docs/PROGRESS.md).
   const stats = await page.evaluate(async () => {
     const g = window.__game!;
     const auto = g.renderer.resolutionScale(); // what the automatic resolution settled on so far (software rendering)
     g.renderer.setAutoResolution(false);
     g.debug.teleport(512, 700, 0, 0);
     const have = g.state!.tactical!.zombies.length;
-    g.debug.spawnZombies(150 - have, 70);
+    g.debug.spawnZombies(600 - have, 160);
     for (const z of g.state!.tactical!.zombies) if (!z.dummy) z.dummy = 1; // keep them on their feet for the measurement
     await new Promise((resolve) => setTimeout(resolve, 2000));
     const a = g.debug.renderInfo();
@@ -321,7 +321,7 @@ test('firing range: scope, a zeroed head shot at 300 m, ears, and 150 zombies wi
     return { zombies: s.tactical!.zombies.length, calls: b.calls, triangles: b.triangles, cpu: (b.cpuMs - a.cpuMs) / Math.max(1, b.frames - a.frames), tick, draw, scale: auto };
   });
   console.log(`range, ${stats.zombies} zombies: ${stats.calls} draw calls, ${stats.triangles} triangles, sim step ${stats.tick.toFixed(3)} ms + draw submission ${stats.draw.toFixed(2)} ms (frame average incl. UI: ${stats.cpu.toFixed(2)} ms; automatic scale had reached ${stats.scale})`);
-  expect(stats.zombies).toBe(150);
+  expect(stats.zombies).toBeGreaterThanOrEqual(600); // a respawned target may come back meanwhile
   expect(stats.calls).toBeLessThan(150);
   expect(stats.triangles).toBeLessThan(500_000);
   expect(stats.tick + stats.draw).toBeLessThan(4);
