@@ -86,7 +86,8 @@ export function createTacticalRenderer(): SubRenderer {
           // Only what the fog lets through.
           const dx = Math.max(off[0] - cam.x, 0, cam.x - off[0] - current.size);
           const dz = Math.max(off[1] - cam.z, 0, cam.z - off[1] - current.size);
-          if (Math.hypot(dx, dz) > L.neighbours) continue;
+          // From the command layer's overhead camera the whole neighbourhood would be in view: there, only the edge nearby.
+          if (Math.hypot(dx, dz) > (state.mode === 'command' ? L.neighboursFromAbove : L.neighbours)) continue;
           const map = neighbourMap(state, cell);
           if (map) wanted.set(map, off);
         }

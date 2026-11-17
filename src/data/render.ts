@@ -25,9 +25,9 @@ export const RENDER = {
    * Terrain level of detail (07c): a 256 m chunk of ground is drawn with every 4 m sample when the
    * camera is closer than `full`, every 8 m closer than `half`, every 16 m closer than `far`, and not
    * at all beyond (the fog has hidden it). Neighbouring maps are drawn when the camera is within
-   * `neighbours` of their square.
+   * `neighbours` of their square (`neighboursFromAbove` in the command layer, whose camera sees everything).
    */
-  terrainLod: { full: 200, half: 480, far: 900, neighbours: 860 },
+  terrainLod: { full: 200, half: 480, far: 900, neighbours: 860, neighboursFromAbove: 300 },
   /** Anisotropic filtering of the ground texture (keeps roads sharp at grazing angles). */
   groundAnisotropy: 4,
   /** Operation area edge length (m). */
