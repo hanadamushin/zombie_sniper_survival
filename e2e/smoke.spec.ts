@@ -27,6 +27,7 @@ const clock = (page: Page) => page.evaluate(() => {
 });
 
 test('boots, runs a new game and resumes it after a reload', async ({ page }) => {
+  test.setTimeout(120_000); // two map generations; slow when the suite runs in parallel
   const errors = trackErrors(page);
   await page.goto('/');
   await expect(page.getByTestId('title-screen')).toBeVisible();
@@ -173,7 +174,7 @@ test('timelapse, start selection and travel on the strategic map', async ({ page
   await expect(page.getByTestId('travel-status')).toBeVisible();
   // On the road there is no operation area.
   await expect.poll(() => page.evaluate(() => window.__game!.state!.tactical === null && window.__game!.map === null)).toBe(true);
-  await expect.poll(() => page.evaluate(() => window.__game!.state!.player.cell), { timeout: 30_000 }).toBe(target.cell);
+  await expect.poll(() => page.evaluate(() => window.__game!.state!.player.cell), { timeout: 60_000 }).toBe(target.cell);
   await expect(page.getByTestId('travel-status')).toBeHidden();
   // Arrival: the area of the new cell, entered from a road at its edge.
   await page.waitForFunction((cell) => window.__game?.map != null && window.__game.state!.tactical?.cell === cell, target.cell);
@@ -401,6 +402,8 @@ test('colony: meet someone, hire, assign jobs, days pass — food and materials 
     s.colony.stock.ears += 300;
     // (06) Nobody is on watch in this test: keep the nightly visitors away so that the two days are about the economy.
     s.world.cells.Z[s.world.homeCell!] = 0;
+    // ...and those already on the map too (since 07b+ there are 80 or so; some would wander into the camp).
+    s.tactical!.zombies.length = 0;
     for (let i = 0; i < 2 * 1440 * 4; i++) g.sim.tick(s, 0.25, { ...g.debug.noInput });
     return { survivors: s.colony.survivors.length };
   });

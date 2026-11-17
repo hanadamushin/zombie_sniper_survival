@@ -100,6 +100,12 @@ export const BALANCE = {
      */
     active: { base: 20, perLog: 20, min: 5, max: 120 },
     nightActive: { base: 8, perLog: 14, min: 5, max: 120 },
+    /**
+     * The operation area is populated as if the cell held this many times its Z (07b+, playtest:
+     * "walking is all there is"). 17 makes a 5 % danger cell (Z ≈ 41) as crowded as a 30 % one
+     * (Z ≈ 700) used to be. Kills still take 1 from the cell's Z; once Z is 0 nothing new comes in.
+     */
+    tacticalZScale: 17,
     /** Seconds between reinforcements from the map edge (07b+: 20 -> 12). */
     respawnSeconds: 12,
     clearedBelowZ: 20,

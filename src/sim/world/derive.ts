@@ -49,6 +49,8 @@ export interface CellTactical {
   cell: CellId;
   land: Land;
   z: number;
+  /** What the operation area is populated from: z × BALANCE.world.tacticalZScale (07b+). */
+  localZ: number;
   active: number;
   danger: number;
   cleared: boolean;
@@ -62,11 +64,13 @@ export function cellTactical(state: GameState, grid: StaticGrid, cell: CellId): 
   const info = grid.cells[cell];
   if (!info) return null;
   const z = Math.max(0, state.world.cells.Z[cell] ?? 0);
+  const localZ = z * W.tacticalZScale;
   return {
     cell,
     land: info.land,
     z,
-    active: Math.min(W.active.max, Math.round(getMod(state, 'zombie.active', activeCap(z)))),
+    localZ,
+    active: Math.min(W.active.max, Math.round(getMod(state, 'zombie.active', activeCap(localZ)))),
     danger: dangerOf(z),
     cleared: isCleared(z),
     kinds: kindMix(info.land),

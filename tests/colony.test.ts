@@ -247,15 +247,31 @@ describe('thirty days', () => {
   });
 
   it('no food: hunger, starvation, death', () => {
+    // The headquarters' garden (07b+) feeds about two people; five without farmers or a market go hungry.
     const r = rig();
     const c = r.state.colony;
     c.stock.food = 0;
     c.stock.ears = 1000;
-    r.add('defense');
-    r.run(9 * DAY);
-    expect(c.survivors.length + c.memorial.length).toBeLessThanOrEqual(1);
+    for (let i = 0; i < 5; i++) r.add('defense');
+    r.run(12 * DAY);
+    expect(c.survivors.length).toBeLessThan(5);
     expect(c.log.some((l) => l.text === 'log.noFood')).toBe(true);
     expect(c.log.some((l) => l.text === 'log.died' || l.text === 'log.deserted')).toBe(true);
+  });
+
+  it('the headquarters\' garden feeds two people with nobody farming (07b+)', () => {
+    const r = rig();
+    const c = r.state.colony;
+    c.stock.food = 2; // a day's worth to start with: the garden yields by the hour, meals come three times a day
+    c.stock.ears = 1000;
+    r.add('defense', { sta: 1 });
+    r.add('defense', { sta: 1 }); // the hungriest: 1.24 food a day each
+    r.run(DAY - r.state.time.minute);
+    const start = c.stock.food;
+    r.run(10 * DAY);
+    expect(c.log.some((l) => l.text === 'log.noFood')).toBe(false);
+    expect(c.survivors.length).toBe(2);
+    expect(c.stock.food).toBeGreaterThanOrEqual(start);
   });
 });
 

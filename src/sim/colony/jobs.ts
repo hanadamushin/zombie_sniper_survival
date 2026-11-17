@@ -206,6 +206,12 @@ export function workMinute(c: ColonyCtx): void {
   if (forage > 0) forageMinute(c, forage * COLONY.forageFactor);
 }
 
+/** The headquarters' kitchen garden: a little food into the stores every hour, no workers needed (07b+). */
+export function gardenHour(c: ColonyCtx): void {
+  if (c.state.world.homeCell === null || c.state.flags.range) return;
+  moveStock(c, 'food', COLONY.garden.foodPerDay / 24);
+}
+
 /** Scavengers at home comb the home cell: its loot shrinks, the stores grow. */
 function forageMinute(c: ColonyCtx, points: number): void {
   const home = c.state.world.homeCell;

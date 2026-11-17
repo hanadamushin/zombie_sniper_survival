@@ -94,6 +94,12 @@ export const COLONY = {
     ledgerDays: 30,
     logMax: 200,
   },
+  /**
+   * Kitchen garden of the headquarters (07b+, playtest: "early on there is no food at all"): food that
+   * goes straight into the stores every day without anyone working, whatever the season — about two
+   * people's meals (2 × mealBase). Farm produce, by contrast, belongs to the farmers and is bought.
+   */
+  garden: { foodPerDay: 2.6 },
   farm: {
     /** One plot yields this much food per day from a reference farmer (refPoints of farming output per day). */
     foodPerPlotDay: 4,

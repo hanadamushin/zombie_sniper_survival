@@ -624,6 +624,9 @@ function pickWanderGoal(map: TacticalMap, z: Zombie, rng: RngState, radius: numb
     const r = radius * (0.3 + 0.7 * rand(rng));
     const x = z.pos[0] + Math.cos(a) * r;
     const zz = z.pos[2] + Math.sin(a) * r;
+    // Wanderers keep out of the home base (07b+: with more of them about, they used to drift in);
+    // those chasing the player or raiding come in regardless.
+    if (map.params.isHome && Math.hypot(x - map.size / 2, zz - map.size / 2) < Z.homeKeepOut) continue;
     if (isWalkable(map, Math.floor(x / map.tile), Math.floor(zz / map.tile))) {
       z.goal[0] = x;
       z.goal[1] = zz;
@@ -904,9 +907,10 @@ function spawn(state: GameState, area: TacticalArea, grid: StaticGrid, dt: numbe
   if (!info) return;
   const map = area.map;
   const rng = stream(state, 'tactical.spawn');
-  const target = Math.min(info.active, info.z, Z.max);
+  // 07b+: the area is populated from localZ (z × tacticalZScale); nothing new comes in once z is 0.
+  const target = info.z > 0 ? Math.min(info.active, info.localZ, Z.max) : 0;
   let alive = aliveCount(t);
-  t.reserve = Math.max(0, info.z - alive);
+  t.reserve = Math.max(0, info.localZ - alive);
   if (!t.populated) {
     t.populated = true;
     t.spawnT = info.respawnSeconds;

@@ -804,7 +804,7 @@ function worldGame(seed = 12): { state: GameState; sim: Sim; events: GameEvent[]
 }
 
 describe('zombies in the world', () => {
-  it('the start cell has something to shoot: min(active, Z) zombies, none inside the base', () => {
+  it('the start cell has something to shoot: min(active, Z × tacticalZScale) zombies, none inside the base', () => {
     const g = worldGame();
     const { state } = g;
     const z0 = state.world.cells.Z[state.player.cell]!;
@@ -813,7 +813,8 @@ describe('zombies in the world', () => {
     const t = state.tactical!;
     expect(t.populated).toBe(true);
     expect(t.zombies.length).toBeGreaterThanOrEqual(10);
-    expect(t.zombies.length).toBeLessThanOrEqual(Math.min(z0, BALANCE.zombie.max));
+    expect(t.zombies.length).toBeLessThanOrEqual(Math.min(activeCap(z0 * BALANCE.world.tacticalZScale), BALANCE.zombie.max));
+    expect(t.zombies.length).toBeGreaterThan(z0 > 60 ? 60 : 40); // 07b+: more than the cell's own Z on a quiet start
     for (const z of t.zombies) expect(Math.hypot(z.pos[0] - 512, z.pos[2] - 512)).toBeGreaterThan(BALANCE.zombie.homeKeepOut - 1);
     // Deterministic for a seed.
     const h = worldGame();
@@ -852,14 +853,17 @@ describe('zombies in the world', () => {
     expect(state.world.cells.Z[cell]).toBe(before - 1);
     expect(aliveCount(t)).toBeLessThanOrEqual(count);
     void area;
-    // With the cell nearly empty the cap is the cell's Z, and at 0 nothing comes any more.
+    // While the cell has any Z left, newcomers walk in from the edge, one per respawnSeconds
+    // (07b+: the area holds up to Z × tacticalZScale, so 3 left is still plenty)...
     state.world.cells.Z[cell] = 3;
     t.zombies.length = 0;
     areaOf(state)!.dynamic.clear();
     state.player.pos = [512, state.player.pos[1], 512];
     g.run(BALANCE.world.respawnSeconds * 5 + 1);
-    expect(aliveCount(t)).toBe(3);
+    expect(aliveCount(t)).toBe(5);
+    expect(t.reserve).toBe(3 * BALANCE.world.tacticalZScale - 5);
     for (const z of t.zombies) expect(Math.min(z.pos[0], z.pos[2], 1024 - z.pos[0], 1024 - z.pos[2])).toBeLessThan(120); // came in from the edge
+    // ...and at 0 nothing comes any more.
     state.world.cells.Z[cell] = 0;
     t.zombies.length = 0;
     areaOf(state)!.dynamic.clear();
@@ -906,7 +910,7 @@ describe('zombies in the world', () => {
     state.time.minute = 21 * 60; // night: faster, sharper-eyed
     g.run(DT);
     const t = state.tactical!;
-    expect(t.zombies.length).toBe(activeCap(state.world.cells.Z[urban]!));
+    expect(t.zombies.length).toBe(activeCap(state.world.cells.Z[urban]! * BALANCE.world.tacticalZScale));
     expect(t.zombies.length).toBeGreaterThan(70);
     // Walk into the nearest group and stand there.
     const p = state.player;

@@ -20,7 +20,7 @@ import { buyFromVillage, craftMinute, marketHour, payWages, serveMeal } from './
 import { depositCarried, resupply, updateEncounters } from './encounters.ts';
 import { expeditionsMinute, sendExpedition } from './expeditions.ts';
 import { construct } from '../build/construction.ts';
-import { workMinute } from './jobs.ts';
+import { gardenHour, workMinute } from './jobs.ts';
 import { dailyMorale, healthHour, infectionMinute, unpaidMorale, updatePlayerDeath } from './morale.ts';
 import { ctxNow, ledgerOf, logEntry, type ColonyCtx } from './stock.ts';
 import { dismiss, expireCandidates, hire } from './survivors.ts';
@@ -56,6 +56,7 @@ export function colonyMinute(c: ColonyCtx): void {
     unpaidMorale(c);
   }
   workMinute(c);
+  if (m % 60 === 30) gardenHour(c); // half past: never on the day boundary
   craftMinute(c);
   expeditionsMinute(c);
   infectionMinute(c);
