@@ -10,6 +10,7 @@ import { chance, rand, randInt, randRange, type RngState } from '../core/rng.ts'
 import { TACTICAL } from '../data/tactical.ts';
 import { forTiles, hAt, heightRange, homeDist, inHomeZone, N, occupy, rectFree, resample, rngOf, SIZE, TILE, TILES, tileIndex, type Builder } from './builder.ts';
 import { smoothstep } from './noise.ts';
+import { editFade } from './world.ts';
 import { GROUND, type BrushKind } from './types.ts';
 
 const T = TACTICAL;
@@ -55,7 +56,7 @@ export function addDike(b: Builder, pts: [number, number][], height: number): vo
     // Fade out towards the map edge so that the apron (which does not know the dike) still meets it.
     const x = (i % N) * TILE;
     const z = Math.floor(i / N) * TILE;
-    const edge = smoothstep(0, 24, Math.min(x, z, SIZE - x, SIZE - z));
+    const edge = editFade(x, z);
     const home = b.params.isHome ? smoothstep(T.homeFlatRadius + 4, T.homeFlatRadius + 40, homeDist(x, z)) : 1;
     b.height[i] = b.height[i]! + height * (1 - smoothstep(R.dikeCrest, reach, d)) * edge * home;
   });
@@ -72,7 +73,7 @@ export function addCreek(b: Builder, pts: [number, number][]): void {
   forNear(samples, reach, (i, d) => {
     const x = (i % N) * TILE;
     const z = Math.floor(i / N) * TILE;
-    const edge = smoothstep(0, 24, Math.min(x, z, SIZE - x, SIZE - z));
+    const edge = editFade(x, z);
     const home = b.params.isHome ? smoothstep(T.homeFlatRadius + 4, T.homeFlatRadius + 40, homeDist(x, z)) : 1;
     b.height[i] = b.height[i]! - F.creekDepth * (1 - smoothstep(F.creekBed, reach, d)) * edge * home;
   });

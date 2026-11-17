@@ -6,6 +6,7 @@ import { fork, seedRng, type RngState } from '../core/rng.ts';
 import { TACTICAL } from '../data/tactical.ts';
 import { sampleHeight } from './height.ts';
 import { smoothstep } from './noise.ts';
+import { editFade } from './world.ts';
 import { GROUND, type Area, type Brush, type Building, type BuildingKind, type GenParams, type Ladder, type Prop, type Road, type RoadKind, type Rock, type Solid, type Vantage } from './types.ts';
 
 const T = TACTICAL;
@@ -188,7 +189,8 @@ export function addRoad(b: Builder, kind: RoadKind, width: number, pts: [number,
         for (let ix = ix0; ix <= ix1; ix++) {
           const d = Math.hypot(ix * TILE - x, iz * TILE - z);
           if (d >= reach) continue;
-          const w = 1 - smoothstep(half, reach, d);
+          // 07c: the road bed fades out at the map edge, where the ground must match the neighbour's.
+          const w = (1 - smoothstep(half, reach, d)) * editFade(ix * TILE, iz * TILE);
           const i = iz * N + ix;
           accH[i] = accH[i]! + prof[s]! * w;
           accW[i] = accW[i]! + w;

@@ -63,6 +63,15 @@ export const TACTICAL = {
     flightRise: 3,
   },
 
+  /**
+   * Continuity with the neighbouring cells (07c, gen/world.ts). blend: half width of the band on each
+   * side of a border over which the land classes' relief is mixed (m). seaDrop: how far below the
+   * rural level the ground of a sea cell lies. gateChance / gateWild: chance that a road crosses a
+   * shared edge (between two forest / mountain cells: a track); gateMargin: gates stay this far from
+   * the corners. editFade: road beds, dikes and creeks fade out over this distance from the edge (m).
+   */
+  world: { blend: 120, seaDrop: 7, gateChance: 0.65, gateWild: 0.45, gateMargin: 170, editFade: 40 },
+
   /** Tiles steeper than this (rise / run) are not walkable for the nav grid. */
   navMaxSlope: 0.9,
 

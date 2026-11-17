@@ -1,7 +1,7 @@
 // Trees, tall grass and rocks. Placement follows the ground class, slope and the wooded-patch
 // noise of the land; roads, fields, buildings, the home base and vantage points stay clear.
 
-import { chance, rand, randRange } from '../core/rng.ts';
+import { chance, fork, rand, randRange, seedRng } from '../core/rng.ts';
 import { TACTICAL } from '../data/tactical.ts';
 import { hAt, homeDist, N, rngOf, SIZE, TILE, tileIndex, type Builder } from './builder.ts';
 import { sampleGradient } from './height.ts';
@@ -25,8 +25,17 @@ export function scatterFlora(b: Builder): void {
   const land = b.params.land;
   const F = T.flora[land];
   const rng = rngOf(b, 'flora');
-  const seedW = Math.floor(rand(rng) * 0x7fffffff);
-  const seedK = Math.floor(rand(rng) * 0x7fffffff);
+  let seedW = Math.floor(rand(rng) * 0x7fffffff);
+  let seedK = Math.floor(rand(rng) * 0x7fffffff);
+  // 07c: inside a world the woods and the mix of conifers continue into the neighbouring cells.
+  const world = b.params.world;
+  const ox = world ? world.gx * SIZE : 0;
+  const oz = world ? world.gy * SIZE : 0;
+  if (world) {
+    const shared = fork(seedRng(world.seed), 'world.flora');
+    seedW = Math.floor(rand(shared) * 0x7fffffff);
+    seedK = Math.floor(rand(shared) * 0x7fffffff);
+  }
   const stats = heightStats(b);
   const grad: [number, number] = [0, 0];
   const slopeAt = (x: number, z: number): number => {
@@ -34,7 +43,7 @@ export function scatterFlora(b: Builder): void {
     return Math.hypot(grad[0], grad[1]);
   };
   const wood = (x: number, z: number): number => {
-    let m = fbm(x / 170, z / 170, seedW, 3);
+    let m = fbm((x + ox) / 170, (z + oz) / 170, seedW, 3);
     // Rural hills are wooded; their fields lie on the low ground.
     if (land === 'rural') m += Math.min(0.5, Math.max(0, (hAt(b, x, z) - stats.median - 6) / 30));
     return m;
@@ -69,7 +78,7 @@ export function scatterFlora(b: Builder): void {
       if (land === 'mountain') p *= 1 - smoothstep(0.5, 0.78, (hAt(b, x, z) - stats.min) / Math.max(1, stats.max - stats.min));
       if (roll >= p) continue;
       if (!homeClear(x, z) || !clearOfVantage(x, z) || slopeAt(x, z) > 1.1) continue;
-      const conifer = rand(rng) < F.conifer + 0.25 * fbm(x / 90, z / 90, seedK, 2);
+      const conifer = rand(rng) < F.conifer + 0.25 * fbm((x + ox) / 90, (z + oz) / 90, seedK, 2);
       const size = rand(rng);
       const h = conifer ? 9 + size * 9 : 6 + size * 6.5;
       const r = conifer ? 1.7 + size * 1.4 : 2.4 + size * 2.2;

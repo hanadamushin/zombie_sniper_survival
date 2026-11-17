@@ -8,11 +8,12 @@ import { chance, pick, rand, randInt, randRange, type RngState } from '../core/r
 import type { Land } from '../core/types.ts';
 import { TACTICAL } from '../data/tactical.ts';
 import {
-  addBuilding, addLadder, addRoad, addStairs, addTower, forTiles, hAt, heightRange, homeDist, inHomeZone, occupy, rectFree, rngOf,
+  addBuilding, addLadder, addRoad, addStairs, addTower, forTiles, hAt, heightRange, homeDist, inHomeZone, occupy, rectFree, resample, rngOf,
   SIZE, STAIR_DEPTH, STAIR_LENGTH, TILE, type Builder, type Side,
 } from './builder.ts';
 import { addCreek, addDike, ruralScenery, terrace } from './cover.ts';
-import { fbm, noise2, ridged } from './noise.ts';
+import { fbm } from './noise.ts';
+import { gatesOf, terrainFunction, type Gate } from './world.ts';
 import { GROUND, type Building } from './types.ts';
 
 const T = TACTICAL;
@@ -22,54 +23,9 @@ const MID = SIZE / 2;
 // Terrain
 // ---------------------------------------------------------------------------------------------
 
-/** Raw terrain height function of a map; also valid outside the playable square (apron). */
+/** Raw terrain height function of a map; also valid outside the playable square (apron). 07c: continuous across cells. */
 export function terrainFn(b: Builder): (x: number, z: number) => number {
-  const land = b.params.land;
-  const P = T.terrain[land];
-  const rng = rngOf(b, 'terrain');
-  const s1 = Math.floor(rand(rng) * 0x7fffffff);
-  const s2 = Math.floor(rand(rng) * 0x7fffffff);
-  const s3 = Math.floor(rand(rng) * 0x7fffffff);
-  const hills: { x: number; z: number; h: number; s: number }[] = [];
-  for (let i = 0; i < P.hills[0]; i++) {
-    // Away from the centre (home base) but inside the map, and apart from each other.
-    for (let tries = 0; tries < 40; tries++) {
-      const x = randRange(rng, 130, SIZE - 130);
-      const z = randRange(rng, 130, SIZE - 130);
-      if (homeDist(x, z) < 290) continue;
-      if (hills.some((o) => Math.hypot(o.x - x, o.z - z) < 300)) continue;
-      hills.push({ x, z, h: randRange(rng, P.hills[1], P.hills[2]), s: randRange(rng, 85, 130) });
-      break;
-    }
-  }
-  // 07b: knolls and a shorter undulation. Drawn after the hills so that those stay where they were.
-  const s4 = Math.floor(rand(rng) * 0x7fffffff);
-  for (let i = 0; i < P.knolls[0]; i++) {
-    for (let tries = 0; tries < 40; tries++) {
-      const x = randRange(rng, 60, SIZE - 60);
-      const z = randRange(rng, 60, SIZE - 60);
-      if (homeDist(x, z) < 200) continue;
-      if (hills.some((o) => Math.hypot(o.x - x, o.z - z) < o.s + 60)) continue;
-      hills.push({ x, z, h: randRange(rng, P.knolls[1], P.knolls[2]), s: randRange(rng, 22, 36) });
-      break;
-    }
-  }
-  const detail = land === 'urban' ? 0 : land === 'suburb' ? 0.15 : 0.5;
-  const offset = P.amp + 4;
-  return (x, z) => {
-    let h = offset + P.amp * fbm(x / P.wave, z / P.wave, s1, 4);
-    if (P.ridge > 0) {
-      const r = ridged(x / (P.wave * 1.5), z / (P.wave * 1.5), s2, 3);
-      h += P.ridge * r * r;
-    }
-    for (const hill of hills) {
-      const d2 = (x - hill.x) ** 2 + (z - hill.z) ** 2;
-      h += hill.h * Math.exp(-d2 / (2 * hill.s * hill.s));
-    }
-    if (P.mid > 0) h += P.mid * fbm(x / P.midWave, z / P.midWave, s4, 2);
-    if (detail > 0) h += detail * noise2(x / 23, z / 23, s3);
-    return h;
-  };
+  return terrainFunction(b.params, rngOf(b, 'terrain'));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -104,6 +60,78 @@ function crossing(rng: RngState, clear: number, wobble: number): [number, number
   return chance(rng, 0.5)
     ? windingPath(rng, [0, clampEdge(a)], [SIZE, clampEdge(c)], wobble)
     : windingPath(rng, [clampEdge(a), 0], [clampEdge(c), SIZE], wobble);
+}
+
+/** Push the points of a path out of the circle of radius `clear` around the centre. */
+function keepOut(pts: [number, number][], clear: number): [number, number][] {
+  return pts.map(([x, z]) => {
+    const d = homeDist(x, z);
+    if (d >= clear || d < 1e-6) return [x, z] as [number, number];
+    return [MID + ((x - MID) / d) * clear, MID + ((z - MID) / d) * clear] as [number, number];
+  });
+}
+
+/** Inward unit normal of a gate's edge. */
+const inward = (g: Gate): [number, number] => (g.side === 0 ? [1, 0] : g.side === 1 ? [-1, 0] : g.side === 2 ? [0, 1] : [0, -1]);
+
+/**
+ * Path between two gates (07c): straight in from each edge for `stub` metres (so that the road
+ * lines up with the neighbour's), winding in between, kept `clear` of the centre.
+ */
+function gatePath(rng: RngState, a: Gate, c: [number, number], clear: number, wobble: number, end?: Gate): [number, number][] {
+  const stub = 36;
+  const [ax, az] = inward(a);
+  const a1: [number, number] = [a.pos[0] + ax * stub, a.pos[1] + az * stub];
+  let c1 = c;
+  if (end) {
+    const [cx, cz] = inward(end);
+    c1 = [end.pos[0] + cx * stub, end.pos[1] + cz * stub];
+  }
+  const middle = keepOut(windingPath(rng, a1, c1, wobble), clear);
+  const pts: [number, number][] = [a.pos, ...middle];
+  if (end) pts.push(end.pos);
+  return pts;
+}
+
+/**
+ * Main road of a countryside map and the spurs to its other gates (07c). With no world context or
+ * no gates it falls back to a line across the map, as before.
+ */
+function roadsThroughGates(b: Builder, rng: RngState, clear: number, wobble: number): { main: [number, number][]; spurs: [number, number][][] } {
+  const gates = gatesOf(b.params);
+  if (gates.length === 0) {
+    const line = crossing(rng, clear, wobble);
+    // Inside a world, a road that leads nowhere stops short of the edge.
+    return { main: b.params.world ? line.filter(([x, z]) => Math.min(x, z, SIZE - x, SIZE - z) > 40) : line, spurs: [] };
+  }
+  const first = gates[0]!;
+  if (gates.length === 1) {
+    // A dead end into the area: across to the far side, short of the edge.
+    const [nx, nz] = inward(first);
+    const to: [number, number] = [MID + nx * 330 + randRange(rng, -120, 120) * Math.abs(nz), MID + nz * 330 + randRange(rng, -120, 120) * Math.abs(nx)];
+    return { main: gatePath(rng, first, to, clear, wobble), spurs: [] };
+  }
+  // The two gates furthest apart carry the main road; the others join it.
+  let pair: [Gate, Gate] = [first, gates[1]!];
+  let best = -1;
+  for (let i = 0; i < gates.length; i++) {
+    for (let j = i + 1; j < gates.length; j++) {
+      const d = Math.hypot(gates[i]!.pos[0] - gates[j]!.pos[0], gates[i]!.pos[1] - gates[j]!.pos[1]);
+      if (d > best) {
+        best = d;
+        pair = [gates[i]!, gates[j]!];
+      }
+    }
+  }
+  const main = gatePath(rng, pair[0], pair[1].pos, clear, wobble, pair[1]);
+  const spurs: [number, number][][] = [];
+  for (const g of gates) {
+    if (g === pair[0] || g === pair[1]) continue;
+    let near = main[1]!;
+    for (const p of main) if (Math.hypot(p[0] - g.pos[0], p[1] - g.pos[1]) < Math.hypot(near[0] - g.pos[0], near[1] - g.pos[1])) near = p;
+    spurs.push(gatePath(rng, g, near, clear, wobble * 0.6));
+  }
+  return { main, spurs };
 }
 
 function tryBuilding(
@@ -356,8 +384,10 @@ function layoutRural(b: Builder): void {
   // Embankments first: the roads cut through them, the fields stop at them.
   const dikes = randInt(rng, R.dikes[0], R.dikes[1]);
   for (let i = 0; i < dikes; i++) addDike(b, crossing(rng, T.homeFlatRadius + 70, 50), randRange(rng, R.dikeHeight[0], R.dikeHeight[1]));
-  const main = crossing(rng, T.homeFlatRadius + 40, 45);
+  // 07c: the road runs between the gates it shares with the neighbouring cells.
+  const { main, spurs } = roadsThroughGates(b, rng, T.homeFlatRadius + 40, 45);
   addRoad(b, 'street', 6, main, true);
+  for (const spur of spurs) addRoad(b, 'street', 5, spur, true);
   // Farm tracks leave the road sideways towards the map edges.
   const horizontal = Math.abs(main[main.length - 1]![0] - main[0]![0]) > SIZE / 2;
   const lanes = randInt(rng, 1, 2);
@@ -365,7 +395,8 @@ function layoutRural(b: Builder): void {
   for (let i = 0; i < lanes; i++) {
     const from = main[Math.floor(main.length * (0.25 + 0.5 * i + rand(rng) * 0.15))]!;
     const towardsLow = horizontal ? from[1] > MID : from[0] > MID;
-    const far = towardsLow ? 0 : SIZE;
+    // Inside a world the farm tracks end before the edge (they are not shared with the neighbour).
+    const far = b.params.world ? (towardsLow ? 45 : SIZE - 45) : towardsLow ? 0 : SIZE;
     const slide = randRange(rng, -180, 180);
     const to: [number, number] = horizontal
       ? [Math.min(SIZE - 40, Math.max(40, from[0] + slide)), far]
@@ -439,14 +470,16 @@ function layoutWild(b: Builder, land: 'forest' | 'mountain'): void {
   const rng = rngOf(b, 'wild');
   // A creek bed: with the track, the long sight lanes of the forest.
   if (land === 'forest') addCreek(b, crossing(rng, T.homeFlatRadius + 60, 70));
-  const track = crossing(rng, T.homeFlatRadius + 50, land === 'forest' ? 90 : 120);
+  const { main: track, spurs } = roadsThroughGates(b, rng, T.homeFlatRadius + 50, land === 'forest' ? 90 : 120);
   addRoad(b, 'track', 4, track, true);
+  for (const spur of spurs) addRoad(b, 'track', 3.5, spur, true);
 
   // Huts along the track: enough for the loot spots of the cell, at least one.
   const want = Math.max(b.params.lootSpots, land === 'forest' ? randInt(rng, 2, 3) : 1);
   let built = 0;
   for (let tries = 0; tries < 400 && built < want; tries++) {
-    const [px, pz] = track[randInt(rng, 2, track.length - 3)]!;
+    const along = track.length >= 6 ? track : resample(track, 16);
+    const [px, pz] = along[randInt(rng, Math.min(2, along.length - 1), Math.max(0, along.length - 3))]!;
     const angle = rand(rng) * Math.PI * 2;
     const dist = randRange(rng, 9, 46);
     const cabin = tryBuilding(b, built % 3 === 2 ? 'shed' : 'house', px + Math.cos(angle) * dist, pz + Math.sin(angle) * dist,

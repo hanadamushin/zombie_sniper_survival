@@ -9,7 +9,7 @@
 // Cells that are only passed through on the road never get a map.
 
 import type { CellId, GameState, StaticGrid, TacticalState } from '../../core/types.ts';
-import { generateTacticalMap, mapSeedFor, type GenParams, type TacticalMap } from '../../gen/index.ts';
+import { generateTacticalMap, mapSeedFor, type GenParams, type TacticalMap, type WorldContext } from '../../gen/index.ts';
 import { cellTactical } from '../world/derive.ts';
 import { createSpatialHash, type SpatialHash } from './collision.ts';
 import { placePlayer } from './player.ts';
@@ -39,11 +39,29 @@ function mapFor(params: GenParams): TacticalMap {
   return map;
 }
 
+/** Where a cell sits and what surrounds it (07c): terrain and roads continue into the neighbours. */
+export function worldContext(state: GameState, grid: StaticGrid, cell: CellId): WorldContext {
+  const w = grid.gridW;
+  const gx = cell % w;
+  const gy = Math.floor(cell / w);
+  const around: WorldContext['around'] = [];
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const x = gx + dx;
+      const y = gy + dy;
+      const id = y * w + x;
+      const info = x >= 0 && y >= 0 && x < w && y < grid.gridH ? grid.cells[id] : undefined;
+      around.push(info ? { land: info.land, mapSeed: mapSeedFor(state.seed, id) } : null);
+    }
+  }
+  return { seed: state.seed >>> 0, gx, gy, gridW: w, around };
+}
+
 /** Generation parameters of a cell for the current game (null for the sea). */
 export function areaParams(state: GameState, grid: StaticGrid, cell: CellId, lootSpots?: number): GenParams | null {
   const info = cellTactical(state, grid, cell);
   if (!info) return null;
-  return { mapSeed: mapSeedFor(state.seed, cell), land: info.land, isHome: cell === state.world.homeCell, lootSpots: lootSpots ?? info.lootSpots };
+  return { mapSeed: mapSeedFor(state.seed, cell), land: info.land, isHome: cell === state.world.homeCell, lootSpots: lootSpots ?? info.lootSpots, world: worldContext(state, grid, cell) };
 }
 
 /** The live area of this game, or null while it has not been generated (or on the road). */

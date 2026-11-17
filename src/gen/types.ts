@@ -165,12 +165,30 @@ export interface StaticHash {
   brush: number[][];
 }
 
+/**
+ * Where a cell sits in the world and what surrounds it (07c), so that its terrain and roads
+ * continue into the neighbouring cells' maps (gen/world.ts). Part of the generation parameters:
+ * the same context always gives the same map.
+ */
+export interface WorldContext {
+  /** Game seed: the shared noise of the whole world. */
+  seed: number;
+  /** Grid position of the cell (x east, y south) and the grid width. */
+  gx: number;
+  gy: number;
+  gridW: number;
+  /** 3 × 3 neighbourhood, row by row from the north-west; index 4 is this cell. null: sea or off the grid. */
+  around: ({ land: Land; mapSeed: number } | null)[];
+}
+
 export interface GenParams {
   mapSeed: number;
   land: Land;
   isHome: boolean;
   /** Number of searchable buildings wanted (sim/world/derive.ts cellTactical().lootSpots). */
   lootSpots: number;
+  /** 07c: absent for stand-alone maps (tests, the firing range) — then nothing continues past the edge. */
+  world?: WorldContext;
 }
 
 export interface TacticalMap {
