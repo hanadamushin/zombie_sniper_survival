@@ -12,9 +12,8 @@ export function zombieDensity(z: number): number {
 }
 
 /** How many zombies may be active at once in the tactical map of a cell holding `z`. */
-export function activeCap(z: number): number {
+export function activeCap(z: number, a: { base: number; perLog: number; min: number; max: number } = W.active): number {
   if (z <= 0) return 0;
-  const a = W.active;
   const perHundredKm2 = (z / W.cellAreaKm2) * 100;
   return Math.round(Math.min(a.max, Math.max(a.min, a.base + a.perLog * Math.log10(1 + perHundredKm2))));
 }

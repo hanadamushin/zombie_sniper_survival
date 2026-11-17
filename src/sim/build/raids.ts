@@ -106,7 +106,7 @@ export function raidMinute(state: GameState, ctx: Ctx): void {
   // The nightly approach.
   if (minute === R.nightHour * 60 && !state.build.raid) {
     const z = Math.max(0, world.cells.Z[home] ?? 0);
-    const size = Math.min(z, Math.max(R.nightMin, Math.round(getMod(state, 'raid.nightSize', activeCap(z) * R.nightShare * Math.min(1, population(state) / R.nightFullPop)))));
+    const size = Math.min(z, Math.max(R.nightMin, Math.round(getMod(state, 'raid.nightSize', activeCap(z, BALANCE.world.nightActive) * R.nightShare * Math.min(1, population(state) / R.nightFullPop)))));
     // They come for people: an empty base draws nobody.
     if (size > 0 && (playerPresent(state) || population(state) > 1)) startRaid(state, ctx, 'night', size, rand(stream(state, 'build.raid')) * Math.PI * 2);
   }

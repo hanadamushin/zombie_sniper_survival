@@ -188,7 +188,7 @@ describe('cell -> tactical parameters', () => {
   it('follows the spec formulas', () => {
     expect(activeCap(0)).toBe(0);
     expect(activeCap(1)).toBeGreaterThanOrEqual(5);
-    expect(activeCap(100)).toBe(Math.round(8 + 14 * Math.log10(101)));
+    expect(activeCap(100)).toBe(Math.round(BALANCE.world.active.base + BALANCE.world.active.perLog * Math.log10(101)));
     expect(activeCap(5_000_000)).toBeLessThanOrEqual(120);
     expect(dangerOf(0)).toBe(0);
     expect(dangerOf(1e9)).toBe(1);

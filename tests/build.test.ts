@@ -452,7 +452,7 @@ describe('raids', () => {
     const size = state.build.raid!.size;
     expect(state.build.raid!.kind).toBe('night');
     expect(size).toBeGreaterThanOrEqual(8);
-    expect(size).toBe(Math.round(activeCap(300) * BUILD.raid.nightShare));
+    expect(size).toBe(Math.round(activeCap(300, BALANCE.world.nightActive) * BUILD.raid.nightShare));
     const ears0 = state.colony.stock.ears;
     r.run(600, () => state.build.raid === null);
     expect(state.build.raid).toBeNull();

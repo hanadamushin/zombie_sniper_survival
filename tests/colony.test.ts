@@ -265,6 +265,9 @@ describe('time', () => {
     const c = r.state.colony;
     // No zombies in the home cell: the nightly visitors (06) would otherwise cost ammunition and bring in ears.
     r.state.world.cells.Z[r.state.world.homeCell!] = 0;
+    // ...and none already on the map (the first tick placed them): one wandering into the base would
+    // kill the idle player and skip three days.
+    if (r.state.tactical) r.state.tactical.zombies.length = 0;
     c.stock.ears = 200;
     c.stock.metal = 10;
     c.stock.parts = 3;

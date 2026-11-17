@@ -93,9 +93,15 @@ export const BALANCE = {
   // --- docs/02_systems_spec.md §2.3 / §2.4 / §1 world layer (owner: 02 map / infection) ---
   world: {
     cellAreaKm2: 100,
-    /** active = clamp(base + perLog * log10(1 + Z per 100 km²), min, max). */
-    active: { base: 8, perLog: 14, min: 5, max: 120 },
-    respawnSeconds: 20,
+    /**
+     * active = clamp(base + perLog * log10(1 + Z per 100 km²), min, max).
+     * 07b+: raised from base 8 / perLog 14 after the playtest ("too few zombies to see").
+     * The night approach on the base keeps the old scale (`nightActive`, used by sim/build/raids.ts).
+     */
+    active: { base: 20, perLog: 20, min: 5, max: 120 },
+    nightActive: { base: 8, perLog: 14, min: 5, max: 120 },
+    /** Seconds between reinforcements from the map edge (07b+: 20 -> 12). */
+    respawnSeconds: 12,
     clearedBelowZ: 20,
     /** Zombie kind mix; urban cells get runner / brute x urbanBoost (then renormalised). */
     kindMix: { walker: 0.8, runner: 0.12, crawler: 0.06, brute: 0.02 },
@@ -256,7 +262,7 @@ export const BALANCE = {
      */
     spawnRoadShare: 0.15,
     clusterTries: 4,
-    spawnOpenShare: 0.12,
+    spawnOpenShare: 0.3,
     coverDist: 9,
     hollowRing: 22,
     hollowDepth: 1.1,
