@@ -61,7 +61,13 @@ export function createInput(deps: InputDeps): Input {
   };
 
   const locked = (): boolean => document.pointerLockElement === canvas;
-  const tactical = (): boolean => getState()?.mode === 'tactical';
+  /** A full-screen result is up (defeat, or the ending not yet dismissed): the game is not being played. */
+  const overlayUp = (s: GameState): boolean => s.flags.defeat === true || (s.research.victory != null && s.flags.endingSeen !== true);
+  /** Playing in the tactical view: controls are live and the pointer may be locked. */
+  const tactical = (): boolean => {
+    const s = getState();
+    return s?.mode === 'tactical' && !overlayUp(s);
+  };
 
   const requestLock = (): void => {
     if (locked()) return;
@@ -90,7 +96,7 @@ export function createInput(deps: InputDeps): Input {
     else next = target;
     dispatch({ type: 'setMode', mode: next });
     // Request the lock inside the user gesture; the modeChanged handler alone may be too late.
-    if (next === 'tactical') requestLock();
+    if (next === 'tactical' && !overlayUp(state)) requestLock();
   };
 
   const togglePause = (): void => {
@@ -183,12 +189,20 @@ export function createInput(deps: InputDeps): Input {
   const offMode = events.on('modeChanged', (e) => {
     if (e.mode === 'menu') beforeMenu = e.prev;
     if (e.mode === 'world' && e.prev !== 'menu') beforeWorld = e.prev;
-    if (e.mode === 'tactical') requestLock();
+    if (e.mode === 'tactical' && tactical()) requestLock();
     else {
       clearHeld();
       if (locked()) document.exitPointerLock();
     }
   });
+
+  // Game over / the ending: hand the cursor back so that the buttons on the screen can be clicked.
+  const release = (): void => {
+    clearHeld();
+    if (locked()) document.exitPointerLock();
+  };
+  const offDefeat = events.on('defeat', release);
+  const offVictory = events.on('victory', release);
 
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('keyup', onKeyUp);
@@ -242,6 +256,8 @@ export function createInput(deps: InputDeps): Input {
     togglePause,
     dispose() {
       offMode();
+      offDefeat();
+      offVictory();
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', onBlur);

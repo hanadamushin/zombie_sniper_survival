@@ -311,3 +311,46 @@ test('rural and forest stay within budget with the new cover, from a firing posi
   console.log(lines.join('\n'));
   expect(errors).toEqual([]);
 });
+
+test('game over hands the cursor back: the pointer lock is released and clicks do not take it again', async ({ page }) => {
+  test.setTimeout(120_000);
+  const errors = trackErrors(page);
+  // Headless Chromium cannot lock the pointer for real: stand in for it (the same calls, the same event).
+  await page.addInitScript(() => {
+    let lockedTo: Element | null = null;
+    const w = window as unknown as { __locks: number };
+    w.__locks = 0;
+    Object.defineProperty(Document.prototype, 'pointerLockElement', { configurable: true, get: () => lockedTo });
+    Element.prototype.requestPointerLock = function (this: Element) {
+      lockedTo = this;
+      w.__locks++;
+      document.dispatchEvent(new Event('pointerlockchange'));
+      return Promise.resolve();
+    } as typeof Element.prototype.requestPointerLock;
+    Document.prototype.exitPointerLock = function () {
+      lockedTo = null;
+      document.dispatchEvent(new Event('pointerlockchange'));
+    };
+  });
+  await page.goto('/?seed=12&scenario=0&res=fixed');
+  await startNewGame(page);
+  await page.locator('#scene').click({ position: { x: 640, y: 400 } });
+  await expect.poll(() => page.evaluate(() => document.pointerLockElement?.id ?? null)).toBe('scene');
+
+  // Die with nobody in the colony: defeat.
+  await page.evaluate(() => {
+    const s = window.__game!.state!;
+    s.player.hp = 0;
+    s.player.aim.deadT = 0.2;
+  });
+  await expect(page.getByTestId('defeat')).toBeVisible({ timeout: 30_000 });
+  await expect.poll(() => page.evaluate(() => document.pointerLockElement)).toBeNull();
+  expect(await page.getByTestId('mode-menu').count()).toBe(0); // losing the lock here does not open the pause menu
+  // Clicking the scene does not grab the pointer again; the button works.
+  const locks = await page.evaluate(() => (window as unknown as { __locks: number }).__locks);
+  await page.mouse.click(20, 400);
+  expect(await page.evaluate(() => (window as unknown as { __locks: number }).__locks)).toBe(locks);
+  await page.getByTestId('defeat').getByRole('button').click();
+  await expect(page.getByTestId('title-screen')).toBeVisible();
+  expect(errors).toEqual([]);
+});
