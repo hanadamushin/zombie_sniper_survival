@@ -281,6 +281,8 @@ export const BALANCE = {
     /** LOD: beyond these distances a zombie is updated every 2nd / 4th step (with a longer dt). */
     lodMid: 80,
     lodFar: 200,
+    /** 07c: beyond this distance from the player (m) a zombie that is not chasing or raiding is not updated at all. */
+    freezeDist: 650,
     /** Steps between sight checks of one zombie. */
     senseEvery: 12,
     /** Stuck handling: metres of side-stepping per detour — the first one, and the cap as they grow. */

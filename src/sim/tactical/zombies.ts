@@ -1011,6 +1011,9 @@ export function updateZombies(state: GameState, area: TacticalArea, ctx: SimCont
       continue;
     }
     const dist = Math.hypot(z.pos[0] - p.pos[0], z.pos[2] - p.pos[2]);
+    // 07c: far beyond what the player can make out they simply stand where they are
+    // (unless they are after the player or raiding the base).
+    if (dist > Z.freezeDist && !z.dummy && !z.raid && z.state !== 'chase' && z.state !== 'attack') continue;
     // LOD: far zombies think and move less often, with a proportionally longer step.
     const lod = z.dummy || z.state === 'chase' || z.state === 'attack' || dist < Z.lodMid ? 1 : dist < Z.lodFar ? 2 : 4;
     if ((step + z.id) % lod !== 0) continue;
