@@ -321,8 +321,9 @@ test('game over hands the cursor back: the pointer lock is released and clicks d
     const w = window as unknown as { __locks: number };
     w.__locks = 0;
     Object.defineProperty(Document.prototype, 'pointerLockElement', { configurable: true, get: () => lockedTo });
-    Element.prototype.requestPointerLock = function (this: Element) {
-      lockedTo = this;
+    // The game only ever locks its canvas.
+    Element.prototype.requestPointerLock = function () {
+      lockedTo = document.getElementById('scene');
       w.__locks++;
       document.dispatchEvent(new Event('pointerlockchange'));
       return Promise.resolve();
