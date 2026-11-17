@@ -120,6 +120,7 @@ export const ja = {
   'intro.suburb': '最寄りの町',
   'intro.cells': '{n} セル先',
   'intro.none': '候補地が見つかりませんでした',
+  'intro.busy': 'ゾンビも潜伏者も多い土地。耳は稼ぎやすく人も雇いやすいが、危険も大きい',
 
   'world.view.z': 'ゾンビ',
   'world.view.loot': '物資',

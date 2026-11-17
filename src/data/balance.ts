@@ -117,6 +117,13 @@ export const BALANCE = {
       minLandmass: 200,
       minSeparation: 12,
       count: 3,
+      /**
+       * One of the candidates comes from a busier band (07b+, after the playtest: the quiet starts had
+       * too few zombies to earn the first signing fee). Same rules otherwise, but the danger of the cell
+       * (dangerOf) must lie in [minDanger, maxDanger) — Z of roughly 300..700 per cell. When no such cell
+       * qualifies, the slot goes to another quiet one.
+       */
+      busy: { count: 1, minDanger: 0.2, maxDanger: 0.3 },
       intelRadius: 2,
     },
     travel: {

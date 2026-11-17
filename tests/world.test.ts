@@ -160,15 +160,20 @@ describe('bundled scenarios', () => {
 });
 
 describe('start candidates', () => {
-  it('offers three quiet rural places near a town, far apart', () => {
+  it('offers two quiet rural places and one busier one (danger 20..30 %) near a town, far apart', () => {
     for (let n = 0; n < 3; n++) {
       const state = newGame(n);
       const found = findStartCandidates(state.world.cells, grid, seedRng(n + 10));
       expect(found).toHaveLength(3);
+      expect(found.map((c) => c.tier)).toEqual(['quiet', 'quiet', 'busy']);
       for (const c of found) {
         const info = grid.cells[c.cell]!;
         expect(['rural', 'forest']).toContain(info.land);
-        expect(c.z).toBeLessThan(200);
+        if (c.tier === 'quiet') expect(c.z).toBeLessThan(200);
+        else {
+          expect(dangerOf(c.z)).toBeGreaterThanOrEqual(0.2);
+          expect(dangerOf(c.z)).toBeLessThan(0.3);
+        }
         expect(c.z).toBeGreaterThanOrEqual(BALANCE.world.start.minCellZ); // something to shoot at home (04)
         expect(c.nearbyH).toBeGreaterThanOrEqual(5);
         expect(cellsWithin(grid, c.cell, 3).some((id) => grid.cells[id]!.land === 'suburb')).toBe(true);

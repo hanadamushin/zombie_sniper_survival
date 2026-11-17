@@ -5,6 +5,7 @@ import type { RngState } from '../../core/rng.ts';
 import { rand } from '../../core/rng.ts';
 import type { CellId, GameState, Land, StaticGrid } from '../../core/types.ts';
 import { BALANCE } from '../../data/balance.ts';
+import { dangerOf } from './derive.ts';
 import { cellDistance, cellsWithin } from './grid.ts';
 import type { InfectionCells } from './infection.ts';
 import { reveal } from './travel.ts';
@@ -21,6 +22,8 @@ export interface StartCandidate {
   nearbyZ: number;
   /** Distance in cells to the nearest suburb cell. */
   suburbDistance: number;
+  /** 'quiet': fewer than maxZPerKm2; 'busy': danger in the busy band (more to hunt, more people, more risk). */
+  tier: 'quiet' | 'busy';
 }
 
 const landmassCache = new WeakMap<StaticGrid, Int32Array>();
@@ -62,7 +65,9 @@ export function evaluateStart(cells: InfectionCells, grid: StaticGrid, cell: Cel
   const info = grid.cells[cell];
   if (!info || !(R.lands as readonly Land[]).includes(info.land)) return null;
   const z = cells.Z[cell]!;
-  if (z / BALANCE.world.cellAreaKm2 >= R.maxZPerKm2) return null;
+  const danger = dangerOf(z);
+  const tier = z / BALANCE.world.cellAreaKm2 < R.maxZPerKm2 ? 'quiet' : danger >= R.busy.minDanger && danger < R.busy.maxDanger ? 'busy' : null;
+  if (!tier) return null;
   if (z < R.minCellZ) return null; // nothing to hunt at home on day one
   if (landmassSizes(grid)[cell]! < R.minLandmass) return null;
   let nearbyH = 0;
@@ -74,34 +79,51 @@ export function evaluateStart(cells: InfectionCells, grid: StaticGrid, cell: Cel
     if (grid.cells[id]!.land === 'suburb') suburbDistance = Math.min(suburbDistance, cellDistance(grid, cell, id));
   }
   if (suburbDistance === Infinity || nearbyH < R.minNearbyH) return null;
-  return { cell, z, nearbyH, nearbyZ, suburbDistance };
+  return { cell, z, nearbyH, nearbyZ, suburbDistance, tier };
 }
 
-/**
- * Pick up to `count` start candidates: qualifying cells, far apart from each other, preferring
- * places that have something to hunt nearby. Deterministic for a given rng state.
- */
-export function findStartCandidates(cells: InfectionCells, grid: StaticGrid, rng: RngState, count: number = R.count): StartCandidate[] {
-  const all: StartCandidate[] = [];
-  for (const id of grid.landIds) {
-    const c = evaluateStart(cells, grid, id);
-    if (c) all.push(c);
-  }
-  const hunting = all.filter((c) => c.nearbyZ >= R.minNearbyZ);
-  const pool = hunting.length >= count ? hunting : all;
+function shuffle<T>(list: T[], rng: RngState): T[] {
   // Fisher–Yates with the seeded stream.
-  for (let i = pool.length - 1; i > 0; i--) {
+  for (let i = list.length - 1; i > 0; i--) {
     const j = Math.floor(rand(rng) * (i + 1));
-    [pool[i], pool[j]] = [pool[j]!, pool[i]!];
+    [list[i], list[j]] = [list[j]!, list[i]!];
   }
-  const chosen: StartCandidate[] = [];
-  for (let separation: number = R.minSeparation; chosen.length < count && separation >= 0; separation = separation > 0 ? Math.floor(separation / 2) : -1) {
+  return list;
+}
+
+/** Add up to `want` cells of `pool` to `chosen`, keeping them far apart (the separation halves when it must). */
+function spread(grid: StaticGrid, pool: readonly StartCandidate[], chosen: StartCandidate[], want: number): void {
+  const goal = chosen.length + want;
+  for (let separation: number = R.minSeparation; chosen.length < goal && separation >= 0; separation = separation > 0 ? Math.floor(separation / 2) : -1) {
     for (const c of pool) {
-      if (chosen.length >= count) break;
+      if (chosen.length >= goal) break;
       if (chosen.includes(c)) continue;
       if (chosen.every((o) => cellDistance(grid, o.cell, c.cell) >= separation)) chosen.push(c);
     }
   }
+}
+
+/**
+ * Pick up to `count` start candidates: qualifying cells, far apart from each other, preferring
+ * places that have something to hunt nearby. The quiet ones come first; R.busy.count of them (the
+ * last) come from the busier band. Deterministic for a given rng state.
+ */
+export function findStartCandidates(cells: InfectionCells, grid: StaticGrid, rng: RngState, count: number = R.count): StartCandidate[] {
+  const quiet: StartCandidate[] = [];
+  const busy: StartCandidate[] = [];
+  for (const id of grid.landIds) {
+    const c = evaluateStart(cells, grid, id);
+    if (c) (c.tier === 'quiet' ? quiet : busy).push(c);
+  }
+  const busyWant = Math.min(R.busy.count, Math.max(0, count - 1));
+  const quietWant = count - busyWant;
+  const hunting = quiet.filter((c) => c.nearbyZ >= R.minNearbyZ);
+  const pool = shuffle(hunting.length >= quietWant ? hunting : quiet, rng);
+  const chosen: StartCandidate[] = [];
+  spread(grid, pool, chosen, quietWant);
+  spread(grid, shuffle(busy, rng), chosen, count - chosen.length);
+  // No busy cell anywhere (or too few quiet ones): fill up with whatever qualifies.
+  if (chosen.length < count) spread(grid, pool, chosen, count - chosen.length);
   return chosen;
 }
 

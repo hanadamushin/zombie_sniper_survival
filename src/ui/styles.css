@@ -187,6 +187,8 @@ ul.help { padding: 0; list-style: none; }
 .cards { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
 .intro .cards .card { position: static; flex: 1 1 220px; max-width: 320px; cursor: pointer; }
 .card.active { border-color: var(--accent); }
+.card .tier { margin: 0 0 6px; padding: 3px 8px; border-radius: 4px; background: rgba(200, 80, 50, 0.22); color: #f0b49a; font-size: 12px; line-height: 1.5; }
+.card.busy:not(.active) { border-color: rgba(200, 90, 60, 0.6); }
 .badge { display: inline-grid; place-items: center; width: 20px; height: 20px; margin-right: 6px; border-radius: 50%; background: var(--accent); color: #17130a; font-size: 12px; }
 
 @media (max-width: 600px) {

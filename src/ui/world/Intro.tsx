@@ -111,12 +111,13 @@ export function Intro({ intro, grid, actions }: { intro: IntroData; grid: Static
             {candidates.map((c, i) => {
               const info = grid.cells[c.cell]!;
               return (
-                <div key={c.cell} class={i === picked ? 'panel card active' : 'panel card'} data-testid={`candidate-${i}`} onClick={() => pick(i)}>
+                <div key={c.cell} class={`panel card${i === picked ? ' active' : ''}${c.tier === 'busy' ? ' busy' : ''}`} data-testid={`candidate-${i}`} data-tier={c.tier} onClick={() => pick(i)}>
                   <h3>
                     <span class="badge">{i + 1}</span>
                     {cellName(grid, c.cell)}
                     <small>{t(`land.${info.land}` as TextKey)}</small>
                   </h3>
+                  {c.tier === 'busy' && <p class="tier" data-testid={`candidate-busy-${i}`}>{t('intro.busy')}</p>}
                   <dl>
                     <dt>{t('intro.cellZ')}</dt>
                     <dd>{t('world.bodies', { n: fmt(c.z) })}</dd>
