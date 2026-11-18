@@ -201,3 +201,64 @@ describe('where to get ammunition (07c)', () => {
     expect(hint.turn).toBeCloseTo(Math.PI / 2, 6); // to the left
   });
 });
+
+import { cacheAmmo } from '../src/gen/caches.ts';
+import { cacheInReach, cachesLeft } from '../src/sim/world/outposts.ts';
+import { mapSeedFor } from '../src/gen/index.ts';
+import { cellsWithin } from '../src/sim/world/grid.ts';
+import { deserialize, serialize } from '../src/core/save.ts';
+
+describe('ammunition caches (07c)', () => {
+  it('a map has the caches its seed says, off the middle of the base; around a start there are many', { timeout: 120_000 }, () => {
+    const w = grid.gridW;
+    const inland = grid.landIds.find((id) => ['rural', 'forest'].includes(grid.cells[id]!.land) && grid.cells[id + 1] && grid.cells[id - 1] && grid.cells[id + w] && grid.cells[id - w])!;
+    const g = gameAt(inland);
+    let total = 0;
+    for (const cell of cellsWithin(grid, inland, 1)) {
+      const map = generateTacticalMap(areaParams(g.s, grid, cell)!);
+      const ammo = cacheAmmo(mapSeedFor(g.s.seed, cell), grid.cells[cell]!.land);
+      expect(map.caches.map((c) => c.ammo)).toEqual(ammo);
+      for (const c of map.caches) if (map.params.isHome) expect(Math.hypot(c.pos[0] - 512, c.pos[1] - 512)).toBeGreaterThan(150);
+      total += ammo.length;
+    }
+    // Ten times or so the one supply point (the base) a new game used to have within walking distance.
+    expect(total).toBeGreaterThanOrEqual(5);
+    // Averages over the whole map.
+    let n = 0;
+    for (const id of grid.landIds) n += cacheAmmo(mapSeedFor(12, id), grid.cells[id]!.land).length;
+    expect(n / grid.landIds.length).toBeGreaterThan(0.9);
+  });
+
+  it('B next to a cache takes what fits, the rest stays for later, an empty one is gone; it survives a save', { timeout: 120_000 }, () => {
+    // A cell with a cache next door: walk there by hand.
+    const w = grid.gridW;
+    const home = grid.landIds.find((id) => ['rural', 'forest'].includes(grid.cells[id]!.land) && [id + 1, id - 1, id + w, id - w].some((n) => grid.cells[n] && cacheAmmo(mapSeedFor(12, n), grid.cells[n]!.land).length > 0))!;
+    const g = gameAt(home);
+    const cell = [home + 1, home - 1, home + w, home - w].find((n) => grid.cells[n] && cacheAmmo(mapSeedFor(12, n), grid.cells[n]!.land).length > 0)!;
+    g.s.player.cell = cell;
+    g.s.tactical = null;
+    g.sim.tick(g.s, DT, emptyInputFrame());
+    const map = mapOf(g.s)!;
+    const cache = map.caches[0]!;
+    g.s.tactical!.zombies.length = 0;
+    g.s.player.pos = [cache.pos[0] + 1, heightAt(map, cache.pos[0] + 1, cache.pos[1]), cache.pos[1]];
+    expect(cacheInReach(g.s, grid, map)).toEqual({ index: 0, left: cache.ammo });
+    g.s.player.inv.ammo = BALANCE.player.maxAmmo - 10;
+    g.sim.dispatch({ type: 'resupply' });
+    g.sim.tick(g.s, DT, emptyInputFrame());
+    expect(g.s.player.inv.ammo).toBe(BALANCE.player.maxAmmo);
+    expect(cachesLeft(g.s, grid, cell)[0]).toBe(cache.ammo - 10);
+    const again = deserialize(serialize(g.s));
+    expect(cachesLeft(again, grid, cell)[0]).toBe(cache.ammo - 10);
+    // Take the rest: it is empty, and gone from what B can reach.
+    g.s.player.inv.ammo = 0;
+    g.sim.dispatch({ type: 'resupply' });
+    g.sim.tick(g.s, DT, emptyInputFrame());
+    expect(g.s.player.inv.ammo).toBe(cache.ammo - 10);
+    expect(cachesLeft(g.s, grid, cell)[0]).toBe(0);
+    expect(cacheInReach(g.s, grid, map)).toBeNull();
+    g.sim.dispatch({ type: 'resupply' });
+    g.sim.tick(g.s, DT, emptyInputFrame());
+    expect(g.events.some((e) => e.type === 'commandRejected' && e.command === 'resupply')).toBe(true);
+  });
+});

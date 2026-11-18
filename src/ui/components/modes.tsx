@@ -18,7 +18,10 @@ import { WorldMap } from '../world/WorldMap.tsx';
 import { slotLabel } from './TitleScreen.tsx';
 import { BuildGround, NO_TOOL, type BuildTool } from '../command/build.tsx';
 import { CommandPanel } from '../command/CommandPanel.tsx';
-import { nearestSupply, outpostAt } from '../../sim/world/outposts.ts';
+import { cacheInReach, nearestSupply, outpostAt } from '../../sim/world/outposts.ts';
+import { areaParams, cachedMap, mapOf } from '../../sim/tactical/area.ts';
+import { cellsWithin } from '../../sim/world/grid.ts';
+import type { TacticalMap } from '../../gen/index.ts';
 import { logText } from '../command/format.ts';
 import { interactionAt, nearestHideout } from '../../sim/colony/encounters.ts';
 import { playerAtHome } from '../../sim/colony/morale.ts';
@@ -83,9 +86,16 @@ export function TacticalLayer({ state, grid }: ModeProps) {
   // First steps (07b): somebody is willing to join but nobody has been hired yet — say where to do that.
   const hireHint = !dead && !state.flags.range && state.colony.candidates.length > 0 && state.colony.survivors.length === 0;
   // 07c: where to get ammunition, when it cannot be had right here.
-  const supplyAt = dead || state.flags.range || state.world.travel ? null : nearestSupply(state, TACTICAL.size);
+  // Caches (07c) in this area and the neighbouring ones whose maps are made.
+  const mapOfCell = (cell: number): TacticalMap | null => (cell === p.cell ? mapOf(state) : grid ? (() => {
+    const params = areaParams(state, grid, cell);
+    return params ? cachedMap(params) : null;
+  })() : null);
+  const nearCells = grid ? cellsWithin(grid, p.cell, 1) : [];
+  const supplyAt = dead || state.flags.range || state.world.travel ? null : nearestSupply(state, TACTICAL.size, mapOfCell, grid, nearCells);
+  const cache = dead || playerAtHome(state) ? null : cacheInReach(state, grid, mapOf(state));
   const post = playerAtHome(state) || state.world.travel ? undefined : outpostAt(state, p.cell);
-  const supply = playerAtHome(state) ? state.colony.stock.ammo : (post?.ammo ?? 0);
+  const supply = playerAtHome(state) ? state.colony.stock.ammo : post ? post.ammo : (cache?.left ?? 0);
   const canResupply = !dead && supply >= 1 && (p.inv.ammo ?? 0) < BALANCE.player.maxAmmo;
   // Rangefinder (W6a) and observation records (S2): what the reticle rests on.
   const rangefinder = scoped && !dead && hasFlag(state, 'scope.rangefinder');
@@ -124,7 +134,11 @@ export function TacticalLayer({ state, grid }: ModeProps) {
       {supplyAt && (
         <div class="supply-hint" data-testid="hud-supply" data-dir={supplyAt.dir} data-kind={supplyAt.point.kind}>
           <span class="arrow" style={{ transform: `rotate(${(-supplyAt.turn).toFixed(2)}rad)` }}>▲</span>
-          <span>{t(supplyAt.point.ammo > 0 ? 'hud.supply' : 'hud.supplyNone', {
+          <span>{supplyAt.point.kind === 'cache' ? t('hud.supplyCache', {
+            dir: t(`compass.${supplyAt.dir}` as TextKey),
+            dist: supplyAt.dist < 1000 ? `${Math.max(1, Math.round(supplyAt.dist / 10) * 10)}m` : `${(supplyAt.dist / 1000).toFixed(1)}km`,
+            n: supplyAt.point.ammo,
+          }) : t(supplyAt.point.ammo > 0 ? 'hud.supply' : 'hud.supplyNone', {
             name: supplyAt.point.kind === 'home' ? t('world.home') : t(`world.outpost.tier.${outpostAt(state, supplyAt.point.cell)?.tier ?? 1}` as TextKey),
             dir: t(`compass.${supplyAt.dir}` as TextKey),
             dist: supplyAt.dist < 1000 ? `${Math.round(supplyAt.dist / 10) * 10}m` : `${(supplyAt.dist / 1000).toFixed(1)}km`,
@@ -165,7 +179,7 @@ export function TacticalLayer({ state, grid }: ModeProps) {
         <span data-testid="hud-zoom">{t('hud.zoom', { x: w.zoom.toFixed(1) })}</span>
         {windSpeed > 0.05 && <span>{t('hud.wind', { v: windSpeed.toFixed(1), deg: Math.round(headingDeg(Math.atan2(-wind[0], -wind[1]))) })}</span>}
         <span class="ears" data-testid="hud-ears" data-ears={p.inv.ears ?? 0}>{t('hud.ears', { n: p.inv.ears ?? 0 })}</span>
-        {canResupply && <span class="resupply" data-testid="hud-resupply">{t('hud.resupply', { n: Math.floor(supply) })}</span>}
+        {canResupply && <span class="resupply" data-testid="hud-resupply" data-cache={cache && !post ? 'true' : 'false'}>{cache && !post ? t('hud.cache', { n: cache.left }) : t('hud.resupply', { n: Math.floor(supply) })}</span>}
         <span class="mag-size sr-only">{def.magSize}</span>
       </div>
       {dead && (

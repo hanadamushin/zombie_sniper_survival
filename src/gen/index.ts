@@ -13,6 +13,8 @@ import { randInt, randRange } from '../core/rng.ts';
 import { TACTICAL } from '../data/tactical.ts';
 import { addTower, createBuilder, hAt, homeDist, N, rectFree, rngOf, SIZE, TILE, TILES, tileIndex, type Builder } from './builder.ts';
 import { scatterCover } from './cover.ts';
+import { cacheAmmo } from './caches.ts';
+import { BALANCE } from '../data/balance.ts';
 import { heightStats, scatterFlora } from './flora.ts';
 import { sampleHeight } from './height.ts';
 import { layout, terrainFn } from './lands.ts';
@@ -114,6 +116,43 @@ function placeLootSpots(b: Builder): LootSpot[] {
     }
   }
   return spots;
+}
+
+/**
+ * Ammunition caches (07c): in front of a building that is not a search point, or else beside a
+ * road; never in the middle of the home base. As many as cacheAmmo() says.
+ */
+function placeCaches(b: Builder, loot: LootSpot[]): { pos: [number, number]; ammo: number }[] {
+  const ammo = cacheAmmo(b.params.mapSeed, b.params.land);
+  if (ammo.length === 0) return [];
+  const rng = rngOf(b, 'caches.place');
+  const C = BALANCE.world.caches;
+  const used = new Set(loot.map((l) => l.building));
+  const blocked = (x: number, z: number): boolean =>
+    x < 8 || z < 8 || x > SIZE - 8 || z > SIZE - 8 || (b.params.isHome && homeDist(x, z) < C.homeClear) ||
+    b.solids.some((s) => x > s.x0 - 0.8 && x < s.x1 + 0.8 && z > s.z0 - 0.8 && z < s.z1 + 0.8);
+  const spots: [number, number][] = [];
+  const pool = b.buildings.filter((bd) => bd.kind !== 'tower' && !used.has(bd.id));
+  for (let tries = 0; tries < 60 && spots.length < ammo.length && pool.length > 0; tries++) {
+    const bd = pool.splice(randInt(rng, 0, pool.length - 1), 1)[0]!;
+    const cx = (bd.x0 + bd.x1) / 2;
+    const cz = (bd.z0 + bd.z1) / 2;
+    const door: [number, number] = [[cx, bd.z1 + 1.6], [cx, bd.z0 - 1.6], [bd.x1 + 1.6, cz], [bd.x0 - 1.6, cz]][randInt(rng, 0, 3)] as [number, number];
+    if (!blocked(door[0], door[1]) && spots.every((p) => Math.hypot(p[0] - door[0], p[1] - door[1]) > 40)) spots.push(door);
+  }
+  for (let tries = 0; tries < 200 && spots.length < ammo.length && b.roads.length > 0; tries++) {
+    const road = b.roads[randInt(rng, 0, b.roads.length - 1)]!;
+    const pt = road.pts[randInt(rng, 0, road.pts.length - 1)]!;
+    const side = road.width / 2 + randRange(rng, 1.5, 3);
+    const a = randRange(rng, 0, Math.PI * 2);
+    const p: [number, number] = [pt[0] + Math.cos(a) * side, pt[1] + Math.sin(a) * side];
+    if (!blocked(p[0], p[1]) && spots.every((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) > 40)) spots.push(p);
+  }
+  for (let tries = 0; tries < 200 && spots.length < ammo.length; tries++) {
+    const p: [number, number] = [randRange(rng, 40, SIZE - 40), randRange(rng, 40, SIZE - 40)];
+    if (!blocked(p[0], p[1])) spots.push(p);
+  }
+  return spots.map((pos, i) => ({ pos, ammo: ammo[i]! }));
 }
 
 function edgeSpawn(b: Builder): { edge: [number, number]; edgeYaw: number } {
@@ -241,6 +280,7 @@ export function finishMap(b: Builder, terrain?: (x: number, z: number) => number
   }
 
   const spawn = edgeSpawn(b);
+  const loot = placeLootSpots(b);
   return {
     params: b.params,
     size: SIZE,
@@ -260,7 +300,8 @@ export function finishMap(b: Builder, terrain?: (x: number, z: number) => number
     rocks: b.rocks,
     brush: b.brush,
     props: b.props,
-    lootSpots: placeLootSpots(b),
+    lootSpots: loot,
+    caches: placeCaches(b, loot),
     vantages: b.vantages,
     spawn: { home: [MID, MID], edge: spawn.edge, edgeYaw: spawn.edgeYaw },
     hash: buildStaticHash(b.solids, trees.x, trees.z, tn, b.brush),

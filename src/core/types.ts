@@ -64,6 +64,8 @@ export interface WorldState {
   };
   homeCell: CellId | null;
   outposts: Outpost[];
+  /** 07c: rounds already taken from the ammunition caches of a cell (cell id -> per cache index). Sparse; absent = untouched. */
+  cacheTaken?: Record<string, number[]>;
   expeditions: Expedition[];
   /** `fast` (06): between the base and outposts, one cell per game hour. */
   travel: { from: CellId; to: CellId; path: CellId[]; progress: number; fast?: boolean } | null;

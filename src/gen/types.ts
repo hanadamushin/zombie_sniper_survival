@@ -215,6 +215,8 @@ export interface TacticalMap {
   brush: Brush[];
   props: Prop[];
   lootSpots: LootSpot[];
+  /** 07c: ammunition caches (gen/caches.ts): where each stands and how many rounds it starts with. */
+  caches: { pos: [number, number]; ammo: number }[];
   vantages: Vantage[];
   spawn: {
     /** Centre of the map (home base). */

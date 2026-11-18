@@ -7,7 +7,7 @@ import { SEA } from './palette.ts';
 
 export interface MapMarker {
   cell: CellId;
-  kind: 'player' | 'home' | 'target' | 'candidate' | 'source' | 'outpost';
+  kind: 'player' | 'home' | 'target' | 'candidate' | 'source' | 'outpost' | 'cache';
   /** 07c: ammunition can be taken here — drawn as a badge beside the ring. */
   supply?: boolean;
   label?: string;
@@ -51,7 +51,7 @@ let SUPPLY_GLYPH = '';
 export function setSupplyGlyph(glyph: string): void {
   SUPPLY_GLYPH = glyph;
 }
-const MARKER_COLOR: Record<MapMarker['kind'], string> = { player: '#ffffff', home: '#c9a24a', target: '#7fd4ff', candidate: '#ffffff', source: '#ff5a4a', outpost: '#8fd48a' };
+const MARKER_COLOR: Record<MapMarker['kind'], string> = { player: '#ffffff', home: '#c9a24a', target: '#7fd4ff', candidate: '#ffffff', source: '#ff5a4a', outpost: '#8fd48a', cache: '#8fb4ff' };
 
 export function MapCanvas(props: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);

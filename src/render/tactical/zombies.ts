@@ -14,7 +14,7 @@ import type { GameState, ZombieKind } from '../../core/types.ts';
 import { BALANCE } from '../../data/balance.ts';
 import { RENDER } from '../../data/render.ts';
 import { ZOMBIES } from '../../data/zombies.ts';
-import type { RenderContext, SubRenderer } from '../index.ts';
+import type { FrameInfo, RenderContext, SubRenderer } from '../index.ts';
 
 const R = RENDER.zombies;
 const PARTS = 7;
@@ -86,6 +86,24 @@ class Bodies {
     this.mesh.setMatrixAt(this.n, out);
     this.mesh.setColorAt(this.n, color.set(hex).multiplyScalar(shade));
     this.n++;
+  }
+
+  /**
+   * Far away (07c): a figure too small on screen to make out arms and legs is two boxes — body and
+   * head, upright (or one flat box when it crawls) — and is not posed or animated.
+   */
+  addSimple(kind: ZombieKind, x: number, y: number, z: number, yaw: number, prone: boolean, seed: number): void {
+    const def = ZOMBIES[kind];
+    const pal = R[kind];
+    root.makeRotationY(yaw).setPosition(x, y, z);
+    if (prone) {
+      this.part(root, 0, 0.2, -0.3, 0, 0, 0, def.width, 0.3, 1.5, pick(pal.top, seed), 1);
+      return;
+    }
+    const head = def.headR * 2;
+    const body = def.height - head;
+    this.part(root, 0, 0, 0, 0, body / 2, 0, def.width, body, def.torsoR * 1.5, pick(pal.top, seed), 1);
+    this.part(root, 0, body, 0, 0, def.headR, 0, def.headR * 1.8, head, def.headR * 1.9, pick(R.skin, seed >> 4), 1);
   }
 
   add(kind: ZombieKind, x: number, y: number, z: number, yaw: number, pose: Pose, seed: number, shade: number): void {
@@ -202,7 +220,7 @@ export function createZombieRenderer(): SubRenderer {
     reset() {
       deadKey = '';
     },
-    update(state: GameState) {
+    update(state: GameState, frame: FrameInfo) {
       const t = state.tactical;
       if (!t) {
         live.mesh.count = 0;
@@ -219,6 +237,8 @@ export function createZombieRenderer(): SubRenderer {
       const cam = camera.position;
       const farSq = (RENDER.fog.far + 20) ** 2;
       camera.updateMatrixWorld();
+      // Screen pixels per radian of view (vertical): what a figure's size on screen is measured in.
+      const pxPerRad = (frame.height || 720) / (2 * Math.tan(((camera.fov * Math.PI) / 180) / 2));
       frustum.setFromProjectionMatrix(viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
       for (const z of t.zombies) {
         if ((z.pos[0] - cam.x) ** 2 + (z.pos[2] - cam.z) ** 2 > farSq) continue;
@@ -227,6 +247,20 @@ export function createZombieRenderer(): SubRenderer {
         const def = ZOMBIES[z.kind];
         const prone = z.crippled || def.prone;
         const seed = z.id * 7 + 3;
+        // How tall it is on screen right now (the scope's magnification included).
+        const dist = Math.hypot(z.pos[0] - cam.x, z.pos[1] - cam.y, z.pos[2] - cam.z);
+        const px = (def.height / Math.max(1, dist)) * pxPerRad;
+        if (px < R.lodPixels && z.state !== 'down') {
+          live.addSimple(z.kind, z.pos[0], z.pos[1], z.pos[2], z.yaw, prone, seed);
+          if (nb < MAX_LIVE) {
+            const r = prone ? 0.55 : def.width * 0.8 + 0.12;
+            a.makeRotationY(z.yaw);
+            b.makeScale(r, 1, prone ? r * 1.9 : r);
+            out.multiplyMatrices(a, b).setPosition(z.pos[0], z.pos[1] + 0.05, z.pos[2]);
+            blobs.setMatrixAt(nb++, out);
+          }
+          continue;
+        }
         if (z.state === 'down') {
           deadPose(z.kind, prone, z.headshot, z.t / DOWN, seed);
         } else {

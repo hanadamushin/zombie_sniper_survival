@@ -6,7 +6,8 @@ import { rand, stream } from '../../core/rng.ts';
 import type { CellId, GameState, Outpost, ResourceId, StaticGrid, Survivor } from '../../core/types.ts';
 import { BALANCE } from '../../data/balance.ts';
 import { BUILD, type Cost } from '../../data/buildings.ts';
-import type { TacticalMap } from '../../gen/index.ts';
+import { mapSeedFor, type TacticalMap } from '../../gen/index.ts';
+import { cacheAmmo } from '../../gen/caches.ts';
 import { techUnlocked } from '../build/structures.ts';
 import { getMod, hasFlag } from '../research/modifiers.ts';
 import { aptitude } from '../colony/jobs.ts';
@@ -315,15 +316,61 @@ export function outpostPrefab(map: TacticalMap, tier: number): Prefab | null {
 
 export interface SupplyPoint {
   cell: CellId;
-  kind: 'home' | 'outpost';
+  kind: 'home' | 'outpost' | 'cache';
+  /** For a cache: its index in TacticalMap.caches / cacheAmmo(). */
+  index?: number;
   /** Rounds there now. */
   ammo: number;
   /** Where in the cell's area to head for (m, the area's own frame): the headquarters, or the compound's site when `map` is known (else the middle). */
   pos: [number, number];
 }
 
-/** The base and the outposts: everywhere B takes ammunition (anywhere in that cell). */
-export function supplyPoints(state: GameState, mapOfCell?: (cell: CellId) => TacticalMap | null): SupplyPoint[] {
+/** Rounds left in each ammunition cache of a cell (07c). */
+export function cachesLeft(state: GameState, grid: StaticGrid, cell: CellId): number[] {
+  const info = grid.cells[cell];
+  if (!info) return [];
+  const taken = state.world.cacheTaken?.[String(cell)] ?? [];
+  return cacheAmmo(mapSeedFor(state.seed, cell), info.land).map((a, i) => Math.max(0, a - (taken[i] ?? 0)));
+}
+
+/** The cache in reach of the player in the current area, if any rounds are left in it. */
+export function cacheInReach(state: GameState, grid: StaticGrid | null, map: TacticalMap | null): { index: number; left: number } | null {
+  if (!grid || !map || state.flags.range || state.world.travel) return null;
+  const left = cachesLeft(state, grid, state.player.cell);
+  const [px, , pz] = state.player.pos;
+  let best: { index: number; left: number; d: number } | null = null;
+  map.caches.forEach((c, i) => {
+    const d = Math.hypot(c.pos[0] - px, c.pos[1] - pz);
+    if ((left[i] ?? 0) > 0 && d <= BALANCE.world.caches.reach && (!best || d < best.d)) best = { index: i, left: left[i]!, d };
+  });
+  const found = best as { index: number; left: number; d: number } | null;
+  return found ? { index: found.index, left: found.left } : null;
+}
+
+/** B next to a cache: take what fits from it (07c). */
+export function resupplyFromCache(c: ColonyCtx, map: TacticalMap | null): string | null {
+  const { state, grid } = c;
+  const at = cacheInReach(state, grid, map);
+  if (!at) return 'notHome';
+  const inv = state.player.inv;
+  const room = BALANCE.player.maxAmmo - (inv.ammo ?? 0);
+  if (room <= 0) return 'full';
+  const got = Math.min(room, at.left);
+  const key = String(state.player.cell);
+  const taken = ((state.world.cacheTaken ??= {})[key] ??= []);
+  while (taken.length <= at.index) taken.push(0);
+  taken[at.index] = taken[at.index]! + got;
+  inv.ammo = (inv.ammo ?? 0) + got;
+  c.emit({ type: 'resupplied', ammo: got });
+  return null;
+}
+
+/**
+ * Everywhere B takes ammunition: the base and the outposts (anywhere in that cell), and — for the
+ * cells listed in `cacheCells` — the caches with rounds left (07c; next to them). `mapOfCell` gives
+ * exact positions where the area's map is known.
+ */
+export function supplyPoints(state: GameState, mapOfCell?: (cell: CellId) => TacticalMap | null, grid?: StaticGrid | null, cacheCells: readonly CellId[] = []): SupplyPoint[] {
   const out: SupplyPoint[] = [];
   const home = state.world.homeCell;
   if (home !== null) {
@@ -335,6 +382,19 @@ export function supplyPoints(state: GameState, mapOfCell?: (cell: CellId) => Tac
     const map = mapOfCell?.(o.cell) ?? null;
     out.push({ cell: o.cell, kind: 'outpost', ammo: Math.floor(o.ammo), pos: (map && outpostSite(map)) ?? [512, 512] });
   }
+  if (grid) {
+    for (const cell of cacheCells) {
+      const left = cachesLeft(state, grid, cell);
+      if (left.length === 0) continue;
+      const map = mapOfCell?.(cell) ?? null;
+      left.forEach((n, i) => {
+        if (n <= 0) return;
+        const pos = map?.caches[i]?.pos;
+        if (map && !pos) return;
+        out.push({ cell, kind: 'cache', index: i, ammo: n, pos: pos ? [pos[0], pos[1]] : [512, 512] });
+      });
+    }
+  }
   return out;
 }
 
@@ -345,12 +405,15 @@ const DIRS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'] as const;
  * straight-line distance in metres, compass direction, and the turn from the view for an arrow.
  * Null when the player already stands in a supply cell, or there is none.
  */
-export function nearestSupply(state: GameState, size = 1024, mapOfCell?: (cell: CellId) => TacticalMap | null): { point: SupplyPoint; dist: number; dir: (typeof DIRS)[number]; turn: number } | null {
+export function nearestSupply(
+  state: GameState, size = 1024, mapOfCell?: (cell: CellId) => TacticalMap | null, grid?: StaticGrid | null, cacheCells: readonly CellId[] = [],
+): { point: SupplyPoint; dist: number; dir: (typeof DIRS)[number]; turn: number } | null {
   const w = state.world.gridW;
   if (!w) return null;
   const here = state.player.cell;
-  const points = supplyPoints(state, mapOfCell);
-  if (points.some((p) => p.cell === here)) return null;
+  // Caches only where their place is known (the areas whose maps are made).
+  const points = supplyPoints(state, mapOfCell, grid, cacheCells.filter((c) => mapOfCell?.(c)));
+  if (points.some((p) => p.cell === here && p.kind !== 'cache')) return null;
   const px = (here % w) * size + state.player.pos[0];
   const pz = Math.floor(here / w) * size + state.player.pos[2];
   let best: { point: SupplyPoint; dist: number; dir: (typeof DIRS)[number]; turn: number } | null = null;

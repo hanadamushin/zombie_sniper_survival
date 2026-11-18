@@ -99,6 +99,18 @@ export const BALANCE = {
      * The night approach on the base keeps the old scale (`nightActive`, used by sim/build/raids.ts).
      */
     active: { base: 20, perLog: 20, min: 5, max: 120 },
+    /**
+     * Ammunition caches left in the world (07c, playtest: "ten times as many supply points; several
+     * on one map is fine"): how many per cell by land [min, max], rounds in each [min, max], and how
+     * close the player must stand to take from one with B (m). They do not refill.
+     */
+    caches: {
+      perCell: { urban: [2, 4], suburb: [1, 3], rural: [0, 2], forest: [0, 2], mountain: [0, 1] },
+      ammo: [25, 60],
+      reach: 4,
+      /** Kept clear of the middle of the home base (m), where the stores are. */
+      homeClear: 160,
+    },
     /** 07c (playtest: "five times as many"): the area holds this many times `active` (up to activeMax). */
     activeMul: 5,
     activeMax: 600,

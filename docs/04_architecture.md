@@ -399,6 +399,8 @@ export interface InputFrame { moveX: number; moveZ: number; lookDX: number; look
 - 他セルの出来事（遠征・駐屯地・感染）は一切描画しない（数値のみ）。駐屯地セルに入ったときのプレハブだけは描く
 
 - 地続きの描画（07c、`render/tactical/index.ts`）: 現在の区域と、霧の範囲にかかる隣の区域を、それぞれのメッシュを位置だけずらして描く（作り直さない。3×3 から外れたら破棄、新しい区域は 1 フレームに 1 つだけ構築）。地形は 256m 区画ごとに 4m / 8m / 16m の 3 段階（`RENDER.terrainLod`、カメラから 200 / 480 / 900m）で、区画の縁に 3m のスカートを下げて段差の隙間を隠す（1 区域 1 ドローコール、索引だけ組み直す）。葦・藪・竹は 512m の 4 区画に分け、カメラから 350m 以内の区画だけ描く（`RENDER.brush.fineRange`）。草むらはカメラから 150m 以内の区域だけ。単独マップ（射撃場など）だけ外周の粗い地形（apron）を描く。実測（SwiftShader）で 69〜72 ドローコール・28.6〜38.9 万三角形・sim＋描画発行 0.7〜2.1 ms
+- ゾンビの遠景（07c）: 画面上の身長（スコープの倍率込み）が `RENDER.zombies.lodPixels`（14px）未満の個体は、胴と頭の 2 箱で、姿勢も動きも付けない（`Bodies.addSimple`）。視野・霧の外は描かない。当たり判定（sim）は常に細かい形のまま
+- 補給箱（07c）: 数と弾数は `gen/caches.ts` の `cacheAmmo(mapSeed, land)`、置き場所は `TacticalMap.caches`。残りは `sim/world/outposts.ts` の `cachesLeft` / `cacheInReach` / `resupplyFromCache`（`world.cacheTaken` に取った量）。描画は `render/tactical/beacons.ts`（光の柱と弾薬箱、2 ドローコール）
 - 本拠の構造物・生存者は、隣のセルにいるときも本拠の地図（`neighbourMap`）の高さで、ずらして描く（`structures.ts` / `survivors.ts` の `ox` / `oz`）
 
 ## 9. UI 方針

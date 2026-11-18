@@ -66,12 +66,25 @@ export function WorldMap({ state, grid, actions }: Props) {
   setSupplyGlyph(t('world.supplyGlyph'));
   const markers: MapMarker[] = [];
   let hereLabel = t('world.here');
+  // Caches (07c): known in the cells that have been walked; one marker per cell with the count and the rounds left.
+  const caches = new Map<CellId, { n: number; rounds: number }>();
+  for (const sp of supplyPoints(state, undefined, grid, grid.landIds.filter((id) => cells.visited[id]))) {
+    if (sp.kind !== 'cache') continue;
+    const c = caches.get(sp.cell) ?? { n: 0, rounds: 0 };
+    c.n++;
+    c.rounds += sp.ammo;
+    caches.set(sp.cell, c);
+  }
+  for (const [cell, c] of caches) {
+    if (cell === here || cell === state.world.homeCell || outpostAt(state, cell)) continue;
+    markers.push({ cell, kind: 'cache', label: t('world.cacheLabel', { n: c.n, rounds: c.rounds }), supply: true });
+  }
   for (const sp of supplyPoints(state)) {
     const o = sp.kind === 'outpost' ? outpostAt(state, sp.cell) : undefined;
     const name = sp.kind === 'home' ? t('world.home') : t(`world.outpost.tier.${o?.tier ?? 1}` as TextKey);
     const label = t('world.supplyLabel', { name, n: sp.ammo });
     if (sp.cell === here) hereLabel = t('world.hereAt', { place: label });
-    markers.push({ cell: sp.cell, kind: sp.kind, label: sp.cell === here ? undefined : label, supply: true });
+    markers.push({ cell: sp.cell, kind: sp.kind === 'outpost' ? 'outpost' : 'home', label: sp.cell === here ? undefined : label, supply: true });
   }
   if (selected !== null && selected !== here) markers.push({ cell: selected, kind: 'target' });
   if (travel) markers.push({ cell: travel.to, kind: 'target' });

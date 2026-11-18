@@ -107,7 +107,7 @@ export const RENDER = {
   },
 
   // --- supply beacons (07c): a faint column over the headquarters and the outposts ---
-  beacons: { color: 0x4f8fff, opacity: 0.32, radius: 2.4, height: 110 },
+  beacons: { color: 0x4f8fff, opacity: 0.32, radius: 2.4, height: 110, cacheHeight: 28, crate: 0x4b5233, hideNear: 80, hideNearCache: 30 },
 
   // --- signs of people (07b): smoke over a hideout by day, a small fire light at night ---
   signals: {
@@ -183,6 +183,8 @@ export const RENDER = {
     runner: { top: [0x7a3b33, 0x6d4630, 0x80503a], legs: [0x25272c, 0x30302c] },
     brute: { top: [0x3e4a34, 0x4a4a3a, 0x38403a], legs: [0x2a2c26, 0x33302a] },
     crawler: { top: [0x5a5648, 0x4e5a52, 0x60584e], legs: [0x34322c, 0x2c3030] },
+    /** 07c: a zombie shorter than this on screen (pixels, scope included) is drawn as two plain boxes, not posed. */
+    lodPixels: 14,
     /** Looted bodies are darkened by this factor. */
     lootedShade: 0.55,
     blobOpacity: 0.34,

@@ -1,7 +1,7 @@
 // Where the player and the colony meet on the tactical map: people hiding at search points
 // (E to talk -> candidates), searching a building, handing in ears at home, taking ammunition.
 
-import { resupplyAtOutpost } from '../world/outposts.ts';
+import { outpostAt, resupplyAtOutpost, resupplyFromCache } from '../world/outposts.ts';
 import { randRange, stream } from '../../core/rng.ts';
 import type { GameState, ResourceId, StaticGrid } from '../../core/types.ts';
 import { BALANCE } from '../../data/balance.ts';
@@ -202,7 +202,11 @@ export function depositCarried(c: ColonyCtx): void {
 /** Handle `resupply`: stock ammunition -> the player, up to the carry limit. Home cell only (outposts: 06). */
 export function resupply(c: ColonyCtx): string | null {
   const { state } = c;
-  if (!playerAtHome(state)) return resupplyAtOutpost(c); // 06: outposts hold their own ammunition
+  if (!playerAtHome(state)) {
+    // 06: outposts hold their own ammunition; 07c: elsewhere, a cache within reach.
+    if (outpostAt(state, state.player.cell)) return resupplyAtOutpost(c);
+    return resupplyFromCache(c, mapOf(state));
+  }
   const inv = state.player.inv;
   const room = BALANCE.player.maxAmmo - (inv.ammo ?? 0);
   if (room <= 0) return 'full';
