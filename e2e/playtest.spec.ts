@@ -488,6 +488,15 @@ test('where to get ammunition: the strategic map marks it, and next door the HUD
     g.debug.teleport(150, 512, Math.PI / 2, 0.05); // facing west, towards the base
   });
   await expect(page.getByTestId('hud-supply')).toBeVisible();
+  // Caches nearby (07c) come first when they are closer; empty them, and the hint points home.
+  await page.evaluate(() => {
+    const s = window.__game!.state!;
+    const w = s.world.gridW;
+    const taken: Record<string, number[]> = {};
+    for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) taken[String(s.player.cell + dx + dy * w)] = [999, 999, 999, 999, 999];
+    s.world.cacheTaken = taken;
+  });
+  await expect(page.getByTestId('hud-supply')).toHaveAttribute('data-kind', 'home');
   await expect(page.getByTestId('hud-supply')).toHaveAttribute('data-dir', 'W');
   await expect(page.getByTestId('hud-supply')).toContainText('本拠');
   await expect.poll(() => page.evaluate(() => (window.__game!.renderer.ctx.scene.children.find((o) => o.renderOrder === 4) as { count?: number } | undefined)?.count ?? 0)).toBeGreaterThanOrEqual(1);
