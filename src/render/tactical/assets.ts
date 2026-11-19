@@ -296,13 +296,16 @@ export function broadleafNear(): BufferGeometry {
   return b.build();
 }
 
-/** 広葉樹の遠景（8 三角形）。つぶれた八面体。下の頂点を幹色に寄せる。 */
+/**
+ * 広葉樹の遠景（8 三角形）。つぶれた八面体。下の頂点を幹色に寄せる。
+ * 組み込み時の修正: 下の頂点を y=0.18 → 0 にした（浮いた菱形に見えたため。細い下側が幹に見える）。
+ */
 export function broadleafFar(): BufferGeometry {
   const b = new GeoBuilder();
   const leaf = rgb(COLORS.broadleafLeaf), top = rgb(COLORS.broadleafLeafTop), bark = rgb(COLORS.broadleafBark);
   const rr = ring(4, 0.6, () => 1.04, Math.PI / 4);
   b.fanUp(rr, [0, 1, 0], leaf, top);
-  b.fanDown(rr, [0, 0.18, 0], leaf, bark);
+  b.fanDown(rr, [0, 0, 0], leaf, bark);
   return b.build();
 }
 

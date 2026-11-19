@@ -3,7 +3,7 @@
 
 import * as THREE from 'three';
 import type { TacticalMap } from '../../gen/index.ts';
-import { hash01 } from '../../gen/noise.ts';
+import { detailTexture } from './assets.ts';
 import { buildGroundPixels } from './groundPixels.ts';
 
 export { buildGroundPixels, landColor } from './groundPixels.ts';
@@ -20,19 +20,10 @@ export function buildGroundTexture(map: TacticalMap, anisotropy: number, pixels?
   return tex;
 }
 
-/** Small tiling grey noise used for close-up ground detail. */
+/** Small tiling grey noise used for close-up ground detail (assets.ts detailTexture, average 128). */
 export function buildDetailTexture(): THREE.DataTexture {
   const n = 64;
-  const data = new Uint8Array(n * n * 4);
-  for (let z = 0; z < n; z++) {
-    for (let x = 0; x < n; x++) {
-      // Tileable: blend four shifted lattice hashes.
-      const v = (hash01(x, z, 1) + hash01((x + 1) % n, z, 1) + hash01(x, (z + 1) % n, 1) + hash01((x + 3) % n, (z + 5) % n, 2)) / 4;
-      const g = Math.round(40 + v * 215);
-      data.set([g, g, g, 255], (z * n + x) * 4);
-    }
-  }
-  const tex = new THREE.DataTexture(data, n, n, THREE.RGBAFormat);
+  const tex = new THREE.DataTexture(detailTexture(), n, n, THREE.RGBAFormat);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.magFilter = THREE.LinearFilter;
   tex.minFilter = THREE.LinearMipmapLinearFilter;
