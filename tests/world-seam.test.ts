@@ -262,3 +262,32 @@ describe('ammunition caches (07c)', () => {
     expect(g.events.some((e) => e.type === 'commandRejected' && e.command === 'resupply')).toBe(true);
   });
 });
+
+describe('resupply feedback (07c)', () => {
+  it('B where nothing can be had says why on the log (empty stores, full pack, nowhere)', { timeout: 60_000 }, () => {
+    const w = grid.gridW;
+    const inland = grid.landIds.find((id) => ['rural', 'forest'].includes(grid.cells[id]!.land) && grid.cells[id + 1] && grid.cells[id - 1] && grid.cells[id + w] && grid.cells[id - w])!;
+    const g = gameAt(inland);
+    const last = (): string | undefined => g.s.colony.log[g.s.colony.log.length - 1]?.text;
+    // A new game: the 100 rounds are carried, the base's stores hold none.
+    expect(g.s.colony.stock.ammo).toBe(0);
+    g.sim.dispatch({ type: 'resupply' });
+    g.sim.tick(g.s, DT, emptyInputFrame());
+    expect(last()).toBe('log.resupplyEmpty');
+    g.s.colony.stock.ammo = 30;
+    g.s.player.inv.ammo = BALANCE.player.maxAmmo;
+    g.sim.dispatch({ type: 'resupply' });
+    g.sim.tick(g.s, DT, emptyInputFrame());
+    expect(last()).toBe('log.resupplyFull');
+    g.s.player.inv.ammo = 100;
+    g.sim.dispatch({ type: 'resupply' });
+    g.sim.tick(g.s, DT, emptyInputFrame());
+    expect(g.s.player.inv.ammo).toBe(130);
+    // With the base's stores empty, the hint from next door still points home but says there is nothing.
+    g.s.colony.stock.ammo = 0;
+    g.s.player.cell = inland + 1;
+    g.s.player.pos = [200, 0, 512];
+    g.s.world.cacheTaken = {};
+    expect(nearestSupply(g.s)!.point.ammo).toBe(0);
+  });
+});

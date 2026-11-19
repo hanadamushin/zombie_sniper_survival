@@ -108,8 +108,13 @@ export const colonySystem: System = {
       state.colony.policy.autoBuyFood = cmd.autoBuyFood;
     },
     resupply(state, _cmd, ctx) {
-      const reason = resupply(ctxNow(state, ctx.grid, ctx.emit));
-      if (reason) ctx.emit({ type: 'commandRejected', command: 'resupply', reason });
+      const c = ctxNow(state, ctx.grid, ctx.emit);
+      const reason = resupply(c);
+      if (reason) {
+        ctx.emit({ type: 'commandRejected', command: 'resupply', reason });
+        // 07c (playtest: "pressed B at the blue light, nothing happened"): say why on the HUD.
+        logEntry(c, 'economy', reason === 'full' ? 'log.resupplyFull' : reason === 'noAmmo' ? 'log.resupplyEmpty' : 'log.resupplyNowhere', {});
+      }
     },
   },
   step(state, ctx) {

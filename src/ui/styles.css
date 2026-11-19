@@ -312,7 +312,7 @@ ul.help { padding: 0; list-style: none; }
   .row-card .who { grid-column: 1 / -1; }
   .command-panel { max-height: 70vh; }
 }
-.toast { position: absolute; left: 50%; top: 96px; transform: translateX(-50%); max-width: min(92%, 560px); padding: 5px 12px; border-radius: 6px; background: rgba(10, 14, 18, 0.72); font-size: 13px; text-align: center; }
+.toast { position: absolute; left: 50%; top: 112px; transform: translateX(-50%); max-width: min(92%, 560px); padding: 5px 12px; border-radius: 6px; background: rgba(10, 14, 18, 0.72); font-size: 13px; text-align: center; }
 .toast[data-kind='death'] { color: #e0826a; }
 .weapon-box .resupply { color: var(--accent); }
 .defeat .panel { text-align: center; }

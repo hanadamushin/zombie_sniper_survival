@@ -61,6 +61,8 @@ export function createBeaconRenderer(): SubRenderer {
         const x = p.pos[0] + off[0];
         const z = p.pos[1] + off[1];
         const y = heightAt(there, p.pos[0], p.pos[1]);
+        // Only where there is ammunition to take (07c: an empty store under a light was misleading).
+        if (p.ammo <= 0) continue;
         const cache = p.kind === 'cache';
         // Close by, the place itself is in view: the light would only blind.
         const near = Math.hypot(x - cam.x, z - cam.z) < (cache ? B.hideNearCache : B.hideNear);

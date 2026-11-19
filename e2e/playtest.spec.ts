@@ -495,6 +495,8 @@ test('where to get ammunition: the strategic map marks it, and next door the HUD
     const taken: Record<string, number[]> = {};
     for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) taken[String(s.player.cell + dx + dy * w)] = [999, 999, 999, 999, 999];
     s.world.cacheTaken = taken;
+    // The beacon marks only where there is ammunition: put some in the base's stores.
+    window.__game!.debug.give('ammo', 40);
   });
   await expect(page.getByTestId('hud-supply')).toHaveAttribute('data-kind', 'home');
   await expect(page.getByTestId('hud-supply')).toHaveAttribute('data-dir', 'W');

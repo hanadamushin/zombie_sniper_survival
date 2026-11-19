@@ -417,7 +417,9 @@ export function nearestSupply(
   const px = (here % w) * size + state.player.pos[0];
   const pz = Math.floor(here / w) * size + state.player.pos[2];
   let best: { point: SupplyPoint; dist: number; dir: (typeof DIRS)[number]; turn: number } | null = null;
-  for (const p of points) {
+  // Where there is ammunition first; only when there is none anywhere, the nearest empty one ("no ammunition").
+  const stocked = points.filter((p) => p.ammo > 0);
+  for (const p of stocked.length > 0 ? stocked : points) {
     const dx = (p.cell % w) * size + p.pos[0] - px;
     const dz = Math.floor(p.cell / w) * size + p.pos[1] - pz;
     const dist = Math.hypot(dx, dz);
