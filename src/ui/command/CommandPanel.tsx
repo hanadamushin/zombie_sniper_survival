@@ -19,7 +19,7 @@ import { t, type TextKey } from '../i18n/ja.ts';
 import type { UiActions } from '../store.ts';
 import { cellName, formatDuration } from '../world/info.ts';
 import { BuildTab, type BuildTool } from './build.tsx';
-import { logText, logTime, num, statusText, tk } from './format.ts';
+import { logText, logTime, num, price, statusText, tk } from './format.ts';
 import { ResearchTab } from './research.tsx';
 import { Delta, HintLine, Objectives, WarningList, readPref, writePref } from '../components/common.tsx';
 import { warnings } from '../warnings.ts';
@@ -214,7 +214,7 @@ function Economy({ state, actions, grid }: Props) {
     <div class="economy">
       <dl>
         <dt>{t('cmd.foodPrice')}</dt>
-        <dd>{t('cmd.perFood', { n: num(colony.foodPrice) })}</dd>
+        <dd>{t('cmd.perFood', { n: price(colony.foodPrice) })}</dd>
         <dt>{t('cmd.market')}</dt>
         <dd>{num(colony.market.food)}</dd>
         <dt>{t('cmd.need')}</dt>
