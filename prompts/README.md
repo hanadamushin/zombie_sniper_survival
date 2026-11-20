@@ -25,11 +25,29 @@
 | 09 | [09_balance_qa.md](09_balance_qa.md) | バランス調整・QA | M7 | 中 |
 | 10 | [10_mobile.md](10_mobile.md) | スマホ対応（任意） | M8 | 小 |
 
+## 実在の地図（R0〜R8）
+
+- 発注者の要望で、地図を実データ（国土地理院・e-Stat・国土数値情報）に置き換える。**クラウド環境「zombie_sniper_survival」でセッションを始めること**（実データの配布元へ接続できるのはこの環境だけ）
+- R0（基盤・四国で試験）→ R1〜R8（8 地方を並行）→ 07d-3（実在の建物の輪郭へ種類を当てはめる）
+- 07d-2a〜2f（建物の種類づくり）は R0〜R8 と並行して進めてよい（触るファイルが別）
+
+| # | ファイル | 内容 |
+|---|---|---|
+| R0 | [R0_realmap_foundation.md](R0_realmap_foundation.md) | 実データの取得・変換・区域の生成の仕組み、戦略地図の実データ化、四国で通し |
+| R1 | [R1_realmap_hokkaido.md](R1_realmap_hokkaido.md) | 北海道 |
+| R2 | [R2_realmap_tohoku.md](R2_realmap_tohoku.md) | 東北 |
+| R3 | [R3_realmap_kanto.md](R3_realmap_kanto.md) | 関東 |
+| R4 | [R4_realmap_chubu.md](R4_realmap_chubu.md) | 中部 |
+| R5 | [R5_realmap_kinki.md](R5_realmap_kinki.md) | 近畿 |
+| R6 | [R6_realmap_chugoku.md](R6_realmap_chugoku.md) | 中国 |
+| R7 | [R7_realmap_shikoku.md](R7_realmap_shikoku.md) | 四国（R0 の試験台の仕上げ） |
+| R8 | [R8_realmap_kyushu.md](R8_realmap_kyushu.md) | 九州・沖縄 |
+
 ## 07d・07e の進め方
 
 - 07e は単独で、いつでも実行できる（07d と並行可）
 - 07d-1 → （07d-2a〜2f を並行）→ 07d-3 の順。07d-2 の 6 本は、07d-1 が `main` に入ってから同時に別チャットで始めてよい（触るファイルが分かれている）
-- 07d-3 は 07d-2 が全部 `main` に入ってから。すべて終わったら 09 → 10
+- 07d-3 は 07d-2 と R0〜R8 が全部 `main` に入ってから。すべて終わったら 09 → 10
 
 ## 使い方
 
