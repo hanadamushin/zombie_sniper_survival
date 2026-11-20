@@ -35,3 +35,8 @@
 ### 06 の結果を受けて
 
 - 建築の操作はマウス前提（`ui/command/build.tsx` の `BuildGround`: 左ドラッグで連続配置／視点移動、右ドラッグで回転、ホイールで拡大）。Pointer Events で書いてあるので、1 本指 = 配置・移動、2 本指 = 回転・拡大の対応を足せる。幅 360px でも崩れないことだけ確認済み
+
+### 07c の結果を受けて
+
+- ゾンビは区域あたり最大 600 体、周囲 3×3 の区域を描画している。画質プリセット「低」では、同時出現の倍率（`BALANCE.world.activeMul`）ではなく **描画側** を絞る（遠くのゾンビの簡略化しきい値 `RENDER.zombies.lodPixels` を上げる、隣の区域を描く距離 `RENDER.terrainLod` を縮める、視程を 500m に）。sim の数を端末で変えると、同じセーブで遊びが変わるため
+- Web Worker（`render/tactical/mapWorker.ts`）で隣の区域を作っている。iOS Safari での Worker と転送の動作を確認すること
