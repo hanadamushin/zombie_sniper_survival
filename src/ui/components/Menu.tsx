@@ -29,7 +29,7 @@ export function MenuOverlay({ state, actions }: { state: GameState; actions: UiA
           ))}
         </div>
         {tab === 'game' && <GameTab state={state} actions={actions} range={range} />}
-        {tab === 'settings' && <SettingsPanel />}
+        {tab === 'settings' && <SettingsPanel actions={actions} />}
         {tab === 'help' && <HelpPanel />}
       </div>
     </div>
@@ -99,7 +99,26 @@ function Slider({ id, label, value, min, max, step, format, onInput }: { id: str
 const pct = (v: number): string => `${Math.round(v * 100)}%`;
 const times = (v: number): string => `×${v.toFixed(2)}`;
 
-export function SettingsPanel() {
+/** Whether sound is playing, and a button that makes some (and wakes the audio up). */
+function AudioCheck({ actions }: { actions?: UiActions }) {
+  const [state, setState] = useState(() => actions?.audioState?.() ?? 'none');
+  useEffect(() => {
+    const id = window.setInterval(() => setState(actions?.audioState?.() ?? 'none'), 500);
+    return () => window.clearInterval(id);
+  }, [actions]);
+  const key = state === 'running' ? 'set.audio.running' : state === 'none' ? 'set.audio.none' : 'set.audio.suspended';
+  return (
+    <>
+      <label>{t('set.audio.state')}</label>
+      <div class="ctl">
+        <span class={state === 'running' ? 'level-good' : 'level-warn'} data-testid="set-audio-state" data-state={state}>{t(key)}</span>
+        <button class="chip" data-testid="set-audio-test" onClick={() => { actions?.audioTest?.(); window.setTimeout(() => setState(actions?.audioState?.() ?? 'none'), 100); }}>{t('set.audio.test')}</button>
+      </div>
+    </>
+  );
+}
+
+export function SettingsPanel({ actions }: { actions?: UiActions }) {
   const [, force] = useState(0);
   const set = (patch: Parameters<typeof updateSettings>[0]): void => {
     updateSettings(patch);
@@ -121,6 +140,7 @@ export function SettingsPanel() {
       <Slider id="set-fov" label={t('set.fov')} value={s.fov} {...L.fov} format={(v) => `${Math.round(v)}°`} onInput={(v) => set({ fov: v })} />
 
       <h3>{t('set.audio')}</h3>
+      <AudioCheck actions={actions} />
       {(['master', 'sfx', 'ambience', 'ui'] as const).map((k) => (
         <Slider key={k} id={`set-vol-${k}`} label={t(`set.vol.${k}` as TextKey)} value={s.volume[k]} min={0} max={1} step={0.05} format={pct} onInput={(v) => set({ volume: { [k]: v } })} />
       ))}

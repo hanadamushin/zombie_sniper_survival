@@ -2,6 +2,8 @@
 // bursts, and a "place" helper that pans and muffles a sound by where it comes from.
 // No audio files — every sound in the game is built from these.
 
+import { AUDIO } from '../data/audio.ts';
+
 export type Bus = 'sfx' | 'ambience' | 'ui';
 
 /** Where a sound comes from, relative to the listener: pan -1..1, distance in metres. */
@@ -12,6 +14,8 @@ export interface Place {
 
 export interface Synth {
   readonly ctx: AudioContext;
+  /** Peak level (0..1) of what reaches the speakers right now — for checks and the settings screen. */
+  peak(): number;
   readonly now: number;
   bus(name: Bus): GainNode;
   setLevels(master: number, levels: Record<Bus, number>): void;
@@ -60,14 +64,18 @@ export function createSynth(): Synth | null {
     return null;
   }
   const master = ctx.createGain();
-  // A gentle limiter so that a volley of impacts does not clip.
+  // A limiter so that a volley of impacts does not clip.
   const comp = ctx.createDynamicsCompressor();
-  comp.threshold.value = -10;
-  comp.knee.value = 8;
-  comp.ratio.value = 6;
+  comp.threshold.value = AUDIO.limiter.threshold;
+  comp.knee.value = AUDIO.limiter.knee;
+  comp.ratio.value = AUDIO.limiter.ratio;
   comp.attack.value = 0.003;
   comp.release.value = 0.2;
   master.connect(comp).connect(ctx.destination);
+  const meter = ctx.createAnalyser();
+  meter.fftSize = 2048;
+  comp.connect(meter);
+  const meterBuf = new Float32Array(meter.fftSize);
   const buses: Record<Bus, GainNode> = { sfx: ctx.createGain(), ambience: ctx.createGain(), ui: ctx.createGain() };
   for (const b of Object.values(buses)) b.connect(master);
 
@@ -86,6 +94,12 @@ export function createSynth(): Synth | null {
 
   const synth: Synth = {
     ctx,
+    peak() {
+      meter.getFloatTimeDomainData(meterBuf);
+      let m = 0;
+      for (let i = 0; i < meterBuf.length; i++) m = Math.max(m, Math.abs(meterBuf[i]!));
+      return m;
+    },
     get now() {
       return ctx.currentTime;
     },

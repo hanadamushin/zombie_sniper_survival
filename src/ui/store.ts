@@ -25,6 +25,9 @@ export interface UiActions {
   /** Leave the firing range: back to the game it was opened from, or to the title. */
   leaveRange(): void;
   toggleMode(target: 'command' | 'world' | 'menu'): void;
+  /** Sound (08): play a test sound (also starts the audio), and read whether it is running. */
+  audioTest?(): void;
+  audioState?(): string;
   togglePause(): void;
 }
 
