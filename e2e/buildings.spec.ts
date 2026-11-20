@@ -80,7 +80,7 @@ test('yard: in through the front door, up the stairs to the top of each sample, 
       const top = Math.max(...open.map((q) => q.level));
       const room = open.find((q) => q.level === top && (q.use === 'roof' || top < 5))!;
       // Out in the street in front of it.
-      g.teleport((b.x0 + b.x1) / 2, 520, 0, 0, 0);
+      g.teleport((b.x0 + b.x1) / 2, b.z1 + 9, 0, 0, 0); // the yard wraps onto more streets (07d-2b)
       const target: [number, number, number] = [(room.wx0 + room.wx1) / 2, room.wy, (room.wz0 + room.wz1) / 2];
       return { i: b.i, room: { use: room.use, level: room.level, y: room.wy }, path: g.pathTo(target[0], target[1], target[2]) };
     }, id);

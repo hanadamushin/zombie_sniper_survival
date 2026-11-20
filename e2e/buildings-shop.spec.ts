@@ -123,8 +123,10 @@ test('yard: every shop type can be entered, climbed and searched', async ({ page
       for (let i = 0; i < 10; i++) g.sim.tick(s, 1 / 60, { ...g.debug.noInput });
       return s.tactical!.lootSpots.filter((q) => q.taken).length - before;
     });
-    expect(searched, `${id}: searched the ${spot.table} shelf`).toBe(1);
-    report.push(`${id}: up to the ${r.goal.use} (storey ${r.goal.level}), searched a ${spot.table} shelf`);
+    // The closed shops are not offered as search buildings (lootable: false), except the pharmacy.
+    const lootable = !id.startsWith('shop.shut_') || id === 'shop.shut_yakkyoku';
+    expect(searched, `${id}: searched the ${spot.table} shelf`).toBe(lootable ? 1 : 0);
+    report.push(`${id}: up to the ${r.goal.use} (storey ${r.goal.level}), ${lootable ? 'searched' : 'reached (not offered for searching)'} a ${spot.table} shelf`);
     if (id === 'shop.hotel_biz' || id === 'shop.ryokan_onsen' || id === 'shop.shut_yakkyoku' || id === 'shop.kaitenzushi') {
       await settle(page);
       await page.evaluate(() => {

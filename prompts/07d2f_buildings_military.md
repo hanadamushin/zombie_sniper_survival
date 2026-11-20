@@ -49,3 +49,8 @@
 - 作業は **最新の `main`（07d-1 が入ったもの）から** 始める。始める前に `git fetch origin main` して、`src/gen/buildings/kit.ts` と `docs/buildings_guide.md` があることを確かめる
 - 自分のブランチにプッシュして終える。**他の 07d-2 のブランチを取り込んだり、`main` へ直接プッシュしたりしない**。共有ファイル（`src/gen/buildings/types.ts` の共用体、`src/data/colony.ts` の `ROOM_LOOT`、`kit.ts`）の衝突は取りまとめ役が `main` へ入れるときに解く
 - その衝突を解きやすくするため、共有ファイルへの追加は **末尾に 1 行ずつ**、既存の行は並べ替えない・書き換えない。`kit.ts` に足す関数は、ファイルの末尾に `// --- 07d-2x ---` の見出しを付けてまとめる
+
+## 07d-2b（商業・宿泊）からの注意
+- `src/gen/buildings/defs/shop/common.ts` の `facade()`（多層の外壁を柱・帯・ガラスで安く作る。`rect` で敷地の一部に建つ建物にも）・`core()` / `coreSize()` / `capRail()`（折り返し階段の階段室）・`flatRoof()`（敷地の一部だけの陸屋根）・`parking()` / `car()`（駐車場・放置車両）は自由に使ってよい。kit.ts は変えていない
+- 収穫表に `fuel`（燃料 0.2）を足した（`LootTableId` の末尾と `ROOM_LOOT` の末尾）。車庫・整備場の油缶やドラム缶に使える
+- 試験用の地図は x が 980m を超えると次の通り（110m 北）へ折り返す。e2e では通りの z を決め打ちしない
