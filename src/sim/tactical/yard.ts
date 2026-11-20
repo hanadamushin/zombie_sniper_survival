@@ -7,8 +7,12 @@ import { BUILDING_DEFS } from '../../gen/buildings/index.ts';
 import { addEnterable, createFlatBuilder } from '../../gen/builder.ts';
 import { finishMap, type TacticalMap } from '../../gen/index.ts';
 
-/** The street between the two rows (z) and where the first building starts (x). */
-export const YARD = { street: 520, startX: 120, gap: 14, streetHalf: 9 } as const;
+/**
+ * The street between the two rows (z) and where the first building starts (x). When a row would run
+ * past `endX`, the rows carry on along the next street, `streetStep` further north (07d-2b: the
+ * catalog outgrew one street of the 1 km map).
+ */
+export const YARD = { street: 520, startX: 120, gap: 14, streetHalf: 9, endX: 980, streetStep: 110 } as const;
 
 export interface YardEntry {
   def: string;
@@ -24,10 +28,15 @@ function build(): { map: TacticalMap; entries: YardEntry[] } {
   const entries: YardEntry[] = [];
   for (const rot of [0, 2] as const) {
     let x = YARD.startX;
+    let street = YARD.street;
     for (const def of BUILDING_DEFS) {
       const w = (def.size.w[0] + def.size.w[1]) / 2;
       const d = (def.size.d[0] + def.size.d[1]) / 2;
-      const z0 = rot === 0 ? YARD.street - YARD.streetHalf - d : YARD.street + YARD.streetHalf;
+      if (x + w > YARD.endX) {
+        x = YARD.startX;
+        street += YARD.streetStep;
+      }
+      const z0 = rot === 0 ? street - YARD.streetHalf - d : street + YARD.streetHalf;
       const bd = addEnterable(b, def.id, x, z0, w, d, rot);
       entries.push({ def: def.id, enter: bd.enter!, rot });
       x += w + YARD.gap;
