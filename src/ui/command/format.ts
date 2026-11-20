@@ -16,6 +16,11 @@ export function num(n: number): string {
   return (Math.round(n * 10) / 10).toLocaleString('ja-JP');
 }
 
+/** A price below one ear (07e: food costs about a third of an ear): two decimals. */
+export function price(n: number): string {
+  return (Math.round(n * 100) / 100).toLocaleString('ja-JP');
+}
+
 /** "food:3|metal:1.5" -> "食料 3、金属 1.5" */
 export function itemsText(items: string): string {
   if (!items) return '';
