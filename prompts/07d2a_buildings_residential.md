@@ -40,3 +40,9 @@
 - 落とし穴: 歩ける場所はすべて長方形の部屋で覆う（L 字は 2 部屋＋`join`）。階段の穴の上は部屋にしない。敷地の外に当たり判定のある部品を置かない（庇・看板は `solid: false`）。塔屋・看板の高さは `roofRise` に含める。扉の内側 1.4m に家具を置かない
 - 収穫表は `src/data/colony.ts` の `ROOM_LOOT`。新しい部屋の用途（`RoomUse`）や棚（`LootTableId`）を足したら行も足す（無ければ土地の表になる）。`RoomUse` / `MaterialId` / `FurnitureKind` への追加は型（`src/gen/buildings/types.ts`）にも要る — 並行作業で衝突しやすいので、追加は末尾に 1 行ずつ
 - 肥大型（半径 0.5m）は 0.9m の扉を通れない。肥大型を入れたい建物（倉庫・駅など）は 1.8m の扉を付ける
+
+## 並行作業の約束（07d-2a〜2f 共通）
+
+- 作業は **最新の `main`（07d-1 が入ったもの）から** 始める。始める前に `git fetch origin main` して、`src/gen/buildings/kit.ts` と `docs/buildings_guide.md` があることを確かめる
+- 自分のブランチにプッシュして終える。**他の 07d-2 のブランチを取り込んだり、`main` へ直接プッシュしたりしない**。共有ファイル（`src/gen/buildings/types.ts` の共用体、`src/data/colony.ts` の `ROOM_LOOT`、`kit.ts`）の衝突は取りまとめ役が `main` へ入れるときに解く
+- その衝突を解きやすくするため、共有ファイルへの追加は **末尾に 1 行ずつ**、既存の行は並べ替えない・書き換えない。`kit.ts` に足す関数は、ファイルの末尾に `// --- 07d-2x ---` の見出しを付けてまとめる
