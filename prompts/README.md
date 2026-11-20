@@ -12,9 +12,24 @@
 | 06 | [06_building_defense.md](06_building_defense.md) | 建築・防衛・駐屯地 | M4 | 大 |
 | 07 | [07_tech_progression.md](07_tech_progression.md) | 技術ツリー・進行 | M5 | 中 |
 | 07b | [07b_playtest_fixes.md](07b_playtest_fixes.md) | 実機プレイの指摘への対応（操作・地形の遮蔽・生存者の発見・タイトル） | M5 | 中 |
+| 07e | [07e_economy_loot.md](07e_economy_loot.md) | 耳の値打ち（4〜6 耳で 1 人雇える）と探索の収穫 ×3 | — | 小 |
+| 07d-1 | [07d1_building_framework.md](07d1_building_framework.md) | 中に入れる建物の基盤（設計図の型・段階的な出現・拠点の建物） | — | 大 |
+| 07d-2a | [07d2a_buildings_residential.md](07d2a_buildings_residential.md) | 建物の生成: 家 10・アパート 6 | — | 中 |
+| 07d-2b | [07d2b_buildings_commerce.md](07d2b_buildings_commerce.md) | 建物の生成: 銀行・コンビニ・飲食・ホテル・旅館・GS・シャッター店 | — | 中 |
+| 07d-2c | [07d2c_buildings_office.md](07d2c_buildings_office.md) | 建物の生成: ビル 20 | — | 中 |
+| 07d-2d | [07d2d_buildings_public.md](07d2d_buildings_public.md) | 建物の生成: 学校 8・警察・消防・病院 3・工場 4 | — | 中 |
+| 07d-2e | [07d2e_buildings_transport.md](07d2e_buildings_transport.md) | 建物の生成: 駅 5・空港 3 | — | 中 |
+| 07d-2f | [07d2f_buildings_military.md](07d2f_buildings_military.md) | 建物の生成: 野営基地の残骸 10・陸自 3・海自 1・空自 1 | — | 中 |
+| 07d-3 | [07d3_building_placement.md](07d3_building_placement.md) | 建物の配置（町の格・駅・空港・自衛隊の位置） | — | 大 |
 | 08 | [08_ui_audio.md](08_ui_audio.md) | UI/UX・音・チュートリアル | M6 | 中 |
 | 09 | [09_balance_qa.md](09_balance_qa.md) | バランス調整・QA | M7 | 中 |
 | 10 | [10_mobile.md](10_mobile.md) | スマホ対応（任意） | M8 | 小 |
+
+## 07d・07e の進め方
+
+- 07e は単独で、いつでも実行できる（07d と並行可）
+- 07d-1 → （07d-2a〜2f を並行）→ 07d-3 の順。07d-2 の 6 本は、07d-1 が `main` に入ってから同時に別チャットで始めてよい（触るファイルが分かれている）
+- 07d-3 は 07d-2 が全部 `main` に入ってから。すべて終わったら 09 → 10
 
 ## 使い方
 
