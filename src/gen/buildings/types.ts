@@ -109,7 +109,8 @@ export interface Room {
 export type FurnitureKind = 'shelf' | 'desk' | 'locker' | 'cabinet' | 'fridge' | 'counter' | 'closet' | 'crate' | 'bed' | 'table';
 
 /** Loot table ids (data/colony.ts ROOM_LOOT). Default: the room's use. */
-export type LootTableId = RoomUse | 'pharmacy' | 'grocery' | 'tools' | 'weapons';
+export type LootTableId = RoomUse | 'pharmacy' | 'grocery' | 'tools' | 'weapons'
+  | 'fuel';
 
 export interface SearchPoint {
   /** Where the searcher stands (local; y = floor). */

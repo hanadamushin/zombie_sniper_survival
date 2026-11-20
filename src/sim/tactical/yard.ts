@@ -9,6 +9,9 @@ import { finishMap, type TacticalMap } from '../../gen/index.ts';
 
 /** The street between the two rows (z) and where the first building starts (x). */
 export const YARD = { street: 520, startX: 120, gap: 14, streetHalf: 9 } as const;
+/** 07d-2b: when a row would run off the map (x past `endX`) it goes on along the next street (z). */
+const MORE_STREETS = [600, 680, 440, 360, 760, 280] as const;
+const END_X = 990;
 
 export interface YardEntry {
   def: string;
@@ -22,16 +25,28 @@ let cached: { map: TacticalMap; entries: YardEntry[] } | null = null;
 function build(): { map: TacticalMap; entries: YardEntry[] } {
   const b = createFlatBuilder(0, { mapSeed: 11, land: 'suburb', lootSpots: 100000 });
   const entries: YardEntry[] = [];
+  // Where each type stands along which street (both rows break at the same types).
+  const slots: { x: number; street: number }[] = [];
+  let x = YARD.startX;
+  let street = 0;
+  for (const def of BUILDING_DEFS) {
+    const w = (def.size.w[0] + def.size.w[1]) / 2;
+    if (x + w > END_X && street < MORE_STREETS.length) {
+      street++;
+      x = YARD.startX;
+    }
+    slots.push({ x, street: street === 0 ? YARD.street : MORE_STREETS[street - 1]! });
+    x += w + YARD.gap;
+  }
   for (const rot of [0, 2] as const) {
-    let x = YARD.startX;
-    for (const def of BUILDING_DEFS) {
+    BUILDING_DEFS.forEach((def, i) => {
       const w = (def.size.w[0] + def.size.w[1]) / 2;
       const d = (def.size.d[0] + def.size.d[1]) / 2;
-      const z0 = rot === 0 ? YARD.street - YARD.streetHalf - d : YARD.street + YARD.streetHalf;
-      const bd = addEnterable(b, def.id, x, z0, w, d, rot);
+      const { x: x0, street: z } = slots[i]!;
+      const z0 = rot === 0 ? z - YARD.streetHalf - d : z + YARD.streetHalf;
+      const bd = addEnterable(b, def.id, x0, z0, w, d, rot);
       entries.push({ def: def.id, enter: bd.enter!, rot });
-      x += w + YARD.gap;
-    }
+    });
   }
   const map = finishMap(b);
   map.spawn.edge = [YARD.startX - 8, YARD.street];
