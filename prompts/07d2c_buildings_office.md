@@ -51,3 +51,8 @@
 - 作業は **最新の `main`（07d-1 が入ったもの）から** 始める。始める前に `git fetch origin main` して、`src/gen/buildings/kit.ts` と `docs/buildings_guide.md` があることを確かめる
 - 自分のブランチにプッシュして終える。**他の 07d-2 のブランチを取り込んだり、`main` へ直接プッシュしたりしない**。共有ファイル（`src/gen/buildings/types.ts` の共用体、`src/data/colony.ts` の `ROOM_LOOT`、`kit.ts`）の衝突は取りまとめ役が `main` へ入れるときに解く
 - その衝突を解きやすくするため、共有ファイルへの追加は **末尾に 1 行ずつ**、既存の行は並べ替えない・書き換えない。`kit.ts` に足す関数は、ファイルの末尾に `// --- 07d-2x ---` の見出しを付けてまとめる
+
+## 07d-2b（商業・宿泊）からの注意
+- `src/gen/buildings/defs/shop/common.ts` の補助は自由に使ってよい（kit.ts は変えていない）: `facade`（多層の長い壁を「柱＋階ごとの腰壁＋階ごとのガラス 1 枚」で作る。窓ごとに 4 箱の `kit.wall` より三角形がずっと少ない。10 階建てでも外観 1,500 前後）、`guestRoom`（廊下から入る客室・和室。施錠なら空の施錠の部屋）、`clearOfWays`（部屋の出入口どうしの直線から家具を離す判定。置く前に呼べば「something stands between two ways」を避けられる）、`table` / `booth` / `stools` / `vending` / `car` / `sign` / `awning` / `poleSign` / `graffiti` / `rust` / `toppled`
+- 試験用の地図（`sim/tactical/yard.ts`）は地図の東端 x = 990 を越えると次の通り（z = 600, 680, 440, 360, 760, 280）に折り返すようにした（全種類が 1 本の通りに入りきらなくなったため）。各種類の通りは `debug.enterables()` の `z1 + 9`（南向きの列）。e2e で通りの z を 520 と決め打ちしないこと
+- `shop.konbini_tenant` はビルの 1 階だけの設計図（階高 `ARCH.storey.concrete`、左の 1.8m はビルの入口ロビーと施錠の階段室）。ビルの上の階と組み合わせる仕組みは無い
