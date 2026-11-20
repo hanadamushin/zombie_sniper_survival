@@ -81,7 +81,10 @@ export function dailyEffects(c: ColonyCtx): void {
     const used = moveStock(c, 'food', -Math.min(state.colony.stock.food, foodNeedPerDay(state) * RESEARCH.brewShare));
     ears += used * RESEARCH.brewEars;
   }
-  ears = Math.floor(ears);
+  // 07e: the amounts are fractions of an ear; whole ears are paid in and the rest carries to the next day.
+  const total = ears + Number(state.flags.incomeCarry ?? 0);
+  ears = Math.floor(total + 1e-9);
+  state.flags.incomeCarry = Math.round((total - ears) * 1000) / 1000;
   if (ears > 0) {
     moveEars(c, 'income', ears);
     logEntry(c, 'economy', 'log.dailyIncome', { ears });

@@ -8,8 +8,9 @@
 //       farmPlots / housingBeds / facilityFactor     — read BuildState by the ids in COLONY.facilities
 //   07  takeResearchPoints(state)                    — research output accumulated since the last call
 
-import type { GameState, JobId, ResourceId, Structure, Survivor } from '../../core/types.ts';
-import { COLONY, LOOT_TABLE } from '../../data/colony.ts';
+import type { GameState, JobId, Structure, Survivor } from '../../core/types.ts';
+import { COLONY } from '../../data/colony.ts';
+import { lootYield } from './loot.ts';
 import { RESEARCH } from '../../data/techs.ts';
 import { traitOf } from '../../data/traits.ts';
 import { getMod, hasFlag } from '../research/modifiers.ts';
@@ -220,7 +221,6 @@ function forageMinute(c: ColonyCtx, points: number): void {
   const cells = c.state.world.cells;
   const loot = Math.max(0, cells.loot[home] ?? 0);
   if (loot <= 0) return;
-  const table = LOOT_TABLE[land];
-  for (const res of Object.keys(table) as Exclude<ResourceId, 'ears'>[]) moveStock(c, res, points * (table[res] ?? 0) * loot);
+  for (const [res, expected] of lootYield(land, points)) moveStock(c, res, expected * loot);
   cells.loot[home] = Math.max(0, loot - points * COLONY.expedition.lootPerPoint);
 }

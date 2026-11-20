@@ -556,7 +556,7 @@ describe('outposts and sea crossings', () => {
     const o = outpostAt(state, cell)!;
     expect(o.garrison).toEqual([guard.id]);
     expect(guard.location).toEqual({ kind: 'outpost', id: o.id });
-    expect(state.colony.stock.ears).toBe(60);
+    expect(state.colony.stock.ears).toBe(100 - BUILD.outpost.tiers[0].ears);
     expect(state.colony.stock.wood).toBe(10);
     // Daily supply: min(shortfall, 20 + 10 per tier) from the base's stock; two cells away there is no delay.
     const ctx = ctxNow(state, grid, (e) => r.events.push(e));

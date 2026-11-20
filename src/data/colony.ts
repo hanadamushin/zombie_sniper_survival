@@ -14,11 +14,17 @@ export const COLONY = {
     statOffset: 2,
     /** Where a person grew up shifts one stat. */
     landBias: { urban: { kno: 1 }, suburb: {}, rural: { ath: 1 }, forest: { ath: 1 }, mountain: { ath: 1 } } as Record<Land, { ath?: number; kno?: number }>,
-    /** wage = max(1, round((wageBase + wagePerPoint * (sum - wageSumRef)) * trait factor)) ears / day. */
-    wageBase: 2,
-    wagePerPoint: 0.6,
+    /**
+     * wage = max(wageMin, round to wageStep((wageBase + wagePerPoint * (sum - wageSumRef)) * trait factor)) ears / day.
+     * 07e: one sixth of the 05 values (mean wage 6 -> 1, mean fee 30 -> 5). Fractions of an ear build up
+     * per person (Survivor.wageOwed) and are paid as whole ears (spec §4.1 / §5).
+     */
+    wageBase: 0.33,
+    wagePerPoint: 0.1,
     wageSumRef: 16,
-    /** Signing fee = wage x this. */
+    wageStep: 0.1,
+    wageMin: 0.2,
+    /** Signing fee = max(1, round(wage x this)) whole ears. */
     feeDays: 5,
     morale: 60,
     hp: 100,
@@ -73,7 +79,8 @@ export const COLONY = {
     initialStock: { food: 6, medicine: 1 } as LootTable,
     /** Storage of the bare headquarters; buildings add to it (06). Ears take no room. */
     baseCapacity: { ears: 1e9, food: 60, ammo: 600, wood: 200, metal: 120, cement: 120, parts: 60, medicine: 20, fuel: 60 } as Record<ResourceId, number>,
-    foodBasePrice: 2,
+    /** 07e: one sixth of the 05 value (2), like wages. */
+    foodBasePrice: 0.33,
     /** price = base * clamp(priceTop - pricePerDay * days of food in stock, priceMin, priceMax). */
     priceTop: 1.6,
     pricePerDay: 0.1,
@@ -235,14 +242,21 @@ export const COLONY = {
   },
 } as const;
 
-/** Scavenging yield per point at loot = 1, by land class (spec §4.4 "land table"). */
-export const LOOT_TABLE: Record<Land, LootTable> = {
+/** 07e: every yield of the 05 table times this ("more from searching buildings"); the land ratios stay. */
+export const LOOT_SCALE = 3;
+
+/** Scavenging yield per point at loot = 1, by land class (spec §4.4 "land table"), before LOOT_SCALE. */
+const LOOT_BASE: Record<Land, LootTable> = {
   urban: { food: 0.07, ammo: 0.05, wood: 0.02, metal: 0.08, cement: 0.04, parts: 0.045, medicine: 0.015, fuel: 0.02 },
   suburb: { food: 0.08, ammo: 0.025, wood: 0.04, metal: 0.05, cement: 0.025, parts: 0.025, medicine: 0.01, fuel: 0.015 },
   rural: { food: 0.07, ammo: 0.01, wood: 0.07, metal: 0.025, cement: 0.01, parts: 0.01, medicine: 0.004, fuel: 0.01 },
   forest: { food: 0.03, ammo: 0.002, wood: 0.12, metal: 0.006, parts: 0.003, medicine: 0.001 },
   mountain: { food: 0.015, wood: 0.06, metal: 0.01, parts: 0.002 },
 };
+/** What sim/colony/loot.ts lootYield() reads; 07d replaces the land key with building kinds. */
+export const LOOT_TABLE: Record<Land, LootTable> = Object.fromEntries(
+  Object.entries(LOOT_BASE).map(([land, t]) => [land, Object.fromEntries(Object.entries(t).map(([r, v]) => [r, v * LOOT_SCALE]))]),
+) as Record<Land, LootTable>;
 
 /** What an expedition can be sent out with (spec §4.4). `tech` (07) gates availability when set. */
 export interface ExpeditionWeapon {

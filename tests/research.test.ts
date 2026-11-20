@@ -237,7 +237,7 @@ describe('modifiers', () => {
     // wage: discipline x0.75, then currency reform x0.9 — factors multiply.
     grantTech(state, ['C4b', 'C7']);
     expect(getMod(state, 'wage', 10)).toBeCloseTo(6.75, 9);
-    expect(wageDue(state, { wage: 10 })).toBe(6.8);
+    expect(wageDue(state, { wage: 10 })).toBe(6.75); // 07e: wages are kept to 0.01
     // An addition is applied before any factor on the same key.
     const table = modTable(state);
     table.add['wage'] = 2;
@@ -312,10 +312,11 @@ describe('modifiers', () => {
     state.world.outposts.push({ id: 999, cell: 5, tier: 2, ammo: 0, garrison: [], defense: 0 });
     expect(expeditionRadius(state)).toBe(COLONY.expedition.radius + 2 + RESEARCH.outpostReach);
     // food price: trade lowers it, food security caps it
-    expect(foodPriceFor(0, state)).toBeCloseTo(3.2, 9);
+    const B = COLONY.economy.foodBasePrice;
+    expect(foodPriceFor(0, state)).toBeCloseTo(B * 1.6, 9);
     const trader = bare();
     grantTech(trader, ['C4a', 'A8']);
-    expect(foodPriceFor(0, trader)).toBeCloseTo(2 * 1.2 * 0.8, 9);
+    expect(foodPriceFor(0, trader)).toBeCloseTo(B * 1.2 * 0.8, 9);
   });
 
   it('gates the population until there is an administration', () => {

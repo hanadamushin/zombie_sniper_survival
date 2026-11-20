@@ -250,9 +250,9 @@ export const RESEARCH = {
   garrisonFood: 0.5,
   /** A6b: the tavern turns this share of the day's food need into drink, sold at this many ears per food. */
   brewShare: 0.1,
-  brewEars: 6,
+  brewEars: 1, // 07e: ear amounts in this block are one sixth of the 07 values (6 / 4 / 3 / 5)
   /** C4a: ears per day from each trading partner (a village in reach, every outpost), with a market standing. */
-  tradeEars: 4,
+  tradeEars: 0.7,
   /** C4b: rounds a deserter takes along. */
   desertAmmo: 20,
   /** C6a: how far the radio reaches for people in hiding (cells). */
@@ -261,7 +261,7 @@ export const RESEARCH = {
   receiptShare: 0.5,
   /** C8: days between an outpost's free upgrades, and ears of tax per tier and day. */
   autonomyDays: 10,
-  taxPerTier: 3,
+  taxPerTier: 0.5,
   /** C9: morale for everyone when the charter is signed, and output per outpost (capped). */
   federationMorale: 15,
   federationPerOutpost: 0.02,
@@ -269,7 +269,7 @@ export const RESEARCH = {
   /** Outposts (spec §8): tier 2+ extends the expedition reach by this; tier n watches n-1 cells around; tier 3 farms and trades. */
   outpostReach: 1,
   outpostFood: 3,
-  outpostEars: 5,
+  outpostEars: 0.8,
   /** Victory (spec §13). */
   victory: { era: 3, population: 60, outposts: 6, regions: 3 },
 } as const;

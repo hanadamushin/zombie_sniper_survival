@@ -4,7 +4,8 @@
 import { chance, randInt, randRange, stream } from '../../core/rng.ts';
 import { addMinutes, hasReached } from '../../core/time.ts';
 import { allocId, type CellId, type Expedition, type GameState, type ResourceId, type StaticGrid, type Survivor } from '../../core/types.ts';
-import { COLONY, expeditionWeapon, LOOT_TABLE, type ExpeditionWeapon } from '../../data/colony.ts';
+import { COLONY, expeditionWeapon, type ExpeditionWeapon } from '../../data/colony.ts';
+import { lootYield } from './loot.ts';
 import { RESEARCH } from '../../data/techs.ts';
 import { traitOf } from '../../data/traits.ts';
 import { techUnlocked } from '../build/structures.ts';
@@ -144,11 +145,10 @@ function resolve(c: ColonyCtx, exp: Expedition): void {
     if (!best || pointsOf(s) > pointsOf(best)) best = s;
   }
   for (const s of hurt) points += pointsOf(s) * X.injuredCarry;
-  const table = LOOT_TABLE[land];
   const haul: Partial<Record<ResourceId, number>> = {};
   let top: ResourceId | null = null;
-  for (const res of Object.keys(table) as Exclude<ResourceId, 'ears'>[]) {
-    const amount = Math.round(points * (table[res] ?? 0) * loot * randRange(rng, 0.8, 1.2) * 10) / 10;
+  for (const [res, expected] of lootYield(land, points)) {
+    const amount = Math.round(expected * loot * randRange(rng, 0.8, 1.2) * 10) / 10;
     if (amount <= 0) continue;
     haul[res] = amount;
     moveStock(c, res, amount);

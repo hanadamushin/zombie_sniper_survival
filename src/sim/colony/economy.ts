@@ -35,7 +35,7 @@ export function foodPriceFor(days: number, state?: GameState): number {
 
 /** What a survivor is paid per day: the agreed wage as the colony's institutions bend it (trade, discipline, currency). */
 export function wageDue(state: GameState, s: { wage: number }): number {
-  return Math.round(getMod(state, 'wage', s.wage) * 10) / 10;
+  return Math.round(getMod(state, 'wage', s.wage) * 100) / 100;
 }
 
 /** Every hour: new price, the community buys from its farmers, surplus produce rots. */
@@ -98,6 +98,10 @@ export function buyFromVillage(c: ColonyCtx, amount: number, quiet = false): str
 /**
  * Morning wages (spec §5). Farmers live off their sales. When the ears run short, the most able
  * go unpaid first: the others are paid in ascending order of ability.
+ * 07e: a wage is a fraction of an ear. Each morning it is added to what the person is owed and the
+ * whole ears of that are paid; the fraction waits for the next day. A morning on which the stores
+ * cannot pay the whole ears due is an unpaid day: that day's wage is forfeited (as before 07e) and
+ * the earlier fraction stays owed.
  */
 export function payWages(c: ColonyCtx): void {
   const colony = c.state.colony;
@@ -106,8 +110,11 @@ export function payWages(c: ColonyCtx): void {
   const unpaid: string[] = [];
   for (const s of due) {
     const wage = wageDue(c.state, s);
-    if (colony.stock.ears >= wage) {
-      total += moveEars(c, 'wages', wage);
+    const owed = (s.wageOwed ?? 0) + wage;
+    const pay = Math.floor(owed + 1e-9);
+    if (colony.stock.ears >= pay) {
+      total += moveEars(c, 'wages', pay);
+      s.wageOwed = Math.max(0, Math.round((owed - pay) * 1000) / 1000);
       s.unpaidDays = 0;
     } else {
       s.unpaidDays += 1;

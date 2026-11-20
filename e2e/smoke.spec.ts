@@ -418,8 +418,8 @@ test('colony: meet someone, hire, assign jobs, days pass — food and materials 
       wood: c.stock.wood, log: c.log.length, days: c.ledger.length,
     };
   });
-  expect(after.wages).toBeGreaterThan(10);
-  expect(after.foodBought).toBeGreaterThan(3);
+  expect(after.wages).toBeGreaterThan(2); // 07e: about 1 ear a head and day
+  expect(after.foodBought).toBeGreaterThan(0.3); // ears; 07e: food costs a sixth of what it did
   expect(after.foodIn).toBeGreaterThan(5);
   expect(after.wood).toBeGreaterThan(1);
   expect(after.days).toBeGreaterThanOrEqual(3);

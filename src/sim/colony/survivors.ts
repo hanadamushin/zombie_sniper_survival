@@ -34,13 +34,16 @@ export function statSum(s: Pick<Survivor, 'ath' | 'kno' | 'spd' | 'sta'>): numbe
   return s.ath + s.kno + s.spd + s.sta;
 }
 
-/** Daily wage in ears (spec §4.1). */
+/** Daily wage in ears (spec §4.1): a multiple of wageStep, at least wageMin. Paid in whole ears as it adds up (economy.ts payWages). */
 export function wageOf(sum: number, trait: string): number {
-  return Math.max(1, Math.round((S.wageBase + S.wagePerPoint * (sum - S.wageSumRef)) * (traitOf(trait).wageMul ?? 1)));
+  const raw = (S.wageBase + S.wagePerPoint * (sum - S.wageSumRef)) * (traitOf(trait).wageMul ?? 1);
+  const steps = Math.round(raw / S.wageStep);
+  return Math.max(S.wageMin, Math.round(steps * S.wageStep * 100) / 100);
 }
 
+/** Signing fee in whole ears (spec §4.1). */
 export function signingFee(s: Survivor, state?: GameState): number {
-  const fee = s.wage * S.feeDays;
+  const fee = Math.max(1, Math.round(s.wage * S.feeDays));
   return state ? Math.max(1, Math.round(getMod(state, 'hire.fee', fee))) : fee; // recruiting (C2)
 }
 

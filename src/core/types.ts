@@ -346,7 +346,7 @@ export interface Survivor {
   kno: number;
   spd: number;
   sta: number; // 1..10
-  wage: number;
+  wage: number; // ears per day, may be fractional (07e: steps of 0.1)
   trait: string;
   job: JobId;
   morale: number;
@@ -359,6 +359,8 @@ export interface Survivor {
   task: { kind: string; target: EntityId | null; t: number } | null;
   unpaidDays: number;
   lowMoraleDays: number;
+  /** 07e: wage earned but not yet paid (below one whole ear); missing in older saves = 0. */
+  wageOwed?: number;
   // --- added by 05 (save version 4) ---
   /** Meals eaten / missed today. */
   meals: number;

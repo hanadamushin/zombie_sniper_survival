@@ -75,3 +75,7 @@
 
 ## 終わりに
 `CLAUDE.md` の「終わる前にやること」を実行。後続（07d の他の担当、09、10）向けの注意があれば各プロンプトの末尾に追記してください。
+
+## 07e からの注意
+- 収穫の計算は `src/sim/colony/loot.ts` の `lootYield(kind, points)` に集めた（`[資源, 期待値][]` を表の順で返す。乱数と loot 係数は呼び出し側）。今の `kind` は `Land`（`LootKind = Land`）。建物の種類・部屋の用途を渡せるよう `LootKind` を広げ、表を引く `lootTableFor` を置き換える。呼び出しは `encounters.ts`（プレイヤーの探索）・`expeditions.ts`（遠征）・`jobs.ts`（在宅の調達）の 3 か所
+- `LOOT_TABLE` は 07e で 05 の値の 3 倍（`LOOT_SCALE`）。建物ごとの表もこの水準を基準に

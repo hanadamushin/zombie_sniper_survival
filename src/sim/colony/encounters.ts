@@ -5,7 +5,8 @@ import { outpostAt, resupplyAtOutpost, resupplyFromCache } from '../world/outpos
 import { randRange, stream } from '../../core/rng.ts';
 import type { GameState, ResourceId, StaticGrid } from '../../core/types.ts';
 import { BALANCE } from '../../data/balance.ts';
-import { COLONY, LOOT_TABLE } from '../../data/colony.ts';
+import { COLONY } from '../../data/colony.ts';
+import { lootYield } from './loot.ts';
 import type { SimContext } from '../system.ts';
 import { playerAtHome } from './morale.ts';
 import { ctxNow, itemsParam, logEntry, moveEars, moveStock, type ColonyCtx } from './stock.ts';
@@ -155,9 +156,8 @@ function interact(c: ColonyCtx, grid: StaticGrid | null): void {
   const rng = stream(state, 'colony.search');
   const cells = state.world.cells;
   const items: Partial<Record<ResourceId, number>> = {};
-  const table = LOOT_TABLE[land];
-  for (const res of Object.keys(table) as ResourceId[]) {
-    const n = integerShare(COLONY.search.points * (table[res] ?? 0) * randRange(rng, COLONY.search.spread[0], COLONY.search.spread[1]), randRange(rng, 0, 1));
+  for (const [res, expected] of lootYield(land, COLONY.search.points)) {
+    const n = integerShare(expected * randRange(rng, COLONY.search.spread[0], COLONY.search.spread[1]), randRange(rng, 0, 1));
     if (n <= 0) continue;
     items[res] = n;
     state.player.inv[res] = (state.player.inv[res] ?? 0) + n;

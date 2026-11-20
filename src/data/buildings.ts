@@ -246,10 +246,11 @@ export const BUILD = {
 
   // --- §8 outposts ---
   outpost: {
+    /** 07e: ears are one sixth of the 06 values (40 / 150 / 500), like wages and food. */
     tiers: [
-      { ears: 40, cost: { wood: 20 } as Cost, garrison: 1, ammoCap: 60, defense: 12 },
-      { ears: 150, cost: { metal: 20 } as Cost, garrison: 2, ammoCap: 200, defense: 30, tech: 'C3' },
-      { ears: 500, cost: { cement: 30 } as Cost, garrison: 4, ammoCap: 600, defense: 70, tech: 'C5' },
+      { ears: 7, cost: { wood: 20 } as Cost, garrison: 1, ammoCap: 60, defense: 12 },
+      { ears: 25, cost: { metal: 20 } as Cost, garrison: 2, ammoCap: 200, defense: 30, tech: 'C3' },
+      { ears: 83, cost: { cement: 30 } as Cost, garrison: 4, ammoCap: 600, defense: 70, tech: 'C5' },
     ],
     /** How far from the base (or another outpost) one can be founded, in cells. */
     reach: 12,

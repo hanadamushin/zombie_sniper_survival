@@ -353,7 +353,7 @@ test('an outpost in a cleared neighbouring cell: found it on the map, travel fas
   await canvas.click({ position: at });
   await page.getByTestId('outpost-found').click();
   await expect(page.getByTestId('outpost-info')).toHaveAttribute('data-tier', '1');
-  expect(await page.evaluate(() => window.__game!.state!.colony.stock.ears)).toBe(60);
+  expect(await page.evaluate(() => window.__game!.state!.colony.stock.ears)).toBe(93); // 100 - 7 (07e)
   // A day passes: the first supply run brings ammunition.
   await runSim(page, 1440);
   // (one or two midnights, depending on how far the live loop got)

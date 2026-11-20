@@ -13,7 +13,7 @@ import { interactionAt } from '../src/sim/colony/encounters.ts';
 import { expeditionsMinute, expeditionTargets, returnChance, sendExpedition } from '../src/sim/colony/expeditions.ts';
 import { activityAt, defenders, distributeBuildWork, mealPerDay, outputPerHour, seasonFactor, takeResearchPoints, workHours } from '../src/sim/colony/jobs.ts';
 import { ctxNow } from '../src/sim/colony/stock.ts';
-import { generateSurvivor, signingFee, wageOf } from '../src/sim/colony/survivors.ts';
+import { generateSurvivor, signingFee, statSum, wageOf } from '../src/sim/colony/survivors.ts';
 import { createSim, type Sim } from '../src/sim/index.ts';
 import { areaOf } from '../src/sim/tactical/area.ts';
 import { settlementAttraction, worldSystem } from '../src/sim/world/index.ts';
@@ -59,7 +59,7 @@ function rig(full = false, seed = 7): Rig {
       for (let i = 0; i < steps; i++) sim.tick(state, dt, idle);
     },
     add(job, over = {}) {
-      const s: Survivor = { ...generateSurvivor(state, 'rural', stream(state, 'test.people')), ath: 5, kno: 5, spd: 5, sta: 5, trait: 'none', wage: 4, job, ...over };
+      const s: Survivor = { ...generateSurvivor(state, 'rural', stream(state, 'test.people')), ath: 5, kno: 5, spd: 5, sta: 5, trait: 'none', wage: 1, job, ...over };
       state.colony.survivors.push(s);
       return s;
     },
@@ -67,20 +67,66 @@ function rig(full = false, seed = 7): Rig {
 }
 
 const person = (over: Partial<Survivor> = {}): Survivor => ({
-  id: 1, name: 'x', ath: 5, kno: 5, spd: 5, sta: 5, wage: 4, trait: 'none', job: 'idle', morale: 50, hp: 100, status: 'ok', weapon: 'melee',
+  id: 1, name: 'x', ath: 5, kno: 5, spd: 5, sta: 5, wage: 1, trait: 'none', job: 'idle', morale: 50, hp: 100, status: 'ok', weapon: 'melee',
   location: { kind: 'home' }, pos: [0, 0], task: null, unpaidDays: 0, lowMoraleDays: 0, meals: 0, missed: 0, infectedUntil: null, ...over,
 });
 
 describe('formulas (spec §4)', () => {
-  it('wage: floor of 1, reference sum, top end, trait factor', () => {
-    expect(wageOf(4, 'none')).toBe(1);
-    expect(wageOf(14, 'none')).toBe(1); // 2 + 0.6 * -2 = 0.8 -> 1
-    expect(wageOf(16, 'none')).toBe(2);
-    expect(wageOf(22, 'none')).toBe(6); // 5.6
-    expect(wageOf(40, 'none')).toBe(16); // 16.4
-    expect(wageOf(22, 'greedy')).toBe(7); // 7.28
-    expect(wageOf(22, 'frugal')).toBe(4); // 4.48
-    expect(signingFee(person({ wage: 6 }))).toBe(30);
+  it('wage: floor of 0.2, steps of 0.1, reference sum, top end, trait factor (07e)', () => {
+    expect(wageOf(4, 'none')).toBe(0.2); // 0.33 - 1.2 < 0 -> floor
+    expect(wageOf(14, 'none')).toBe(0.2); // 0.13 -> 0.1 -> floor
+    expect(wageOf(16, 'none')).toBe(0.3); // 0.33
+    expect(wageOf(22, 'none')).toBe(0.9); // 0.93
+    expect(wageOf(26, 'none')).toBe(1.3); // 1.33
+    expect(wageOf(40, 'none')).toBe(2.7); // 2.73
+    expect(wageOf(22, 'greedy')).toBe(1.2); // 1.209
+    expect(wageOf(22, 'frugal')).toBe(0.7); // 0.744
+    expect(signingFee(person({ wage: 1 }))).toBe(5);
+    expect(signingFee(person({ wage: 0.9 }))).toBe(5); // 4.5 rounds up
+    expect(signingFee(person({ wage: 0.2 }))).toBe(1);
+    expect(signingFee(person({ wage: 2.7 }))).toBe(14);
+  });
+
+  it('signing fees of 1,000 people: median and mean 4..6 ears, the able cost more, wages are not all alike (07e)', () => {
+    const state = createInitialState(7, 1);
+    const rng = stream(state, 'fees');
+    const lands = ['urban', 'suburb', 'rural', 'forest', 'mountain'] as const;
+    const people = Array.from({ length: 1000 }, (_, i) => generateSurvivor(state, lands[i % lands.length]!, rng));
+    const fees = people.map((s) => signingFee(s)).sort((a, b) => a - b);
+    const mean = fees.reduce((a, b) => a + b, 0) / fees.length;
+    const median = fees[fees.length / 2]!;
+    expect(median).toBeGreaterThanOrEqual(4);
+    expect(median).toBeLessThanOrEqual(6);
+    expect(mean).toBeGreaterThanOrEqual(4);
+    expect(mean).toBeLessThanOrEqual(6);
+    for (const s of people) expect(Number.isInteger(signingFee(s))).toBe(true);
+    const wageMean = people.reduce((a, s) => a + s.wage, 0) / people.length;
+    expect(wageMean).toBeGreaterThan(0.8);
+    expect(wageMean).toBeLessThan(1.2);
+    expect(new Set(people.map((s) => s.wage)).size).toBeGreaterThanOrEqual(10);
+    const bySum = (lo: number, hi: number): number[] => people.filter((s) => statSum(s) >= lo && statSum(s) <= hi).map((s) => signingFee(s));
+    const avg = (a: number[]): number => a.reduce((x, y) => x + y, 0) / a.length;
+    expect(avg(bySum(26, 40))).toBeGreaterThan(avg(bySum(4, 19)) + 2);
+  });
+
+  it('fractional wages add up and are paid in whole ears (07e)', () => {
+    const r = rig();
+    const c = r.state.colony;
+    c.stock.food = 50;
+    c.stock.ears = 100;
+    const s = r.add('research', { wage: 0.4 });
+    r.run(DAY - r.state.time.minute);
+    const paid: number[] = [];
+    for (let d = 0; d < 5; d++) {
+      const before = c.stock.ears;
+      r.run(DAY);
+      paid.push(Math.round((before - c.stock.ears) * 1e6) / 1e6);
+    }
+    // Only wages leave the stores here (no farmers to buy from): 0.4 a day is 2 ears over 5 days, in whole ears.
+    for (const p of paid) expect(Number.isInteger(p)).toBe(true);
+    expect(paid.reduce((a, b) => a + b, 0)).toBe(2);
+    expect(s.unpaidDays).toBe(0);
+    expect(s.wageOwed ?? 0).toBeCloseTo(0, 6);
   });
 
   it('generated stats stay within 1..10, average near 5.5, and every trait stays within +-30 %', () => {
@@ -139,11 +185,12 @@ describe('formulas (spec §4)', () => {
   });
 
   it('food price follows the days in stock; winter cuts the harvest', () => {
-    expect(foodPriceFor(0)).toBeCloseTo(3.2, 9);
-    expect(foodPriceFor(6)).toBeCloseTo(2, 9);
-    expect(foodPriceFor(10)).toBeCloseTo(1.2, 9);
-    expect(foodPriceFor(100)).toBeCloseTo(1.2, 9);
-    expect(foodPriceFor(-50)).toBeCloseTo(5, 9);
+    const B = COLONY.economy.foodBasePrice;
+    expect(foodPriceFor(0)).toBeCloseTo(B * 1.6, 9);
+    expect(foodPriceFor(6)).toBeCloseTo(B, 9);
+    expect(foodPriceFor(10)).toBeCloseTo(B * 0.6, 9);
+    expect(foodPriceFor(100)).toBeCloseTo(B * 0.6, 9);
+    expect(foodPriceFor(-50)).toBeCloseTo(B * 2.5, 9);
     expect(seasonFactor(90)).toBe(1);
     expect(seasonFactor(90 + 230)).toBe(0.4); // mid-January
   });
@@ -195,8 +242,8 @@ describe('thirty days', () => {
     }
     // The colony actually ran: wages left, food was grown and bought, things were made and found.
     const sum = (f: (d: (typeof days)[number]) => number): number => days.reduce((s, d) => s + f(d), 0);
-    expect(sum((d) => d.wages)).toBeGreaterThan(28 * 6 * 3);
-    expect(sum((d) => d.food)).toBeGreaterThan(50);
+    expect(sum((d) => d.wages)).toBeGreaterThan(28 * 6 * 0.9); // 07e: six paid people at 1 ear a day
+    expect(sum((d) => d.food)).toBeGreaterThan(50 / 6); // 07e: ears are worth six times what they were
     expect(sum((d) => d.flow?.ammo?.[0] ?? 0)).toBeGreaterThan(100);
     expect(sum((d) => d.flow?.wood?.[0] ?? 0)).toBeGreaterThan(5);
     expect(c.work.research).toBeGreaterThan(100);
