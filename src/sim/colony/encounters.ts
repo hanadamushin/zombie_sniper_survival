@@ -12,8 +12,8 @@ import { playerAtHome } from './morale.ts';
 import { ctxNow, itemsParam, logEntry, moveEars, moveStock, type ColonyCtx } from './stock.ts';
 import { addCandidates, hideoutGroup } from './survivors.ts';
 import { mapOf } from '../tactical/area.ts';
-import { isWalkable } from '../tactical/collision.ts';
-import { GROUND } from '../../gen/index.ts';
+import { heightAt, isWalkable } from '../tactical/collision.ts';
+import { GROUND, type TacticalMap } from '../../gen/index.ts';
 
 const N = COLONY.encounter;
 
@@ -22,6 +22,11 @@ const N = COLONY.encounter;
  * of the home base — at a search point in that ring if there is one, otherwise camping in the open.
  * Their smoke (render/tactical/signals.ts) is what tells the player that somebody is out there.
  */
+/** 07d: people hide on the ground floor only (they are drawn and met at ground level). */
+function onGround(map: TacticalMap, s: { pos: [number, number]; y?: number }): boolean {
+  return s.y === undefined || s.y - heightAt(map, s.pos[0], s.pos[1]) < 1;
+}
+
 function firstContact(state: GameState): void {
   const t = state.tactical!;
   const map = mapOf(state);
@@ -35,7 +40,7 @@ function firstContact(state: GameState): void {
     const d = Math.hypot(x - home[0], z - home[1]);
     return d >= N.firstRing[0] && d <= N.firstRing[1];
   };
-  const spots = t.lootSpots.filter((s) => !s.taken && inRing(s.pos[0], s.pos[1]));
+  const spots = t.lootSpots.filter((s) => !s.taken && inRing(s.pos[0], s.pos[1]) && onGround(map, s));
   if (spots.length > 0) {
     const spot = spots[Math.floor(randRange(rng, 0, spots.length))]!;
     t.hideouts!.push({ spot: spot.id, pos: [spot.pos[0], spot.pos[1]], met: false, sure: true });
@@ -66,7 +71,8 @@ export function ensureHideouts(state: GameState): void {
   const last = state.colony.metCells[key];
   if (last !== undefined && state.time.day - last < N.cooldownDays) return;
   const h = Math.max(0, state.world.cells.H[t.cell] ?? 0);
-  const free = t.lootSpots.filter((s) => !s.taken && !t.hideouts!.some((o) => o.spot === s.id));
+  const map = mapOf(state);
+  const free = t.lootSpots.filter((s) => !s.taken && !t.hideouts!.some((o) => o.spot === s.id) && (!map || onGround(map, s)));
   const want = Math.min(N.maxPerArea - t.hideouts.length, Math.round(Math.log10(1 + h)), free.length);
   if (want <= 0) return;
   const rng = stream(state, 'colony.hideout');
@@ -97,6 +103,8 @@ export function interactionAt(state: GameState): Interaction | null {
     const hide = hideouts.findIndex((h) => h.spot === s.id && !h.met);
     if (s.taken && hide < 0) continue;
     const dist = Math.hypot(s.pos[0] - px, s.pos[1] - pz);
+    // 07d: inside a building only the shelves of the floor the player is on.
+    if (s.y !== undefined && Math.abs(s.y - state.player.pos[1]) > 1.4) continue;
     if (dist <= N.reach && (!best || dist < best.dist)) best = hide >= 0 ? { kind: 'talk', spot: s.id, dist, hide } : { kind: 'search', spot: s.id, dist };
   }
   hideouts.forEach((h, hide) => {
@@ -156,7 +164,8 @@ function interact(c: ColonyCtx, grid: StaticGrid | null): void {
   const rng = stream(state, 'colony.search');
   const cells = state.world.cells;
   const items: Partial<Record<ResourceId, number>> = {};
-  for (const [res, expected] of lootYield(land, COLONY.search.points)) {
+  // 07d: a shelf inside a building yields what its room holds.
+  for (const [res, expected] of lootYield(spot.table ? { table: spot.table, land } : land, COLONY.search.points)) {
     const n = integerShare(expected * randRange(rng, COLONY.search.spread[0], COLONY.search.spread[1]), randRange(rng, 0, 1));
     if (n <= 0) continue;
     items[res] = n;

@@ -11,7 +11,8 @@
 //   createSpatialHash()                       16 m buckets for dynamic objects (zombies, survivors)
 
 import { TACTICAL } from '../../data/tactical.ts';
-import { sampleGradient, sampleHeight, TRUNK_SHARE, trunkRadius, type Ladder, type SolidKind, type TacticalMap } from '../../gen/index.ts';
+import { sampleGradient, sampleHeight, TRUNK_SHARE, trunkRadius, type Ladder, type Solid, type SolidKind, type TacticalMap } from '../../gen/index.ts';
+import { detailOf, type BuildingDetail } from '../../gen/buildings/index.ts';
 
 export type Vec3 = [number, number, number];
 
@@ -129,6 +130,19 @@ export function raycastWorld(map: TacticalMap, origin: Readonly<Vec3>, dir: Read
         if (b < tf) tf = b;
       }
       if (tn > tf || tn >= best) continue;
+      if (s.enter !== undefined) {
+        // 07d: an enterable building — the ray goes on inside it, against its own walls and floors.
+        const hit = rayDetail(detailOfSolid(map, s), ox, oy, oz, dx, dy, dz, invX, invY, invZ, tn, Math.min(tf, best));
+        if (!hit) continue;
+        best = hit.t;
+        kind = hit.kind;
+        index = si;
+        nx = hit.axis === 0 ? -stepX : 0;
+        ny = hit.axis === 1 ? (dy > 0 ? -1 : 1) : 0;
+        nz = hit.axis === 2 ? -stepZ : 0;
+        if (hit.axis === -1) ny = 1;
+        continue;
+      }
       best = tn;
       kind = s.kind;
       index = si;
@@ -314,7 +328,18 @@ export function supportAt(map: TacticalMap, x: number, z: number, feetY: number,
   const cz = Math.min(hash.n - 1, Math.max(0, Math.floor(z / hash.cell)));
   for (const si of hash.solids[cz * hash.n + cx]!) {
     const s = map.solids[si]!;
-    if (x >= s.x0 && x <= s.x1 && z >= s.z0 && z <= s.z1 && s.y1 > best && s.y1 <= feetY + stepUp) best = s.y1;
+    if (x < s.x0 || x > s.x1 || z < s.z0 || z > s.z1) continue;
+    if (s.enter !== undefined) {
+      // 07d: inside an enterable building's footprint: its floors, stairs and furniture.
+      const det = detailOfSolid(map, s);
+      const c = det.cells[detailCell(det, z, 'z') * det.gnx + detailCell(det, x, 'x')]!;
+      for (const di of c) {
+        const q = det.solids[di]!;
+        if (x >= q.x0 && x <= q.x1 && z >= q.z0 && z <= q.z1 && q.y1 > best && q.y1 <= feetY + stepUp) best = q.y1;
+      }
+      continue;
+    }
+    if (s.y1 > best && s.y1 <= feetY + stepUp) best = s.y1;
   }
   return best;
 }
@@ -329,8 +354,10 @@ export function pushOut(map: TacticalMap, pos: [number, number], radius: number,
   const n = hash.n;
   const cs = hash.cell;
   let moved = false;
+  const seen = pushSeen;
   for (let iter = 0; iter < 3; iter++) {
     let again = false;
+    seen.length = 0;
     const cx0 = Math.max(0, Math.floor((pos[0] - radius) / cs));
     const cx1 = Math.min(n - 1, Math.floor((pos[0] + radius) / cs));
     const cz0 = Math.max(0, Math.floor((pos[1] - radius) / cs));
@@ -340,6 +367,17 @@ export function pushOut(map: TacticalMap, pos: [number, number], radius: number,
         const c = cz * n + cx;
         for (const si of hash.solids[c]!) {
           const s = map.solids[si]!;
+          if (s.enter !== undefined) {
+            // 07d: an enterable building: push against its own boxes (once per pass).
+            if (seen.includes(si) || feetY > s.y1 + 0.1 || feetY + height < s.y0) continue;
+            if (pos[0] < s.x0 - radius || pos[0] > s.x1 + radius || pos[1] < s.z0 - radius || pos[1] > s.z1 + radius) continue;
+            seen.push(si);
+            if (pushDetail(detailOfSolid(map, s), pos, radius, feetY, height, stepUp)) {
+              again = true;
+              moved = true;
+            }
+            continue;
+          }
           if (s.y1 <= feetY + stepUp || s.y0 >= feetY + height) continue;
           const qx = Math.min(s.x1, Math.max(s.x0, pos[0]));
           const qz = Math.min(s.z1, Math.max(s.z0, pos[1]));
@@ -392,10 +430,166 @@ export function pushOut(map: TacticalMap, pos: [number, number], radius: number,
 
 /** Ladder whose climb zone contains (x, z) at a height within its span, or null. */
 export function ladderAt(map: TacticalMap, x: number, z: number, feetY: number): Ladder | null {
-  for (const l of map.ladders) {
-    if (x >= l.x0 - 0.1 && x <= l.x1 + 0.1 && z >= l.z0 - 0.1 && z <= l.z1 + 0.1 && feetY >= l.y0 - 0.6 && feetY <= l.y1 + 0.05) return l;
+  const inZone = (l: Ladder): boolean => x >= l.x0 - 0.1 && x <= l.x1 + 0.1 && z >= l.z0 - 0.1 && z <= l.z1 + 0.1 && feetY >= l.y0 - 0.6 && feetY <= l.y1 + 0.05;
+  for (const l of map.ladders) if (inZone(l)) return l;
+  // 07d: ladders inside enterable buildings (roof hatches).
+  const hash = map.hash;
+  const cx = Math.min(hash.n - 1, Math.max(0, Math.floor(x / hash.cell)));
+  const cz = Math.min(hash.n - 1, Math.max(0, Math.floor(z / hash.cell)));
+  for (const si of hash.solids[cz * hash.n + cx]!) {
+    const s = map.solids[si]!;
+    if (s.enter === undefined || x < s.x0 || x > s.x1 || z < s.z0 || z > s.z1) continue;
+    for (const l of detailOfSolid(map, s).ladders) if (inZone(l)) return l;
   }
   return null;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Enterable buildings (07d): queries inside an envelope box use the building's own boxes
+// ---------------------------------------------------------------------------------------------
+
+const pushSeen: number[] = [];
+
+/** The building behind an envelope box (generated on first use, gen/buildings detailOf). */
+export function detailOfSolid(map: TacticalMap, s: Solid): BuildingDetail {
+  return detailOf(map.placements[s.enter!]!);
+}
+
+function detailCell(det: BuildingDetail, v: number, axis: 'x' | 'z'): number {
+  const o = axis === 'x' ? det.gx0 : det.gz0;
+  const n = axis === 'x' ? det.gnx : det.gnz;
+  return Math.min(n - 1, Math.max(0, Math.floor((v - o) / det.cell)));
+}
+
+const stamps = new WeakMap<BuildingDetail, { mark: Uint32Array; gen: number }>();
+
+/**
+ * First hit of the ray on a building's boxes between t0 and t1 (glass is passed through).
+ * Walks the building's 2 m lookup grid along the ray.
+ */
+function rayDetail(
+  det: BuildingDetail, ox: number, oy: number, oz: number, dx: number, dy: number, dz: number,
+  invX: number, invY: number, invZ: number, t0: number, t1: number,
+): { t: number; axis: number; kind: SolidKind } | null {
+  let st = stamps.get(det);
+  if (!st) stamps.set(det, (st = { mark: new Uint32Array(det.solids.length), gen: 0 }));
+  st.gen = (st.gen + 1) >>> 0 || 1;
+  const gen = st.gen;
+  const mark = st.mark;
+  const cs = det.cell;
+  let best = t1;
+  let axisBest = -2;
+  let kindBest: SolidKind = 'building';
+  const sx = ox + dx * t0;
+  const sz = oz + dz * t0;
+  let cx = detailCell(det, sx, 'x');
+  let cz = detailCell(det, sz, 'z');
+  const stepX = dx > 0 ? 1 : -1;
+  const stepZ = dz > 0 ? 1 : -1;
+  let tMaxX = invX === Infinity ? Infinity : t0 + ((dx > 0 ? det.gx0 + (cx + 1) * cs : det.gx0 + cx * cs) - sx) * invX;
+  let tMaxZ = invZ === Infinity ? Infinity : t0 + ((dz > 0 ? det.gz0 + (cz + 1) * cs : det.gz0 + cz * cs) - sz) * invZ;
+  const tDeltaX = Math.abs(cs * invX);
+  const tDeltaZ = Math.abs(cs * invZ);
+  let tCell = t0;
+  while (tCell <= best && cx >= 0 && cz >= 0 && cx < det.gnx && cz < det.gnz) {
+    for (const di of det.cells[cz * det.gnx + cx]!) {
+      if (mark[di] === gen) continue;
+      mark[di] = gen;
+      const q = det.solids[di]!;
+      if (q.pane) continue;
+      let tn = t0;
+      let tf = best;
+      let axis = -1;
+      if (invX === Infinity) {
+        if (ox < q.x0 || ox > q.x1) continue;
+      } else {
+        let a = (q.x0 - ox) * invX;
+        let b = (q.x1 - ox) * invX;
+        if (a > b) [a, b] = [b, a];
+        if (a > tn) { tn = a; axis = 0; }
+        if (b < tf) tf = b;
+      }
+      if (invY === Infinity) {
+        if (oy < q.y0 || oy > q.y1) continue;
+      } else {
+        let a = (q.y0 - oy) * invY;
+        let b = (q.y1 - oy) * invY;
+        if (a > b) [a, b] = [b, a];
+        if (a > tn) { tn = a; axis = 1; }
+        if (b < tf) tf = b;
+      }
+      if (invZ === Infinity) {
+        if (oz < q.z0 || oz > q.z1) continue;
+      } else {
+        let a = (q.z0 - oz) * invZ;
+        let b = (q.z1 - oz) * invZ;
+        if (a > b) [a, b] = [b, a];
+        if (a > tn) { tn = a; axis = 2; }
+        if (b < tf) tf = b;
+      }
+      if (tn > tf || tn >= best) continue;
+      best = tn;
+      axisBest = axis;
+      kindBest = q.kind;
+    }
+    if (tMaxX === Infinity && tMaxZ === Infinity) break;
+    if (tMaxX < tMaxZ) {
+      tCell = tMaxX;
+      tMaxX += tDeltaX;
+      cx += stepX;
+    } else {
+      tCell = tMaxZ;
+      tMaxZ += tDeltaZ;
+      cz += stepZ;
+    }
+  }
+  return axisBest === -2 ? null : { t: best, axis: axisBest, kind: kindBest };
+}
+
+/** pushOut against one building's boxes (glass included). */
+function pushDetail(det: BuildingDetail, pos: [number, number], radius: number, feetY: number, height: number, stepUp: number): boolean {
+  let moved = false;
+  const x0 = detailCell(det, pos[0] - radius, 'x');
+  const x1 = detailCell(det, pos[0] + radius, 'x');
+  const z0 = detailCell(det, pos[1] - radius, 'z');
+  const z1 = detailCell(det, pos[1] + radius, 'z');
+  let st = stamps.get(det);
+  if (!st) stamps.set(det, (st = { mark: new Uint32Array(det.solids.length), gen: 0 }));
+  st.gen = (st.gen + 1) >>> 0 || 1;
+  const gen = st.gen;
+  for (let cz = z0; cz <= z1; cz++) {
+    for (let cx = x0; cx <= x1; cx++) {
+      for (const di of det.cells[cz * det.gnx + cx]!) {
+        if (st.mark[di] === gen) continue;
+        st.mark[di] = gen;
+        const s = det.solids[di]!;
+        if (s.y1 <= feetY + stepUp || s.y0 >= feetY + height) continue;
+        const qx = Math.min(s.x1, Math.max(s.x0, pos[0]));
+        const qz = Math.min(s.z1, Math.max(s.z0, pos[1]));
+        const ddx = pos[0] - qx;
+        const ddz = pos[1] - qz;
+        const d2 = ddx * ddx + ddz * ddz;
+        if (d2 >= radius * radius) continue;
+        if (d2 > 1e-10) {
+          const dd = Math.sqrt(d2);
+          pos[0] = qx + (ddx / dd) * radius;
+          pos[1] = qz + (ddz / dd) * radius;
+        } else {
+          const l = pos[0] - s.x0;
+          const r = s.x1 - pos[0];
+          const t = pos[1] - s.z0;
+          const b = s.z1 - pos[1];
+          const m = Math.min(l, r, t, b);
+          if (m === l) pos[0] = s.x0 - radius;
+          else if (m === r) pos[0] = s.x1 + radius;
+          else if (m === t) pos[1] = s.z0 - radius;
+          else pos[1] = s.z1 + radius;
+        }
+        moved = true;
+      }
+    }
+  }
+  return moved;
 }
 
 // ---------------------------------------------------------------------------------------------

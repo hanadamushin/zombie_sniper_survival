@@ -15,6 +15,9 @@ import type { Ladder, Solid, TacticalMap } from '../../gen/index.ts';
 import { ctxNow, logEntry } from '../colony/stock.ts';
 import { getMod, hasFlag, techAvailable, techDone } from '../research/modifiers.ts';
 import { heightAt } from '../tactical/collision.ts';
+import { ARCH } from '../../data/architecture.ts';
+import { buildingDef, makePlacement, rotFacing } from '../../gen/buildings/index.ts';
+import { BASE_BLUEPRINT, BASE_INSET } from '../../gen/buildings/defs/base/hall.ts';
 
 export const TILE = TACTICAL.tile;
 export const TILES = TACTICAL.size / TACTICAL.tile;
@@ -203,6 +206,7 @@ interface Synced {
   rev: number;
   baseSolids: number;
   baseLadders: number;
+  basePlacements: number;
 }
 const synced = new WeakMap<TacticalMap, Synced>();
 
@@ -268,6 +272,19 @@ function addSolids(_state: GameState, ov: Overlay, map: TacticalMap, st: Structu
     }
     case 'building': {
       const inset = 0.3;
+      const bp = BASE_BLUEPRINT[def.id];
+      if (bp) {
+        // 07d: an enterable building — the map keeps its placement and an envelope box, the
+        // collision functions look inside it (gen/buildings). Its door faces the structure's rot.
+        const [dx, dz] = towerLadderDir(st.rot);
+        const bdef = buildingDef(bp);
+        const p = makePlacement(bp, (st.id * 2654435761) >>> 0, rotFacing(dx, dz), bdef.size.w[0], bdef.size.d[0], x0 + BASE_INSET, z0 + BASE_INSET, base);
+        p.structure = st.id;
+        const enter = map.placements.length;
+        map.placements.push(p);
+        solids.push({ x0: p.x0, z0: p.z0, x1: p.x1, z1: p.z1, y0: base - ARCH.foundation, y1: base + p.height, kind: 'building', ref: -1, enter });
+        return;
+      }
       box(x0 + inset, z0 + inset, x1 - inset, z1 - inset, base - 2, base + def.height);
       return;
     }
@@ -286,7 +303,7 @@ export function syncSolids(map: TacticalMap, owner: object | null, rev: number, 
   let rec = synced.get(map);
   if (!rec) {
     if (owner === null) return;
-    synced.set(map, (rec = { owner: null, rev: -1, baseSolids: map.solids.length, baseLadders: map.ladders.length }));
+    synced.set(map, (rec = { owner: null, rev: -1, baseSolids: map.solids.length, baseLadders: map.ladders.length, basePlacements: map.placements.length }));
   }
   if (rec.owner === owner && rec.rev === rev) return;
   rec.owner = owner;
@@ -295,6 +312,9 @@ export function syncSolids(map: TacticalMap, owner: object | null, rev: number, 
   for (const list of hash.solids) while (list.length > 0 && list[list.length - 1]! >= rec.baseSolids) list.pop();
   map.solids.length = rec.baseSolids;
   map.ladders.length = rec.baseLadders;
+  // 07d: the base's enterable buildings are placements after the generated ones (new objects each
+  // time: the renderer and the blueprint caches match them by value).
+  map.placements.length = rec.basePlacements;
   if (owner === null) return;
   fill(map.solids, map.ladders);
   const cs = hash.cell;

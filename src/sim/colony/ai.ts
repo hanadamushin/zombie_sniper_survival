@@ -9,8 +9,10 @@ import { guardPosts, type GuardPost } from '../build/defense.ts';
 import { centreOf, defOf, hqOf, isBuilt, overlayOf, type Overlay } from '../build/structures.ts';
 import { COLONY } from '../../data/colony.ts';
 import type { TacticalMap } from '../../gen/index.ts';
+import { detailOf, type RoomUse } from '../../gen/buildings/index.ts';
 import { areaOf } from '../tactical/area.ts';
-import { isWalkable } from '../tactical/collision.ts';
+import { heightAt, isWalkable, supportAt } from '../tactical/collision.ts';
+import { indoorPath, whereIs } from '../tactical/indoor.ts';
 import { activityAt, type Activity } from './jobs.ts';
 import { arrivalPos, isHome } from './survivors.ts';
 
@@ -32,11 +34,15 @@ interface Sites {
   rev: number;
   /** Centre of the headquarters (the map centre while there is none). */
   hq: [number, number];
-  /** Dwellings with their beds, in the order they fill up. */
-  housing: { pos: [number, number]; beds: number }[];
+  /** Dwellings with their beds, in the order they fill up (07d: and the structure, whose rooms they sleep in). */
+  housing: { pos: [number, number]; beds: number; st: Structure }[];
   fields: Structure[];
   byJob: Partial<Record<'research' | 'crafting' | 'medical', [number, number]>>;
+  /** 07d: the structure behind each of byJob / canteen / the headquarters. */
+  jobSt: Partial<Record<'research' | 'crafting' | 'medical', Structure>>;
   canteen: [number, number] | null;
+  canteenSt: Structure | null;
+  hqSt: Structure | null;
   posts: GuardPost[];
 }
 let sites: Sites | null = null;
@@ -45,24 +51,46 @@ function sitesOf(state: GameState, map: TacticalMap): Sites {
   const build = state.build;
   if (sites && sites.build === build && sites.rev === build.gridRev) return sites;
   const hq = hqOf(state);
-  const next: Sites = { build, rev: build.gridRev, hq: hq ? centreOf(hq) : [map.spawn.home[0], map.spawn.home[1]], housing: [], fields: [], byJob: {}, canteen: null, posts: guardPosts(state) };
+  const next: Sites = { build, rev: build.gridRev, hq: hq ? centreOf(hq) : [map.spawn.home[0], map.spawn.home[1]], housing: [], fields: [], byJob: {}, jobSt: {}, canteen: null, canteenSt: null, hqSt: hq ?? null, posts: guardPosts(state) };
   let best: Partial<Record<string, number>> = {};
   for (const st of build.structures) {
     if (!isBuilt(st)) continue;
     const def = defOf(st);
-    if (def.beds) next.housing.push({ pos: centreOf(st), beds: def.beds });
+    if (def.beds) next.housing.push({ pos: centreOf(st), beds: def.beds, st });
     if (def.plots) next.fields.push(st);
-    if (def.foodSaving) next.canteen = centreOf(st);
+    if (def.foodSaving) {
+      next.canteen = centreOf(st);
+      next.canteenSt = st;
+    }
     for (const job of ['research', 'crafting', 'medical'] as const) {
       const f = def.job?.[job];
       if (f !== undefined && f > (best[job] ?? -1)) {
         best = { ...best, [job]: f };
         next.byJob[job] = centreOf(st);
+        next.jobSt[job] = st;
       }
     }
   }
   sites = next;
   return next;
+}
+
+/**
+ * 07d: a spot inside one of a base building's rooms (preferring the given uses), or null when the
+ * structure has no blueprint (or its map is not synced). `n` spreads people over the rooms.
+ */
+export function indoorSpot(map: TacticalMap, st: Structure, uses: readonly RoomUse[], id: number, n = id): [number, number] | null {
+  const p = map.placements.find((q) => q.structure === st.id);
+  if (!p) return null;
+  const det = detailOf(p);
+  const rooms = det.rooms.filter((r) => uses.includes(r.use));
+  const pool = rooms.length > 0 ? rooms : det.rooms.filter((r) => !r.locked);
+  const r = pool[Math.abs(n) % pool.length];
+  if (!r) return null;
+  const m = 0.6;
+  const fx = hash(id, 41);
+  const fz = hash(id, 42);
+  return [r.wx0 + m + (r.wx1 - r.wx0 - 2 * m) * fx, r.wz0 + m + (r.wz1 - r.wz0 - 2 * m) * fz];
 }
 
 /** Set by placeFor: the structure the place belongs to (a tower for a guard), or null. */
@@ -87,15 +115,15 @@ export function placeFor(state: GameState, map: TacticalMap, s: Survivor, index:
       // Indoors while there are beds; the rest lie down around the fire.
       let left = index;
       for (const h of S.housing) {
-        if (left < h.beds) return [h.pos[0] + (hash(s.id, 11) - 0.5) * 1.5, h.pos[1] + (hash(s.id, 12) - 0.5) * 1.5];
+        if (left < h.beds) return indoorSpot(map, h.st, ['bedroom', 'barracks'], s.id, left) ?? [h.pos[0] + (hash(s.id, 11) - 0.5) * 1.5, h.pos[1] + (hash(s.id, 12) - 0.5) * 1.5];
         left -= h.beds;
       }
       return fire(2.5, 6, 3);
     }
     case 'rest':
-      return S.byJob.medical ?? [hx + (hash(s.id, 13) - 0.5) * 4, hz + (hash(s.id, 14) - 0.5) * 4];
+      return (S.jobSt.medical && indoorSpot(map, S.jobSt.medical, ['bedroom', 'clinic'], s.id)) || S.byJob.medical || [hx + (hash(s.id, 13) - 0.5) * 4, hz + (hash(s.id, 14) - 0.5) * 4];
     case 'eat':
-      return S.canteen ?? fire(2.2, 4.7, 3);
+      return (S.canteenSt && indoorSpot(map, S.canteenSt, ['canteen'], s.id)) || S.canteen || fire(2.2, 4.7, 3);
     case 'free':
       return fire(4, 11, slot);
     case 'work':
@@ -121,9 +149,10 @@ export function placeFor(state: GameState, map: TacticalMap, s: Survivor, index:
           if (site) return [site.tx * map.tile + map.tile / 2 + (hash(s.id, 6) - 0.5) * 3, site.ty * map.tile + map.tile + 1.5];
           return at(C.yard, 3, slot);
         }
-        case 'research': return S.byJob.research ?? at(C.desk, 2);
-        case 'crafting': return S.byJob.crafting ?? at(C.bench, 2);
-        case 'medical': return S.byJob.medical ?? at(C.clinic, 2.5, 20);
+        // 07d: inside the building, in the room that is for the job.
+        case 'research': return (S.jobSt.research && indoorSpot(map, S.jobSt.research, ['lab'], s.id)) || S.byJob.research || at(C.desk, 2);
+        case 'crafting': return (S.jobSt.crafting && indoorSpot(map, S.jobSt.crafting, ['workshop'], s.id)) || S.byJob.crafting || at(C.bench, 2);
+        case 'medical': return (S.jobSt.medical && indoorSpot(map, S.jobSt.medical, ['clinic'], s.id)) || S.byJob.medical || at(C.clinic, 2.5, 20);
         default: return at(C.fire, 5);
       }
   }
@@ -191,6 +220,41 @@ export function findPath(map: TacticalMap, ax: number, az: number, bx: number, b
   return path.reverse();
 }
 
+/** Feet height of someone standing at (x, z) in the base: the floor of a building, or the ground. */
+function feetAt(map: TacticalMap, x: number, z: number): number {
+  return supportAt(map, x, z, heightAt(map, x, z) + 0.6);
+}
+
+/** Over open ground: a straight line or the 4 m grid path. */
+function outdoors(map: TacticalMap, ov: Overlay | null, a: readonly [number, number], b: [number, number]): [number, number][] {
+  return lineClear(map, ov, a[0], a[1], b[0], b[1]) ? [b] : (findPath(map, a[0], a[1], b[0], b[1], ov) ?? [b]);
+}
+
+/**
+ * 07d: the way from a to b in the base: out of the building one is in through its door, across the
+ * base, in through the door of the building the other is in, through the rooms.
+ */
+export function routeTo(map: TacticalMap, ov: Overlay | null, a: readonly [number, number], b: [number, number]): [number, number][] {
+  if (map.placements.length === 0) return outdoors(map, ov, a, b);
+  const from: [number, number, number] = [a[0], feetAt(map, a[0], a[1]), a[1]];
+  const to: [number, number, number] = [b[0], feetAt(map, b[0], b[1]), b[1]];
+  const way = whereIs(map, from[0], from[1], from[2]) || whereIs(map, to[0], to[1], to[2]) ? indoorPath(map, from, to, COLONY.walkRadius) : null;
+  if (!way) return outdoors(map, ov, a, b);
+  // Legs between two points outside go round the walls on the grid.
+  const out: [number, number][] = [];
+  let prev: readonly [number, number] = a;
+  let prevOutside = !whereIs(map, from[0], from[1], from[2]);
+  for (const p of way) {
+    const outside = !whereIs(map, p[0], p[1], p[2]);
+    const q: [number, number] = [p[0], p[2]];
+    if (prevOutside && outside) out.push(...outdoors(map, ov, prev, q));
+    else out.push(q);
+    prev = q;
+    prevOutside = outside;
+  }
+  return out;
+}
+
 interface Walk {
   goal: [number, number];
   path: [number, number][];
@@ -225,8 +289,9 @@ export function updateSurvivorMotion(state: GameState, dt: number): void {
     const activity = alarm ? (s.job === 'defense' ? 'work' : 'free') : activityAt(s, minute);
     const guard = s.job === 'defense' ? guards++ : 0;
     const hq = sitesOf(state, map).hq;
+    const sites = sitesOf(state, map);
     const goal: [number, number] = alarm && s.job !== 'defense'
-      ? [hq[0] + (hash(s.id, 31) - 0.5) * 6, hq[1] + (hash(s.id, 32) - 0.5) * 6]
+      ? (sites.hqSt && indoorSpot(map, sites.hqSt, ['command', 'bedroom', 'storage'], s.id)) || [hq[0] + (hash(s.id, 31) - 0.5) * 6, hq[1] + (hash(s.id, 32) - 0.5) * 6]
       : placeFor(state, map, s, i, activity, minute, guard);
     const target = alarm && s.job !== 'defense' ? null : placeTarget;
     if (fresh) {
@@ -248,7 +313,7 @@ export function updateSurvivorMotion(state: GameState, dt: number): void {
     }
     let walk = walks.get(s.id);
     if (!walk || walk.goal[0] !== goal[0] || walk.goal[1] !== goal[1]) {
-      const path = lineClear(map, ov, s.pos[0], s.pos[1], goal[0], goal[1]) ? [goal] : (findPath(map, s.pos[0], s.pos[1], goal[0], goal[1], ov) ?? [goal]);
+      const path = routeTo(map, ov, s.pos, goal);
       walk = { goal, path };
       walks.set(s.id, walk);
     }

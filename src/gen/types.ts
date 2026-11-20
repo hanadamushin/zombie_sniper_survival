@@ -6,6 +6,7 @@
 // [tx * tile, (tx + 1) * tile) x [ty * tile, (ty + 1) * tile).
 
 import type { Land } from '../core/types.ts';
+import type { BuildingPlacement } from './buildings/types.ts';
 
 export type BuildingKind = 'house' | 'barn' | 'shed' | 'shop' | 'apartment' | 'office' | 'warehouse' | 'tower';
 
@@ -25,6 +26,8 @@ export interface Building {
   lootable: boolean;
   /** How the roof can be reached. */
   access: 'none' | 'stairs' | 'ladder';
+  /** 07d: index into TacticalMap.placements when this is an enterable building (drawn and collided from its blueprint). */
+  enter?: number;
 }
 
 /** 'scenery' (07b): wrecked cars and fallen logs — drawn from TacticalMap.props, not as steel boxes. */
@@ -41,6 +44,11 @@ export interface Solid {
   kind: SolidKind;
   /** Building id for 'building', otherwise -1. */
   ref: number;
+  /**
+   * 07d: this box is the envelope of an enterable building (TacticalMap.placements[enter]). The
+   * collision functions look inside it at the building's own boxes (gen/buildings detailOf).
+   */
+  enter?: number;
 }
 
 /** Climbable zone next to a wall: inside it the player moves vertically between y0 and y1. */
@@ -140,9 +148,13 @@ export interface Prop {
 
 export interface LootSpot {
   id: number;
-  /** Where the player stands to search (in front of the door). */
+  /** Where the player stands to search (in front of the door; 07d: at the shelf inside an enterable building). */
   pos: [number, number];
   building: number;
+  /** 07d: floor height of a search point inside a building (absent: on the ground outside). */
+  y?: number;
+  /** 07d: loot table of the search point (data/colony.ts ROOM_LOOT); absent: the land's table. */
+  table?: string;
 }
 
 export interface Vantage {
@@ -204,6 +216,12 @@ export interface TacticalMap {
   /** 1 = walkable nav tile (no building, not too steep), 0 = blocked. */
   walk: Uint8Array;
   buildings: Building[];
+  /**
+   * 07d: enterable buildings — only where, which type and which way (gen/buildings). Their
+   * blueprints are generated when something comes close. The home map appends the base's
+   * buildings after the generated ones (sim/build/structures.ts syncMap).
+   */
+  placements: BuildingPlacement[];
   solids: Solid[];
   ladders: Ladder[];
   roads: Road[];

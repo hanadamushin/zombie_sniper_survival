@@ -7,8 +7,9 @@
 import { chance, pick, rand, randInt, randRange, type RngState } from '../core/rng.ts';
 import type { Land } from '../core/types.ts';
 import { TACTICAL } from '../data/tactical.ts';
+import { buildingDef, fitSize, type Rot } from './buildings/index.ts';
 import {
-  addBuilding, addLadder, addRoad, addStairs, addTower, forTiles, hAt, heightRange, homeDist, inHomeZone, occupy, rectFree, resample, rngOf,
+  addBuilding, addEnterable, addLadder, addRoad, addStairs, addTower, forTiles, hAt, heightRange, homeDist, inHomeZone, occupy, rectFree, resample, rngOf,
   SIZE, STAIR_DEPTH, STAIR_LENGTH, TILE, type Builder, type Side,
 } from './builder.ts';
 import { addCreek, addDike, ruralScenery, terrace } from './cover.ts';
@@ -147,6 +148,36 @@ function tryBuilding(
   return addBuilding(b, kind, x0, z0, x0 + w, z0 + d, h, { roof, tint });
 }
 
+/**
+ * 07d: put an enterable building of type `defId` into the rectangle (world) with its front facing
+ * `rot`: as large as the type allows, its front on the rectangle's front edge, centred along it.
+ * Returns null when the rectangle is too small (the caller builds its box instead).
+ */
+function enterableIn(b: Builder, defId: string, x0: number, z0: number, x1: number, z1: number, rot: Rot): Building | null {
+  const frontAlongX = rot % 2 === 0;
+  const lw = frontAlongX ? x1 - x0 : z1 - z0;
+  const ld = frontAlongX ? z1 - z0 : x1 - x0;
+  const fit = fitSize(buildingDef(defId), lw, ld);
+  if (!fit) return null;
+  const [w, d] = fit;
+  const ww = frontAlongX ? w : d;
+  const wd = frontAlongX ? d : w;
+  let ax: number;
+  let az: number;
+  if (rot === 0) [ax, az] = [(x0 + x1 - ww) / 2, z1 - wd];
+  else if (rot === 2) [ax, az] = [(x0 + x1 - ww) / 2, z0];
+  else if (rot === 1) [ax, az] = [x1 - ww, (z0 + z1 - wd) / 2];
+  else [ax, az] = [x0, (z0 + z1 - wd) / 2];
+  return addEnterable(b, defId, ax, az, w, d, rot);
+}
+
+/** The side of a lot that faces the nearest edge of its block (the street): as a rotation. */
+function streetSide(x0: number, z0: number, x1: number, z1: number, blk: { x0: number; z0: number; x1: number; z1: number }): Rot {
+  const d = [z1 >= blk.z1 - 4 ? blk.z1 - z1 : Infinity, x1 >= blk.x1 - 4 ? blk.x1 - x1 : Infinity, z0 <= blk.z0 + 4 ? z0 - blk.z0 : Infinity, x0 <= blk.x0 + 4 ? x0 - blk.x0 : Infinity];
+  const m = Math.min(...d);
+  return (m === Infinity ? 0 : d.indexOf(m)) as Rot;
+}
+
 /** First side of a building with free ground for a staircase / ladder. */
 function freeSide(b: Builder, bd: Building, rng: RngState, depth: number, length: number): Side | null {
   const sides: Side[] = [0, 1, 2, 3];
@@ -212,6 +243,7 @@ function splitLots(rng: RngState, x0: number, z0: number, x1: number, z1: number
 function layoutTown(b: Builder, land: 'urban' | 'suburb'): void {
   const cfg = T.town[land];
   const rng = rngOf(b, 'town');
+  const enterRng = rngOf(b, 'town.enterable');
   const xs = gridLines(rng, cfg);
   const zs = gridLines(rng, cfg);
   for (const l of xs) addRoad(b, l.width >= cfg.avenue ? 'avenue' : 'street', l.width, [[l.pos, 0], [l.pos, SIZE]]);
@@ -272,7 +304,15 @@ function layoutTown(b: Builder, land: 'urban' | 'suburb'): void {
       if (kind === 'parking') {
         occupy(b, blk.x0, blk.z0, blk.x1, blk.z1);
         // A low shop at one end of the car park.
-        if (w > 44) flatBuilding('shop', blk.x0 + 2, blk.z0 + 2, blk.x0 + 2 + Math.min(26, w * 0.4), blk.z0 + Math.min(d - 4, 34), randRange(rng, 4.5, 6), true);
+        if (w > 44) {
+          const sx1 = blk.x0 + 2 + Math.min(26, w * 0.4);
+          const sz1 = blk.z0 + Math.min(d - 4, 34);
+          const h = randRange(rng, 4.5, 6);
+          // 07d: the shop at the end of the car park is a convenience store facing it.
+          if (!(chance(enterRng, T.enterable.shop) && !inHomeZone(b, blk.x0 + 2, blk.z0 + 2, sx1, sz1) && enterableIn(b, 'shop.konbini', blk.x0 + 2, blk.z0 + 2, sx1, sz1, 1))) {
+            flatBuilding('shop', blk.x0 + 2, blk.z0 + 2, sx1, sz1, h, true);
+          }
+        }
       }
       continue;
     }
@@ -303,6 +343,10 @@ function layoutTown(b: Builder, land: 'urban' | 'suburb'): void {
         } else {
           kind = 'warehouse';
           h = randRange(rng, 7, 11);
+        }
+        // 07d: some offices are the enterable 5-storey sample (separate stream: the layout stays as it was).
+        if (kind === 'office' && chance(enterRng, T.enterable.office) && !inHomeZone(b, x0 + inset, z0 + inset, x1 - inset, z1 - inset)) {
+          if (enterableIn(b, 'office.zakkyo5', x0 + inset, z0 + inset, x1 - inset, z1 - inset, streetSide(x0, z0, x1, z1, blk))) continue;
         }
         flatBuilding(kind, x0 + inset, z0 + inset, x1 - inset, z1 - inset, h, h >= 9 && h <= 34);
       }
@@ -351,7 +395,11 @@ function layoutTown(b: Builder, land: 'urban' | 'suburb'): void {
             if (side !== null) addLadder(b, bd, side, randRange(rng, 0.25, 0.75));
           }
         } else {
-          addBuilding(b, 'house', x0, z0, x1, z1, chance(rng, 0.25) ? 3.2 : randRange(rng, 5.6, 6.6), { roof: 'gable', tint: rand(rng) });
+          const h = chance(rng, 0.25) ? 3.2 : randRange(rng, 5.6, 6.6);
+          const tint = rand(rng);
+          // 07d: some houses are the enterable two-storey sample, its front towards the street.
+          const rot: Rot = alongX ? (row === 0 ? 2 : 0) : row === 0 ? 3 : 1;
+          if (!(chance(enterRng, T.enterable.house) && enterableIn(b, 'house.wood2', x0, z0, x1, z1, rot))) addBuilding(b, 'house', x0, z0, x1, z1, h, { roof: 'gable', tint });
         }
       }
     }
@@ -363,8 +411,20 @@ function layoutTown(b: Builder, land: 'urban' | 'suburb'): void {
 // Countryside
 // ---------------------------------------------------------------------------------------------
 
-function farmstead(b: Builder, rng: RngState, x: number, z: number): void {
-  const house = tryBuilding(b, 'house', x, z, randRange(rng, 8, 11), randRange(rng, 6.5, 8.5), chance(rng, 0.4) ? 3.4 : 5.8, 'gable', rand(rng));
+function farmstead(b: Builder, rng: RngState, x: number, z: number, enterRng: RngState): void {
+  const hw = randRange(rng, 8, 11);
+  const hd = randRange(rng, 6.5, 8.5);
+  const hh = chance(rng, 0.4) ? 3.4 : 5.8;
+  const tint = rand(rng);
+  // 07d: some farmhouses are the enterable two-storey sample (front to the south).
+  let house: Building | null = null;
+  if (chance(enterRng, T.enterable.house)) {
+    const x0 = x - hw / 2;
+    const z0 = z - hd / 2;
+    const [lo, hi] = rectFree(b, x0 - 2, z0 - 2, x0 + hw + 2, z0 + hd + 2, 12) && !inHomeZone(b, x0, z0, x0 + hw, z0 + hd) ? heightRange(b, x0, z0, x0 + hw, z0 + hd) : [0, 99];
+    if (hi - lo <= 2.5) house = enterableIn(b, 'house.wood2', x0, z0, x0 + hw, z0 + Math.max(hd, 7.2), 0);
+  }
+  house ??= tryBuilding(b, 'house', x, z, hw, hd, hh, 'gable', tint);
   if (!house) return;
   const a = rand(rng) * Math.PI * 2;
   if (chance(rng, 0.75)) {
@@ -413,12 +473,13 @@ function layoutRural(b: Builder): void {
   const hamlets = randInt(rng, 3, 5);
   for (let i = 0; i < hamlets; i++) anchors.push(main[Math.floor(((i + 0.5 + randRange(rng, -0.3, 0.3)) / hamlets) * (main.length - 1))]!);
   let towerNear: [number, number] | null = null;
+  const enterRng = rngOf(b, 'rural.enterable');
   for (const [ax, az] of anchors) {
     const count = randInt(rng, 3, 6);
     for (let k = 0; k < count; k++) {
       const angle = rand(rng) * Math.PI * 2;
       const dist = randRange(rng, 16, 70);
-      farmstead(b, rng, ax + Math.cos(angle) * dist, az + Math.sin(angle) * dist);
+      farmstead(b, rng, ax + Math.cos(angle) * dist, az + Math.sin(angle) * dist, enterRng);
     }
     towerNear ??= [ax, az];
   }

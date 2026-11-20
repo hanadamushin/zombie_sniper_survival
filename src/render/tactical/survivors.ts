@@ -11,7 +11,7 @@ import { RENDER } from '../../data/render.ts';
 import { mapOf } from '../../sim/tactical/area.ts';
 import { cellOffset, neighbourMap } from './neighbours.ts';
 import { standHeight } from '../../sim/build/defense.ts';
-import { heightAt } from '../../sim/tactical/collision.ts';
+import { heightAt, supportAt } from '../../sim/tactical/collision.ts';
 import type { FrameInfo, RenderContext, SubRenderer } from '../index.ts';
 
 const R = RENDER.survivors;
@@ -179,7 +179,8 @@ export function createSurvivorRenderer(): SubRenderer {
         for (const s of state.colony.survivors) {
           if (s.location.kind !== 'home' || s.status === 'dead' || nb >= R.max) continue;
           // Guards who have reached their tower stand on its deck (06).
-          const y = s.task?.target != null && s.task.kind === 'work' ? standHeight(state, homeMap, s.pos[0], s.pos[1]) : heightAt(homeMap, s.pos[0], s.pos[1]);
+          // 07d: indoors they stand on the building's floor.
+          const y = s.task?.target != null && s.task.kind === 'work' ? standHeight(state, homeMap, s.pos[0], s.pos[1]) : supportAt(homeMap, s.pos[0], s.pos[1], heightAt(homeMap, s.pos[0], s.pos[1]) + 0.6);
           drawSurvivor(s, y, frame.realDt);
           blob(s.pos[0], y, s.pos[1], s.task?.kind === 'sleep' || s.task?.kind === 'rest');
         }

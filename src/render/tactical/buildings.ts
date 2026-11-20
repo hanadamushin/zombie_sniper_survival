@@ -12,9 +12,9 @@ const B = RENDER.buildings;
 /** How far building boxes reach below their floor level (hides gaps on sloping ground). */
 const SUNK = 3;
 /** Window style per building kind: 0 none, 1 house, 2 apartment grid, 3 office ribbons. */
-const STYLE: Record<Building['kind'], number> = { house: 1, barn: 0, shed: 0, shop: 3, apartment: 2, office: 3, warehouse: 0, tower: 0 };
+export const STYLE: Record<Building['kind'], number> = { house: 1, barn: 0, shed: 0, shop: 3, apartment: 2, office: 3, warehouse: 0, tower: 0 };
 
-function boxMaterial(): THREE.MeshLambertMaterial {
+export function boxMaterial(): THREE.MeshLambertMaterial {
   const material = new THREE.MeshLambertMaterial();
   const glass = new THREE.Color(B.glass);
   material.onBeforeCompile = (shader) => {
@@ -75,7 +75,7 @@ function boxMaterial(): THREE.MeshLambertMaterial {
 }
 
 /** Unit gable roof: footprint [-0.5, 0.5]², eaves at y = 0, ridge along x at y = 1. */
-function gableGeometry(): THREE.BufferGeometry {
+export function gableGeometry(): THREE.BufferGeometry {
   const a = [-0.5, 0, -0.5], b = [0.5, 0, -0.5], c = [0.5, 0, 0.5], d = [-0.5, 0, 0.5], e = [-0.5, 1, 0], f = [0.5, 1, 0];
   const tris = [a, e, f, a, f, b, d, c, f, d, f, e, a, d, e, b, f, c];
   const geo = new THREE.BufferGeometry();
@@ -91,7 +91,7 @@ export function buildBuildings(map: TacticalMap): Built {
   const pickFrom = (list: readonly number[], t: number): number => list[Math.min(list.length - 1, Math.floor(t * list.length))]!;
 
   for (const b of map.buildings) {
-    if (b.kind === 'tower') continue;
+    if (b.kind === 'tower' || b.enter !== undefined) continue; // 07d: enterable ones are drawn by enterables.ts
     const w = b.x1 - b.x0;
     const d = b.z1 - b.z0;
     boxes.push({

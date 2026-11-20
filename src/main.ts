@@ -16,7 +16,11 @@ import { BALANCE } from './data/balance.ts';
 import { createInput } from './input/index.ts';
 import { createRenderer } from './render/index.ts';
 import { setRenderGrid } from './render/tactical/neighbours.ts';
-import { worldBuildMs, worldPending } from './render/tactical/index.ts';
+import { enterableStats, worldBuildMs, worldPending } from './render/tactical/index.ts';
+import { enterableStageOf, enterableUpgradeMaxMs } from './render/tactical/enterables.ts';
+import { indoorPath } from './sim/tactical/indoor.ts';
+import { TACTICAL } from './data/tactical.ts';
+import { detailOf } from './gen/buildings/index.ts';
 import { createSim } from './sim/index.ts';
 import { areaOf, areaPending, clearParked, ensureArea, mapOf } from './sim/tactical/area.ts';
 import { addZombie } from './sim/tactical/zombies.ts';
@@ -121,13 +125,14 @@ let suspended: GameState | null = null;
  * Firing range (04; reachable from the title and the pause menu since 07b): no world, no saves.
  * `?range=1` opens it at boot. A running game is put aside (and autosaved), not ended.
  */
-function openRange(): void {
+function openRange(yard = false): void {
   if (state && !state.flags.range) {
     void saveSlot(AUTO_SLOT);
     suspended = state;
   }
   const next = createInitialState(1, 1);
   next.flags.range = true;
+  if (yard) next.flags.yard = true;
   if (suspended) next.flags.rangeReturn = true;
   pending = null;
   ui.setIntro(null);
@@ -195,7 +200,7 @@ const ui = createUi(uiRoot, {
   saveSlot,
   listSaves: () => listSaves(store),
   quitToTitle,
-  openRange,
+  openRange: () => openRange(),
   leaveRange,
   toggleMode: input.toggleMode,
   togglePause: input.togglePause,
@@ -316,6 +321,7 @@ requestAnimationFrame(frame);
   const params = new URLSearchParams(location.search);
   if (params.get('res') === 'fixed') renderer.setAutoResolution(false);
   if (params.get('range') === '1') openRange();
+  if (params.get('yard') === '1') openRange(true);
 }
 
 // Debug / e2e handle (read-only use; mutate through dispatch). `debug` bypasses the rules on
@@ -332,6 +338,19 @@ interface DebugApi {
   setInput(input: Partial<InputFrame> | null): void;
   /** Open the firing range (flat map, targets at 100..600 m). `noSway` holds the rifle perfectly still. */
   openRange(noSway?: boolean): void;
+  /** 07d: open the building yard (every enterable building type on flat ground; flags.range + flags.yard). */
+  openYard(): void;
+  /** 07d: the enterable buildings of the current map: placement, world rooms and nav links (generated on demand). */
+  enterables(): { i: number; def: string; x0: number; z0: number; x1: number; z1: number; base: number; rot: number }[];
+  enterable(i: number): ReturnType<typeof detailOf> | null;
+  /** 07d: buildings drawn at each stage (far, mid, near) on all maps, those waiting, and the slowest stage change so far (ms). */
+  enterableStages(reset?: boolean): { far: number; mid: number; near: number; pending: number; maxMs: number };
+  /** 07d: the stage (0 far, 1 outside, 2 inside) the current map's i-th enterable building is drawn at. */
+  enterableStage(i: number): number;
+  /** 07d: waypoints (feet) from the player to (x, y, z) through the buildings on the way, or null. */
+  pathTo(x: number, y: number, z: number): [number, number, number][] | null;
+  /** 07d: put one zombie at (x, z); `chase` sets it after the player. Returns its id. */
+  placeZombie(x: number, z: number, kind?: ZombieKind, chase?: boolean): number;
   /** Add n zombies in a ring of the given radius around the player (perf checks, screenshots). Returns how many were added. */
   spawnZombies(n: number, radius?: number, kind?: ZombieKind): number;
   /** Colony shortcuts (05): put n generated survivors on the roll with a job; add to the stores. Returns the ids. */
@@ -411,6 +430,41 @@ window.__game = {
     openRange(noSway = false) {
       openRange();
       if (state && noSway) state.flags.noSway = true;
+    },
+    openYard() {
+      openRange(true);
+    },
+    enterables() {
+      const map = state ? mapOf(state) : null;
+      return (map?.placements ?? []).map((p, i) => ({ i, def: p.def, x0: p.x0, z0: p.z0, x1: p.x1, z1: p.z1, base: p.base, rot: p.rot }));
+    },
+    enterable(i) {
+      const map = state ? mapOf(state) : null;
+      const p = map?.placements[i];
+      return p ? detailOf(p) : null;
+    },
+    enterableStage(i) {
+      const map = state ? mapOf(state) : null;
+      return map ? enterableStageOf(map, i) : -1;
+    },
+    pathTo(x, y, z) {
+      const map = state ? mapOf(state) : null;
+      return state && map ? indoorPath(map, state.player.pos, [x, y, z], TACTICAL.player.radius) : null;
+    },
+    placeZombie(x, z, kind = 'walker', chase = false) {
+      const area = state ? areaOf(state) : null;
+      if (!state || !area) return -1;
+      const zb = addZombie(state, area, kind, x, z, 0);
+      if (!zb) return -1;
+      if (chase) {
+        zb.state = 'chase';
+        zb.target = 'player';
+        zb.goal = [state.player.pos[0], state.player.pos[2]];
+      }
+      return zb.id;
+    },
+    enterableStages(reset = false) {
+      return { ...enterableStats(), maxMs: enterableUpgradeMaxMs(reset) };
     },
     spawnZombies(n, radius = 60, kind) {
       const area = state ? areaOf(state) : null;

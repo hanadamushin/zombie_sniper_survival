@@ -9,7 +9,7 @@
 // Cells that are only passed through on the road never get a map.
 
 import type { CellId, GameState, StaticGrid, TacticalState } from '../../core/types.ts';
-import { generateTacticalMap, mapSeedFor, type GenParams, type TacticalMap, type WorldContext } from '../../gen/index.ts';
+import { generateTacticalMap, mapSeedFor, type GenParams, type LootSpot, type TacticalMap, type WorldContext } from '../../gen/index.ts';
 import { cellTactical } from '../world/derive.ts';
 import { createSpatialHash, type SpatialHash } from './collision.ts';
 import { placePlayer } from './player.ts';
@@ -17,6 +17,7 @@ import type { GameEvent } from '../../core/events.ts';
 import { reveal } from '../world/travel.ts';
 import { TACTICAL } from '../../data/tactical.ts';
 import { rangeMap } from './range.ts';
+import { yardMap } from './yard.ts';
 import { BALANCE } from '../../data/balance.ts';
 
 export interface TacticalArea {
@@ -26,6 +27,14 @@ export interface TacticalArea {
 }
 
 const areas = new WeakMap<TacticalState, TacticalArea>();
+
+/** What the state keeps of a search point (07d: its floor height and loot table inside a building). */
+function spotState(s: LootSpot, taken: boolean): TacticalState['lootSpots'][number] {
+  const out: TacticalState['lootSpots'][number] = { id: s.id, pos: [s.pos[0], s.pos[1]], taken };
+  if (s.y !== undefined) out.y = s.y;
+  if (s.table !== undefined) out.table = s.table;
+  return out;
+}
 /** Last generated maps by parameters, so that re-entering a cell or reloading is instant. */
 const cache = new Map<string, TacticalMap>();
 /** 07c: the 3 × 3 neighbourhood the renderer shows, plus a few just left. */
@@ -91,9 +100,9 @@ export function areaPending(state: GameState, grid: StaticGrid | null): boolean 
 function ensureRange(state: GameState): TacticalArea {
   const known = state.tactical ? areas.get(state.tactical) : undefined;
   if (known) return known;
-  const map = rangeMap();
+  const map = state.flags.yard ? yardMap() : rangeMap();
   const fresh = !state.tactical;
-  state.tactical ??= { cell: state.player.cell, mapSeed: map.params.mapSeed, zombies: [], corpses: [], bullets: [], reserve: 0, wind: [0, 0], lootSpots: [] };
+  state.tactical ??= { cell: state.player.cell, mapSeed: map.params.mapSeed, zombies: [], corpses: [], bullets: [], reserve: 0, wind: [0, 0], lootSpots: state.flags.yard ? map.lootSpots.map((s) => spotState(s, false)) : [] };
   const area: TacticalArea = { map, dynamic: createSpatialHash() };
   areas.set(state.tactical, area);
   if (fresh) {
@@ -120,7 +129,7 @@ export function ensureArea(state: GameState, grid: StaticGrid | null): TacticalA
     if (!params) return null;
     const map = mapFor({ ...params, mapSeed: tactical.mapSeed });
     const taken = new Set(tactical.lootSpots.filter((s) => s.taken).map((s) => s.id));
-    tactical.lootSpots = map.lootSpots.map((s) => ({ id: s.id, pos: [s.pos[0], s.pos[1]], taken: taken.has(s.id) }));
+    tactical.lootSpots = map.lootSpots.map((s) => spotState(s, taken.has(s.id)));
     const area: TacticalArea = { map, dynamic: createSpatialHash() };
     areas.set(tactical, area);
     return area;
@@ -137,7 +146,7 @@ export function ensureArea(state: GameState, grid: StaticGrid | null): TacticalA
     bullets: [],
     reserve: Math.max(0, state.world.cells.Z[cell] ?? 0),
     wind: [0, 0],
-    lootSpots: map.lootSpots.map((s) => ({ id: s.id, pos: [s.pos[0], s.pos[1]], taken: false })),
+    lootSpots: map.lootSpots.map((s) => spotState(s, false)),
   };
   state.tactical = tactical;
   const area: TacticalArea = { map, dynamic: createSpatialHash() };
@@ -249,7 +258,7 @@ export function walkAcross(state: GameState, grid: StaticGrid | null, emit: (e: 
       bullets: [],
       reserve: Math.max(0, state.world.cells.Z[to] ?? 0),
       wind: [0, 0],
-      lootSpots: map.lootSpots.map((s) => ({ id: s.id, pos: [s.pos[0], s.pos[1]], taken: false })),
+      lootSpots: map.lootSpots.map((s) => spotState(s, false)),
     };
     next = { tactical, area: { map, dynamic: createSpatialHash() } };
     state.tactical = tactical;

@@ -198,7 +198,8 @@ export interface TacticalState {
   bullets: Bullet[];
   reserve: number; // rough number of zombies that can still be spawned this visit
   wind: [number, number];
-  lootSpots: { id: number; pos: [number, number]; taken: boolean }[];
+  /** 07d: `y` floor height of a search point inside a building, `table` its loot table (data/colony.ts ROOM_LOOT). */
+  lootSpots: { id: number; pos: [number, number]; taken: boolean; y?: number; table?: string }[];
   /** The initial zombies of this visit have been placed (04; false again after a load). */
   populated?: boolean;
   /** Seconds until the next reinforcement from the map edge (04). */
@@ -260,6 +261,9 @@ export interface Zombie {
   /** Firing-range target: 1 stands still, 2 paces sideways; never attacks. `spot` is its lane. */
   dummy?: number;
   spot?: number;
+  /** 07d: enterable building it is in (TacticalMap.placements index) and the last room it was seen in. */
+  inside?: number;
+  room?: number;
 }
 export interface Corpse {
   id: EntityId;

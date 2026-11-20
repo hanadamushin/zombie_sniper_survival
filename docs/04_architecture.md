@@ -382,6 +382,13 @@ export interface InputFrame { moveX: number; moveZ: number; lookDX: number; look
 - 生成結果の確認: `node tools/tactical-preview.ts <dir> [seed]` が 5 区分＋本拠版を上から見た PNG に書き出す。`node tools/sight-stats.ts` が区分ごとの「200m で視線が通る割合」と生成時間を出す
 - **遮蔽物（07b、`gen/cover.ts`）**: `TacticalMap.brush`（`Brush { kind: 'hedge'|'bush'|'reeds'|'bamboo', ax, az, bx, bz, r, h }` ＝地面に立つカプセル。当たり判定なし・視線だけ遮る。`map.hash.brush` に登録）と `TacticalMap.props`（`Prop { kind: 'car'|'truck'|'log'|'greenhouse', ... }` ＝箱の小道具。車・倒木は `solids` に `kind: 'scenery'` の箱も持つ）。土手・沢・段々畑は高さ配列を直接変える（`addDike` / `addCreek` / `terrace`）。生成の順は 地形 → 本拠の平坦化 → 配置（土手・道路・集落・小道具・畑）→ 射点 → 植生 → 遮蔽物
 
+- **中に入れる建物（07d、`src/gen/buildings/`、手引きは `docs/buildings_guide.md`）**: 種類 `BuildingDef`（カテゴリ別の `catalog/<category>.ts` に登録）が `generate(rng, {w, d, seed})` で設計図 `BuildingBlueprint`（部品・開口・階・部屋・階段・探索ポイント・部屋のつながり。データだけ）を返す。組み立ては `kit.ts`。地図は `TacticalMap.placements: BuildingPlacement[]`（種類・位置・向き `rot`・シード）と、外形の箱（`Solid.enter` = placements の添字、`Building.enter`）だけを持つ。設計図と世界座標の当たり判定（2m の格子つき）は `blueprintOf` / `detailOf` が最初に使われたときに作り LRU に置く（`TACTICAL.interior`）
+  - 当たり判定: `raycastWorld` / `segmentHitsStatic` / `pushOut` / `supportAt` / `ladderAt` は外形の箱に触れたら中の箱（壁・床・階段・家具、ガラス）で判定する。ガラス（`pane`）は動くものだけ止め、弾と視線は通す。部品から自動で作るので描画と同じ寸法（勾配屋根は内接する 3 段の箱）
+  - ゾンビ・生存者の経路: `sim/tactical/indoor.ts`（`whereIs` / `indoorStep` / `indoorPath` / `roomRoute`）。追跡中のゾンビは `zombies.ts` の chase で使う（プレイヤーから 90m 以内）。4m の通行グリッドでは建物のタイルは通れないまま
+  - 区域の生成: 03 の配置のまま、一部の家・コンビニ・オフィスを見本に差し替える（`lands.ts` の `enterableIn`、割合は `TACTICAL.enterable`、別の乱数列なので他の配置は変わらない）。配置の規則は 07d-3
+  - 拠点: 06 の機能建物は `defs/base/hall.ts` の設計図（`base.<構造物 id>`）。`sim/build/structures.ts` の `syncMap` が完成した建物ごとに placements の後ろへ足す（生成時の数より後ろは毎回作り直し）。生存者の行き先は `sim/colony/ai.ts` の `indoorSpot`、道のりは `routeTo`
+  - 試験用の地図: `state.flags.range` ＋ `state.flags.yard`（`sim/tactical/yard.ts`、`?yard=1`）に全種類が並ぶ
+
 ## 8. 描画方針（性能予算）
 
 - 目標: 内蔵GPUのノートPCで 60fps（最低 30fps）。ドローコール < 150
@@ -405,6 +412,8 @@ export interface InputFrame { moveX: number; moveZ: number; lookDX: number; look
 - 本拠の構造物・生存者は、隣のセルにいるときも本拠の地図（`neighbourMap`）の高さで、ずらして描く（`structures.ts` / `survivors.ts` の `ox` / `oz`）
 - 自分の弾（08、`render/tactical/shots.ts`）: 飛んでいる弾（`state.tactical.bullets`）の後ろに 18m の薄い線（加算合成、LineSegments 1。弾が 12m 飛ぶまでは出さない）。銃口の煙は `effects.ts` の粒子（スコープ中は視野に入らないよう低く短く）、発砲の小さな揺れ（ロール）は `camera.ts`。数値は `RENDER.shots`
 - 音（08、`src/audio/`）: Web Audio の合成のみ（`synth.ts` の発振器・ノイズ・フィルタ・包絡）。最初のキー入力かクリックで AudioContext を開始。位置のある音は聞き手（戦術ではプレイヤー、指揮層では俯瞰カメラの注視点）からの方角で左右に振り、距離で減衰・こもらせ、遠い着弾・壁・防衛担当の銃声は距離 ÷ 343 m/s 遅らせる。数値は `data/audio.ts`
+
+- 中に入れる建物（07d、`render/tactical/enterables.ts`）: 区域ごとに、外形の箱 1 ＋外形の屋根 1（設計図なし、遠景）と、部品の形ごとの InstancedMesh（箱・切妻・寄棟・くさび・ガラス）の最大 7 ドローコール。建物ごとに距離で段階（遠景・外観・内部、`RENDER.enterables`）を決め、段階を上げるのは 1 フレームに 1 棟（近い順、設計図の生成と書き込み）、下げるのはその場（スロットを 0 にして返す）。スロットは形ごとのプールから範囲で借り、足りなければ倍に作り直す。色は `RENDER.materials`。06 の構造物の描画（`structures.ts`）は中に入れる建物を描かない
 
 ## 9. UI 方針
 

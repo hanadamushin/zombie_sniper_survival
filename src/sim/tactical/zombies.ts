@@ -24,6 +24,8 @@ import { bodyDistance, damageStructure, defOf, GATE_THICK, moatFilled, overlayOf
 import { cellTactical } from '../world/derive.ts';
 import type { TacticalArea } from './area.ts';
 import { heightAt, isWalkable, pushOut, segmentHitsStatic, sightBlocked, supportAt, type Vec3 } from './collision.ts';
+import { indoorStep } from './indoor.ts';
+import { TACTICAL } from '../../data/tactical.ts';
 import { GROUND } from '../../gen/index.ts';
 import { hurtPlayer, isDead } from './health.ts';
 import { RANGE_SPOTS } from './range.ts';
@@ -749,6 +751,19 @@ function updateOne(state: GameState, area: TacticalArea, ctx: SimContext, z: Zom
         z.t = Z.attackWindup;
         return;
       }
+      // 07d: the player is in an enterable building, or the zombie is: room by room, through the
+      // doors that are open and wide enough for it, up and down the stairs.
+      if (map.placements.length > 0 && pdist < TACTICAL.interior.routeRange) {
+        const way = indoorStep(map, z, def.radius, p.pos);
+        if (way) {
+          z.stair = -1;
+          // Following the player through a building, it hears where they went: close by it does not
+          // lose track, further off it keeps on longer than in the open.
+          if (!sees) z.lost -= pdist < TACTICAL.interior.hear ? dt : dt * (1 - TACTICAL.interior.lostRate);
+          moveToward(state, area, z, way[0], way[2], speedOf(z, def, night), dt, near1);
+          return;
+        }
+      }
       let tx = z.goal[0];
       let tz = z.goal[1];
       // The player is up a building with outside stairs: go by the stairs.
@@ -990,7 +1005,9 @@ export function updateZombies(state: GameState, area: TacticalArea, ctx: SimCont
   if (!t) return;
   const dt = ctx.dt;
   const step = (t.step = (t.step ?? 0) + 1);
-  if (state.flags.range) spawnRange(state, area, dt);
+  if (state.flags.range) {
+    if (!state.flags.yard) spawnRange(state, area, dt);
+  }
   else if (ctx.grid) spawn(state, area, ctx.grid, dt);
 
   const p = state.player;

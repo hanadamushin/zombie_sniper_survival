@@ -17,6 +17,7 @@ import { mapOf } from '../../sim/tactical/area.ts';
 import type { RenderContext, SubRenderer } from '../index.ts';
 import { buildBrush, type BrushPart } from './brush.ts';
 import { buildBuildings } from './buildings.ts';
+import { buildEnterables, type EnterablePart } from './enterables.ts';
 import { around, cellOffset, groundPixelsOf, neighbourMap } from './neighbours.ts';
 import { buildTerrain, type Built, type TerrainPart } from './terrain.ts';
 import { buildVegetation, type Vegetation } from './vegetation.ts';
@@ -33,11 +34,15 @@ interface Entry {
   terrain: TerrainPart | null;
   vegetation: Vegetation | null;
   brush: BrushPart | null;
+  enterables: EnterablePart | null;
   /** Parts still to build, in order. */
-  todo: ('terrain' | 'buildings' | 'vegetation' | 'brush')[];
+  todo: ('terrain' | 'buildings' | 'enterables' | 'vegetation' | 'brush')[];
 }
 
 let pendingWork = 0;
+let stageCount = { far: 0, mid: 0, near: 0, pending: 0 };
+/** 07d: enterable buildings at each drawing stage over every map drawn, and those waiting to go up. */
+export const enterableStats = (): { far: number; mid: number; near: number; pending: number } => ({ ...stageCount });
 /** Neighbour maps still being built or awaited (perf checks wait for 0: steady frames only). */
 export const worldPending = (): number => pendingWork;
 
@@ -49,7 +54,7 @@ export function createTacticalRenderer(): SubRenderer {
   const start = (map: TacticalMap): Entry => {
     const group = new THREE.Group();
     ctx.scene.add(group);
-    const entry: Entry = { map, group, parts: [], terrain: null, vegetation: null, brush: null, todo: ['terrain', 'buildings', 'vegetation', 'brush'] };
+    const entry: Entry = { map, group, parts: [], terrain: null, vegetation: null, brush: null, enterables: null, todo: ['terrain', 'buildings', 'enterables', 'vegetation', 'brush'] };
     entries.set(map, entry);
     return entry;
   };
@@ -59,6 +64,7 @@ export function createTacticalRenderer(): SubRenderer {
     let part: Built;
     if (what === 'terrain') part = e.terrain = buildTerrain(e.map, ctx.renderer, { apron: !e.map.params.world, pixels: groundPixelsOf(e.map) });
     else if (what === 'buildings') part = buildBuildings(e.map);
+    else if (what === 'enterables') part = e.enterables = buildEnterables(e.map);
     else if (what === 'vegetation') part = e.vegetation = buildVegetation(e.map);
     else if (what === 'brush') part = e.brush = buildBrush(e.map);
     else return;
@@ -110,7 +116,9 @@ export function createTacticalRenderer(): SubRenderer {
       }
       for (const e of [...entries.values()]) if (!wanted.has(e.map)) drop(e);
       let budget = 1; // neighbour parts built this frame
+      let stages: number = RENDER.enterables.perFrame; // 07d: enterable buildings going up a stage this frame
       pendingWork = missing;
+      const sc = { far: 0, mid: 0, near: 0, pending: 0 };
       for (const [map, off] of wanted) {
         let e = entries.get(map);
         if (!e) {
@@ -134,7 +142,17 @@ export function createTacticalRenderer(): SubRenderer {
         const away = Math.hypot(Math.max(-local.x, 0, local.x - map.size), Math.max(-local.z, 0, local.z - map.size));
         e.vegetation?.update(local, RENDER.fog.far, away < RENDER.flora.grassRange);
         e.brush?.update(local.x, local.z);
+        if (e.enterables) {
+          stages = e.enterables.update(local.x, local.y, local.z, stages);
+          pendingWork += e.enterables.pending();
+          const [f, m, n] = e.enterables.stages();
+          sc.far += f;
+          sc.mid += m;
+          sc.near += n;
+          sc.pending += e.enterables.pending();
+        }
       }
+      stageCount = sc;
     },
     dispose: clear,
   };

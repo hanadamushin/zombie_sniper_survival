@@ -35,3 +35,10 @@
 
 ## 終わりに
 `CLAUDE.md` の「終わる前にやること」を実行。後続（07d の他の担当、09、10）向けの注意があれば各プロンプトの末尾に追記してください。
+
+## 07d-1 からの注意
+- 手引きは `docs/buildings_guide.md`。見本は `src/gen/buildings/defs/{house/wood2,shop/konbini,office/zakkyo5,base/hall}.ts`
+- 登録したら `npx vitest run tests/buildings.test.ts -t '<id>'` で 5 項目（決定性・三角形・到達性・部屋内の直線・4 方向の歩行）が自動で走る。失敗のメッセージに部屋と座標が出る。目視は `npm run buildings:preview`（`tmp/buildings/<id>.png` に各階の平面図）と `?yard=1`（全種類が並ぶ。`debug.enterables()` / `debug.pathTo()`）
+- 落とし穴: 歩ける場所はすべて長方形の部屋で覆う（L 字は 2 部屋＋`join`）。階段の穴の上は部屋にしない。敷地の外に当たり判定のある部品を置かない（庇・看板は `solid: false`）。塔屋・看板の高さは `roofRise` に含める。扉の内側 1.4m に家具を置かない
+- 収穫表は `src/data/colony.ts` の `ROOM_LOOT`。新しい部屋の用途（`RoomUse`）や棚（`LootTableId`）を足したら行も足す（無ければ土地の表になる）。`RoomUse` / `MaterialId` / `FurnitureKind` への追加は型（`src/gen/buildings/types.ts`）にも要る — 並行作業で衝突しやすいので、追加は末尾に 1 行ずつ
+- 肥大型（半径 0.5m）は 0.9m の扉を通れない。肥大型を入れたい建物（倉庫・駅など）は 1.8m の扉を付ける

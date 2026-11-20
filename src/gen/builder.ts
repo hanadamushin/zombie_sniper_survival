@@ -7,6 +7,8 @@ import { TACTICAL } from '../data/tactical.ts';
 import { sampleHeight } from './height.ts';
 import { smoothstep } from './noise.ts';
 import { editFade } from './world.ts';
+import { ARCH } from '../data/architecture.ts';
+import { buildingDef, makePlacement, worldSize, type BuildingPlacement, type Rot } from './buildings/index.ts';
 import { GROUND, type Area, type Brush, type Building, type BuildingKind, type GenParams, type Ladder, type Prop, type Road, type RoadKind, type Rock, type Solid, type Vantage } from './types.ts';
 
 const T = TACTICAL;
@@ -23,6 +25,8 @@ export interface Builder {
   /** Tiles taken by roads, buildings, stairs, fields... (placement tests). */
   occupied: Uint8Array;
   buildings: Building[];
+  /** 07d: enterable buildings (gen/buildings). */
+  placements: BuildingPlacement[];
   solids: Solid[];
   ladders: Ladder[];
   roads: Road[];
@@ -47,6 +51,7 @@ export function createBuilder(params: GenParams): Builder {
     ground: new Uint8Array(TILES * TILES),
     occupied: new Uint8Array(TILES * TILES),
     buildings: [],
+    placements: [],
     solids: [],
     ladders: [],
     roads: [],
@@ -246,6 +251,36 @@ export function addBuilding(b: Builder, kind: BuildingKind, x0: number, z0: numb
   // The box reaches below the floor so that it meets sloping ground on every side.
   b.solids.push({ x0, z0, x1, z1, y0: hi - 6, y1: hi + height, kind: 'building', ref: building.id });
   occupy(b, x0 - 1, z0 - 1, x1 + 1, z1 + 1);
+  return building;
+}
+
+/** Stable seed of the n-th enterable building of a map. */
+function placementSeed(mapSeed: number, n: number): number {
+  let h = Math.imul((mapSeed ^ 0x27d4eb2f) >>> 0, 0x165667b1) ^ Math.imul(n + 1, 0x9e3779b1);
+  h = Math.imul(h ^ (h >>> 15), 0x85ebca6b);
+  return (h ^ (h >>> 13)) >>> 0;
+}
+
+/**
+ * 07d: an enterable building of type `defId`, local size lw × ld (see gen/buildings fitSize), its
+ * front facing `rot`, the world footprint starting at (x0, z0). The map keeps only the placement
+ * and an envelope box; the blueprint is made when something comes close.
+ */
+export function addEnterable(b: Builder, defId: string, x0: number, z0: number, lw: number, ld: number, rot: Rot): Building {
+  const def = buildingDef(defId);
+  const [ww, wd] = worldSize(rot, lw, ld);
+  const [, hi] = heightRange(b, x0, z0, x0 + ww, z0 + wd);
+  const id = b.buildings.length;
+  const enter = b.placements.length;
+  const place = makePlacement(defId, placementSeed(b.params.mapSeed, enter), rot, lw, ld, x0, z0, hi, id);
+  b.placements.push(place);
+  const building: Building = {
+    id, kind: def.kind, x0, z0, x1: place.x1, z1: place.z1, base: hi, height: place.height, roof: def.roof === 'flat' ? 'flat' : 'gable',
+    tint: 0.5, lootable: def.lootable ?? true, access: 'none', enter,
+  };
+  b.buildings.push(building);
+  b.solids.push({ x0, z0, x1: place.x1, z1: place.z1, y0: hi - ARCH.foundation, y1: hi + place.height, kind: 'building', ref: id, enter });
+  occupy(b, x0 - 1, z0 - 1, place.x1 + 1, place.z1 + 1);
   return building;
 }
 

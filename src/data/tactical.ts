@@ -53,6 +53,37 @@ export const TACTICAL = {
     edgeMargin: 2,
   },
 
+  /**
+   * Enterable buildings (07d, gen/buildings, sim/tactical/indoor.ts). Blueprints and their world
+   * collision are generated the first time something touches a building and kept in LRU caches of
+   * these sizes. Zombies chasing the player find their way through rooms and doors only for the
+   * buildings within `routeRange` of the player.
+   */
+  interior: {
+    blueprints: 256,
+    details: 160,
+    routeRange: 90,
+    /** A chasing zombie heads straight for a door within this distance (further out it follows the flow field). */
+    doorApproach: 30,
+    /** A waypoint counts as reached within this (m, horizontal) and this height difference. */
+    reach: 0.45,
+    reachY: 0.9,
+    /** While a chasing zombie is on its way through a building, it loses track of an unseen player this much slower. */
+    lostRate: 0.25,
+    /** ...and within this distance of the player it does not lose track at all (it hears them inside). */
+    hear: 25,
+  },
+  /**
+   * 07d samples standing in for some of 03's generated buildings (the rest stay boxes until 07d-3
+   * places every building as a type): the share of suburban / rural houses, suburban shops, car-park
+   * shops and urban offices that become the enterable sample of their kind (when the lot fits).
+   */
+  enterable: {
+    house: 0.35,
+    shop: 0.6,
+    office: 0.25,
+  },
+
   stairs: {
     rise: 0.3,
     /** Horizontal length of one flight and of a landing, lane width (m). */

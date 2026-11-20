@@ -11,6 +11,7 @@ import * as THREE from 'three';
 import { commandView } from '../../core/view.ts';
 import type { GameState, Structure } from '../../core/types.ts';
 import { BUILD, BUILDINGS, footprint, type BuildingDef } from '../../data/buildings.ts';
+import { BASE_BLUEPRINT } from '../../gen/buildings/defs/base/hall.ts';
 import { RENDER } from '../../data/render.ts';
 import type { TacticalMap } from '../../gen/index.ts';
 import { defOf, isRuin, maxHp, moatFilled, overlayOf, TILE, TILES, towerLadderDir, type Overlay } from '../../sim/build/structures.ts';
@@ -420,7 +421,8 @@ export function createStructureRenderer(): SubRenderer {
             case 'moat': drawMoat(ov, state, st, def, y); break;
             case 'tower': drawTower(st, def, y, wear); break;
             case 'wire': drawWire(st, y, wear); break;
-            default: drawBuilding(st, def, y, wear, raised);
+            // 07d: enterable buildings are drawn from their blueprints (enterables.ts).
+            default: if (!BASE_BLUEPRINT[def.id]) drawBuilding(st, def, y, wear, raised);
           }
         }
         if (commandView.highlight === st.id) ghostBox((st.tx + w / 2) * TILE, y, (st.ty + d / 2) * TILE, w * TILE + 0.3, Math.max(1, def.height) + 0.4, d * TILE + 0.3, R.bad);

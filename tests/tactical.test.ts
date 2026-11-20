@@ -121,9 +121,16 @@ describe('tactical map generation', () => {
       expect(Math.min(sx, sz, map.size - sx, map.size - sz)).toBeLessThan(16);
       expect(supportAt(map, sx, sz, Infinity)).toBeCloseTo(heightAt(map, sx, sz), 6);
       expect(map.lootSpots).toHaveLength(want);
-      expect(new Set(map.lootSpots.map((s) => s.building)).size).toBe(want);
+      // 07d: an enterable building gives a spot per shelf inside (on its floor); the others one at the door.
+      const outside = map.lootSpots.filter((s) => s.y === undefined);
+      expect(new Set(outside.map((s) => s.building)).size).toBe(outside.length);
       for (const spot of map.lootSpots) {
         const b = map.buildings[spot.building]!;
+        if (spot.y !== undefined) {
+          expect(b.enter).toBeDefined();
+          expect(spot.pos[0] > b.x0 && spot.pos[0] < b.x1 && spot.pos[1] > b.z0 && spot.pos[1] < b.z1).toBe(true);
+          continue;
+        }
         const dx = Math.max(b.x0 - spot.pos[0], 0, spot.pos[0] - b.x1);
         const dz = Math.max(b.z0 - spot.pos[1], 0, spot.pos[1] - b.z1);
         expect(Math.hypot(dx, dz)).toBeGreaterThan(0.5);

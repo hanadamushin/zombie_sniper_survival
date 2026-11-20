@@ -73,6 +73,50 @@ export const RENDER = {
     park: 0x62804c,
     plaza: 0xa39c8f,
   },
+  /**
+   * Enterable buildings (07d, render/tactical/enterables.ts). Each one is drawn in one of three
+   * stages by its distance from the camera: beyond `mid` a single box with the roof shape (the far
+   * outline snipers need), within `mid` the outside (walls, windows, doors, roof), within `near` (or
+   * with the camera inside it) the inside too. A building drops a stage only `hysteresis` metres past
+   * the line. At most `perFrame` buildings go up a stage per frame (nearest first). Instances are
+   * pooled per shape; a pool starts with `capacity` slots and doubles when full.
+   */
+  enterables: { near: 40, mid: 300, hysteresis: 15, perFrame: 1, capacity: 4096, glassOpacity: 0.32, interiorShade: 0.82 },
+  /** 07d: colours of the building materials (gen/buildings/types.ts MaterialId); Part.tint picks one. */
+  materials: {
+    concrete: [0x9a9790, 0x8c8a85, 0xa8a49a, 0x7f817f],
+    plaster: [0xd8d2c4, 0xcfd3d4, 0xe2dccb, 0xc7bfae, 0xb9c2c6],
+    mortar: [0xb8b2a4, 0xa9a598, 0xc4bca8],
+    siding: [0xc9c3b3, 0xb4b8b0, 0xd2c8ae, 0x9fa5a3, 0xc1b49a, 0x8f9a94],
+    brick: [0x8a5a44, 0x7a4e3e, 0x95654c],
+    wood: [0x8a6a4a, 0x7a5c40, 0x9a7a56, 0x6d5238, 0xa88a62],
+    woodDark: [0x4f3b2a, 0x5a4330],
+    tile: [0x3f4650, 0x4a4f58, 0x5b4a42, 0x37414a],
+    slate: [0x50525a, 0x5e5a55, 0x434a52],
+    metalRoof: [0x6b4038, 0x3f4a4c, 0x5a6a6e, 0x7a6b52],
+    steel: [0x5a5f63, 0x6a6f72, 0x4f5458],
+    rust: [0x7a5440, 0x6e4a3a],
+    glass: [0x2a3a48, 0x334450],
+    shutter: [0x8e9296, 0x7d8286, 0x9aa0a2],
+    door: [0x6a5440, 0x5a4636, 0x7d7268],
+    doorSteel: [0x5f666b, 0x6f7478],
+    frame: [0x3c3e40],
+    flooring: [0x8f6f4d, 0xa0805a, 0x7d6045],
+    tatami: [0xa9a46a, 0x9c9a62],
+    carpet: [0x5d5a63, 0x6a5e52],
+    tileFloor: [0xb8b6ae, 0xa9aaa6],
+    vinyl: [0x8d918c, 0x9a958a],
+    paper: [0xe6e0cf],
+    fabric: [0x5b6a7a, 0x7a5b52, 0x6a7a5b, 0x8a8a80],
+    shelf: [0x9aa0a4, 0x8a9296, 0xb0b2ae],
+    counter: [0xbcb6a6, 0x9a8a72, 0x6f6a62],
+    appliance: [0xd4d6d4, 0xc4c8ca, 0x8a8e90],
+    sign: [0x2f7a4a, 0x2a5a9a, 0xb04a2a, 0xd0a020],
+    blood: [0x4a120e, 0x3a100c],
+    debris: [0x6a6258, 0x58524a],
+    plant: [0x4a6634],
+    asphalt: [0x47484b],
+  },
   buildings: {
     /** Wall colours by kind (picked by Building.tint). */
     walls: {

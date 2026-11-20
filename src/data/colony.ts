@@ -6,6 +6,8 @@ import type { JobId, Land, ResourceId } from '../core/types.ts';
 export type LootTable = Partial<Record<ResourceId, number>>;
 
 export const COLONY = {
+  /** 07d: how wide survivors are when the base's buildings pick the doors they use (m, radius). */
+  walkRadius: 0.3,
   // --- §4.1 generation ---
   survivor: {
     /** Stats are (dice)d(sides) - offset, clamped to 1..10: 3d4-2 gives a bell around 5.5. */
@@ -257,6 +259,50 @@ const LOOT_BASE: Record<Land, LootTable> = {
 export const LOOT_TABLE: Record<Land, LootTable> = Object.fromEntries(
   Object.entries(LOOT_BASE).map(([land, t]) => [land, Object.fromEntries(Object.entries(t).map(([r, v]) => [r, v * LOOT_SCALE]))]),
 ) as Record<Land, LootTable>;
+
+/**
+ * 07d: what a search point inside a building yields, by its loot table id (the room's use, or a
+ * special shelf: pharmacy / grocery / tools / weapons), per point at loot = 1 before LOOT_SCALE.
+ * Same scale as LOOT_BASE (a suburban building is about 0.27 a point in all). Unknown ids fall back
+ * to the land table. 07d-2 adds rows here for new room uses.
+ */
+const ROOM_LOOT_BASE: Record<string, LootTable> = {
+  living: { food: 0.06, wood: 0.03, metal: 0.02, parts: 0.02, medicine: 0.01 },
+  kitchen: { food: 0.16, metal: 0.02, fuel: 0.02 },
+  bedroom: { food: 0.02, wood: 0.02, parts: 0.01, medicine: 0.02, ammo: 0.005 },
+  tatami: { food: 0.03, wood: 0.04, medicine: 0.01 },
+  closet: { food: 0.02, wood: 0.05, parts: 0.02, medicine: 0.01 },
+  bath: { medicine: 0.04, parts: 0.01 },
+  toilet: { medicine: 0.03 },
+  genkan: { wood: 0.01, metal: 0.01 },
+  hall: { wood: 0.01, metal: 0.01 },
+  stairs: { metal: 0.01 },
+  lobby: { metal: 0.01, parts: 0.01 },
+  roof: { metal: 0.02 },
+  platform: { metal: 0.02, food: 0.01 },
+  sales: { food: 0.12, parts: 0.02, medicine: 0.02 },
+  grocery: { food: 0.2, fuel: 0.01 },
+  pharmacy: { medicine: 0.1, food: 0.02 },
+  backroom: { food: 0.06, wood: 0.05, metal: 0.04, parts: 0.03, cement: 0.02, fuel: 0.02 },
+  storage: { food: 0.06, wood: 0.05, metal: 0.04, parts: 0.03, cement: 0.02, fuel: 0.02 },
+  office: { food: 0.02, wood: 0.02, metal: 0.03, parts: 0.04 },
+  clinic: { medicine: 0.12, parts: 0.02 },
+  bar: { food: 0.06, fuel: 0.04 },
+  classroom: { food: 0.02, wood: 0.03, parts: 0.02 },
+  lab: { metal: 0.02, parts: 0.06, medicine: 0.04 },
+  workshop: { metal: 0.08, cement: 0.02, parts: 0.06, fuel: 0.03 },
+  tools: { metal: 0.08, cement: 0.02, parts: 0.06, fuel: 0.03 },
+  machine: { metal: 0.06, parts: 0.06, fuel: 0.04 },
+  garage: { metal: 0.06, parts: 0.05, fuel: 0.06 },
+  canteen: { food: 0.14, fuel: 0.02 },
+  barracks: { food: 0.04, ammo: 0.04, medicine: 0.02 },
+  command: { ammo: 0.03, parts: 0.03 },
+  armory: { ammo: 0.15, metal: 0.04, parts: 0.03 },
+  weapons: { ammo: 0.15, metal: 0.04, parts: 0.03 },
+};
+export const ROOM_LOOT: Readonly<Record<string, LootTable>> = Object.fromEntries(
+  Object.entries(ROOM_LOOT_BASE).map(([id, t]) => [id, Object.fromEntries(Object.entries(t).map(([r, v]) => [r, v * LOOT_SCALE]))]),
+);
 
 /** What an expedition can be sent out with (spec §4.4). `tech` (07) gates availability when set. */
 export interface ExpeditionWeapon {

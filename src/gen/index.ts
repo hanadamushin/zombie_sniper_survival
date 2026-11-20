@@ -19,6 +19,7 @@ import { heightStats, scatterFlora } from './flora.ts';
 import { sampleHeight } from './height.ts';
 import { layout, terrainFn } from './lands.ts';
 import { smoothstep } from './noise.ts';
+import { detailOf } from './buildings/index.ts';
 import { GROUND, type Brush, type GenParams, type LootSpot, type Solid, type StaticHash, type TacticalMap } from './types.ts';
 
 export * from './types.ts';
@@ -104,6 +105,16 @@ function placeLootSpots(b: Builder): LootSpot[] {
   const spots: LootSpot[] = [];
   for (const bd of pool) {
     if (spots.length >= b.params.lootSpots) break;
+    if (bd.enter !== undefined) {
+      // 07d: an enterable building is searched at its shelves, desks and lockers (each one a spot).
+      const det = detailOf(b.placements[bd.enter]!);
+      for (const sp of det.search) {
+        if (spots.length >= b.params.lootSpots) break;
+        if (det.bp.rooms[sp.room]?.locked) continue;
+        spots.push({ id: spots.length, pos: [sp.wpos[0], sp.wpos[2]], building: bd.id, y: sp.wpos[1], table: sp.table });
+      }
+      continue;
+    }
     const cx = (bd.x0 + bd.x1) / 2;
     const cz = (bd.z0 + bd.z1) / 2;
     const doors: [number, number][] = [[cx, bd.z1 + 1.3], [cx, bd.z0 - 1.3], [bd.x1 + 1.3, cz], [bd.x0 - 1.3, cz]];
@@ -291,6 +302,7 @@ export function finishMap(b: Builder, terrain?: (x: number, z: number) => number
     ground: b.ground,
     walk: buildWalkGrid(b),
     buildings: b.buildings,
+    placements: b.placements,
     solids: b.solids,
     ladders: b.ladders,
     roads: b.roads,
