@@ -10,12 +10,25 @@ import { commandView, VIEW_LIMITS } from '../../core/view.ts';
 import { mapOf } from '../../sim/tactical/area.ts';
 import { heightAt } from '../../sim/tactical/collision.ts';
 import { viewFovDeg } from '../../sim/tactical/weapon.ts';
+import { settings } from '../../settings.ts';
 import type { FrameInfo, RenderContext, SubRenderer } from '../index.ts';
 
 export interface CameraRig extends SubRenderer {
   /** Vertical field of view override in degrees (null = follow the player's scope: sim/tactical/weapon.ts viewFovDeg). */
   setFov(fov: number | null): void;
   fov(): number;
+}
+
+const DEG = Math.PI / 180;
+/**
+ * Settings (08): the field of view without the scope. Only the un-scoped end changes; through the
+ * scope the picture is exactly the sim's (the mil reticle depends on it).
+ */
+function tacticalFov(scopeT: number, simFov: number): number {
+  if (settings.fov === RENDER.camera.fov || scopeT >= 1) return simFov;
+  const k = Math.tan((settings.fov * DEG) / 2) / Math.tan((RENDER.camera.fov * DEG) / 2);
+  const tan = Math.tan((simFov * DEG) / 2) * (1 + (k - 1) * (1 - scopeT));
+  return (2 * Math.atan(tan)) / DEG;
 }
 
 export function createCameraRig(): CameraRig {
@@ -30,11 +43,19 @@ export function createCameraRig(): CameraRig {
   let fresh = true;
   let groundY = 0;
   let areaKey: unknown = null;
+  /** 08: a small roll kick on each shot, settling back (presentation only; the sim's recoil is separate). */
+  let kick = 0;
+  let kickT = 0;
 
   return {
     id: 'camera',
     init(ctx: RenderContext) {
       camera = ctx.camera;
+      ctx.events.on('shotFired', (e) => {
+        const S = RENDER.shots;
+        kick = S.shakeRoll * (e.scoped ? S.shakeScoped : 1) * (Math.random() < 0.5 ? -1 : 1);
+        kickT = 0;
+      });
       camera.rotation.order = 'YXZ';
       // Screen point -> point on the ground under the overhead camera (the base is level, so a plane will do).
       const ndc = new THREE.Vector3();
@@ -72,7 +93,7 @@ export function createCameraRig(): CameraRig {
         prev.copy(curr);
         curr.set(x, y, z);
       }
-      fov = override ?? (state.mode === 'tactical' ? viewFovDeg(p) : C.fov);
+      fov = override ?? (state.mode === 'tactical' ? tacticalFov(p.aim.scopeT, viewFovDeg(p)) : C.fov);
       if (camera.fov !== fov) {
         camera.fov = fov;
         camera.updateProjectionMatrix();
@@ -87,7 +108,9 @@ export function createCameraRig(): CameraRig {
         if (Math.abs(iy - eyeY) > 1.5) eyeY = iy;
         camera.position.set(ix, eyeY + p.eye, iz);
         // Sway and recoil move the whole picture; the reticle stays in the middle (04).
-        camera.rotation.set(p.pitch + p.aim.off[1], p.yaw + p.aim.off[0], 0);
+        kickT += frame.realDt;
+        const roll = kick * Math.exp(-RENDER.shots.shakeDecay * kickT) * Math.cos(kickT * 40);
+        camera.rotation.set(p.pitch + p.aim.off[1], p.yaw + p.aim.off[0], Math.abs(roll) > 1e-5 ? roll : 0);
       } else {
         // Command / world / menu: an overhead camera the player can pan, zoom and turn (06).
         // It starts above the player, looking north, and is re-centred when the area changes.

@@ -336,6 +336,7 @@ export interface InputFrame { moveX: number; moveZ: number; lookDX: number; look
 04 が追加したイベント: `dryFire`, `reloadStarted{seconds}`, `reloadDone{mag}`, `knifeSwing{hit, killed}`, `playerInfected{untilDay, untilMinute}`, `playerRevived`, `zombieAlerted{id, chase}`。`bulletHit` に `surface`（ゾンビ以外に当たったときの種類）・`dir`・`range`・`killed`、`zombieKilled` に `knife`、`playerHurt` / `playerDied` に `cause`、`shotFired` に `scoped` を追加。
 05 が追加: コマンド `setPolicy{autoBuyFood}`（`resupply` は colony システムが担当）。イベント `candidateFound{id, cell, by}`, `spotSearched{spot, items}`, `expeditionSent`, `earsDeposited{amount}`, `resupplied{ammo}`, `foodBought{amount, cost, source}`, `colonyLog{kind, text}`。`defeat{reason:'noColony'}` と `playerRevived` は共同体が発火。
 06 が追加: コマンド `setStructurePriority{id, priority}`, `upgradeOutpost{id}`, `assignGarrison{survivor, outpost|null}`、`travel` に `fast?`。`placeBlueprint` / `cancelStructure` / `setStructurePriority` は build、`foundOutpost` / `upgradeOutpost` / `assignGarrison` は world、`resupply` は colony（本拠でなければ駐屯地から）。イベント `blueprintPlaced`, `structureRemoved`, `raidStarted{kind, size, dir, away}`, `raidEnded{kind, killed, repelled, away}`, `defenderFired{id, pos, target, hit}`, `survivorHurt`, `outpostUpgraded`, `outpostSupplied`。`structureDamaged`（耐久の 1/20 ごと）, `structureDestroyed`, `structureBuilt`, `moatBridged`, `hordeWarning`, `hordeArrived`, `outpostFounded`, `outpostLost`, `defeat{reason:'hqDestroyed'}` を発火。`zombieKilled.by` は防衛担当か構造物（有刺鉄線・堀）の id になり得る。
+08 が追加: コマンド `markSeen{key}`（time システムが担当。`state.flags['seen.<key>'] = true`、キーは英数字と `._-` の 32 文字まで）。イベントの追加はなし。
 07 が追加: コマンド `dismissEnding`、`startResearch` / `setAllocation` を実装（research システム）。イベント `techCompleted{id}`, `eraAdvanced{era}`, `victory{tech}` を発火。`candidateFound.by` に `'radio'`。拒否理由 `unknownTech` / `techDone` / `techLocked` / `techEra` / `techPrereq` / `badAllocation` / `popCap`、`assignJob` の `locked`。
 `dayStarted` は 00:00 に、同じ tick の `hourStarted{hour:0}` より先に発火する。
 
@@ -402,6 +403,8 @@ export interface InputFrame { moveX: number; moveZ: number; lookDX: number; look
 - ゾンビの遠景（07c）: 画面上の身長（スコープの倍率込み）が `RENDER.zombies.lodPixels`（14px）未満の個体は、胴と頭の 2 箱で、姿勢も動きも付けない（`Bodies.addSimple`）。視野・霧の外は描かない。当たり判定（sim）は常に細かい形のまま
 - 補給箱（07c）: 数と弾数は `gen/caches.ts` の `cacheAmmo(mapSeed, land)`、置き場所は `TacticalMap.caches`。残りは `sim/world/outposts.ts` の `cachesLeft` / `cacheInReach` / `resupplyFromCache`（`world.cacheTaken` に取った量）。描画は `render/tactical/beacons.ts`（光の柱と弾薬箱、2 ドローコール）
 - 本拠の構造物・生存者は、隣のセルにいるときも本拠の地図（`neighbourMap`）の高さで、ずらして描く（`structures.ts` / `survivors.ts` の `ox` / `oz`）
+- 自分の弾（08、`render/tactical/shots.ts`）: 飛んでいる弾（`state.tactical.bullets`）の後ろに 18m の薄い線（加算合成、LineSegments 1。弾が 12m 飛ぶまでは出さない）。銃口の煙は `effects.ts` の粒子（スコープ中は視野に入らないよう低く短く）、発砲の小さな揺れ（ロール）は `camera.ts`。数値は `RENDER.shots`
+- 音（08、`src/audio/`）: Web Audio の合成のみ（`synth.ts` の発振器・ノイズ・フィルタ・包絡）。最初のキー入力かクリックで AudioContext を開始。位置のある音は聞き手（戦術ではプレイヤー、指揮層では俯瞰カメラの注視点）からの方角で左右に振り、距離で減衰・こもらせ、遠い着弾・壁・防衛担当の銃声は距離 ÷ 343 m/s 遅らせる。数値は `data/audio.ts`
 
 ## 9. UI 方針
 
@@ -409,6 +412,13 @@ export interface InputFrame { moveX: number; moveZ: number; lookDX: number; look
 - 指揮層のパネル: 生存者一覧（仕事割り振り）、建築メニュー、研究ツリー、経済台帳、ログ
 - 戦略地図: セルの色（Z 密度／loot／intel）、駐屯地、移動経路、遠征
 - 文言は `src/ui/i18n/ja.ts` に集約（日本語のみ実装、キーで参照）
+- **見た目の約束（08）**: 色・余白・書体・角丸・影は `ui/styles.css` 冒頭の CSS 変数（`--ink-*` 面、`--paper*` 文字、`--khaki` 操作できるもの、`--rust` 注意、`--blood*` 危険、`--line*` 罫線、`--s1..5` 余白、`--r1/2` 角、`--fs-*` 文字、`--font-num` 数字）だけを使う。面は `.panel`（薄い罫線の入った野帳の頁）、操作は `button` / `.chip` / `.icon-btn`、見出しは `.stamp`。新しい部品もこの組み合わせで作る
+- **画面の構成（08）**: 上部バー（`components/Hud.tsx`: 日付・速度・3 層の切替・問題・通知・メニュー、襲来の表示）は全モード共通で、スコープ中は消える。戦術 HUD（`components/Tactical.tsx`）は画面の縁の小箱だけ（左下 体力・姿勢・スタミナ、右下 弾・ゼロイン・倍率・耳、上 方位、左上 次にやること、下中央 ヒント 1 行と操作の案内）。スコープ中に残るのは弾数・息・ゼロイン・倍率だけ。指揮層（`command/CommandPanel.tsx`）は下のタブバー＋左右にドッキングするパネル（建築は右固定、他は ⇆ で入れ替え、▾ でたたむ）＋上の備蓄の帯＋反対側の「次にやること・問題」
+- **毎フレーム動く表示（08）**: 息・回収・体力・スタミナ・方位・画面効果は Preact の 10Hz 再描画に乗せない。部品が `ui/live.ts` の `useLive(fn)` で関数を登録し、メインループが毎フレーム `ui.frame()` → `liveFrame()` で要素の style を直接書く（`setStyle` は値が変わったときだけ書く）
+- **通知（08）**: `ui/notify.ts` の `createNotifier` が sim のイベントを購読する。共同体のログ（`colonyLog`）はそのままトーストになり（重さはログのキーで決まる）、ログのない出来事（感染・拒否された操作・セルの境界・時代・襲来のバナー・撃破の表示）はイベントから作る。ゾンビの撃破は 1 体ずつ通知しない。履歴はセッション内 80 件（上部バーの「通知」）。全イベントの音と表示の対応は `audio/feedback.ts` の `EVENT_FEEDBACK`（`Record<GameEventType, …>` なので、イベントを足すと型検査が対応の記入を求める）
+- **チュートリアル（08）**: `ui/guide.ts`。1 行ヒントの順序（`STEPS`）と状況のヒント（`tipFor`）、「次にやること」（`objectives`）。完了はゲームの記録（撃破数・雇用・設計図など）から判定し、記録のないもの（歩いた・覗いた・地図を開いた）と × で閉じたものはコマンド `markSeen{key}` で `state.flags['seen.tut.<id>']` に残す（セーブされる）。UI は state を直接書かない
+- **問題欄（08）**: `ui/warnings.ts` の `warnings(state)`（食料・未払い・士気・壁・堀・設計図と建築担当・感染・弾薬・待機・研究）。上部バーに件数、指揮層に一覧
+- **設定（08）**: `src/settings.ts`（GameState の外、localStorage）。マウス感度・矢印キー照準の速さ（入力層が掛ける。sim の `lookSensitivity` はそのまま）、スコープの押下／切替（入力層）、視野角（`render/tactical/camera.ts` がスコープなしの端だけ変える）、音量（`audio/`）、視程（`render/sky.ts` の霧）、解像度の自動調整のオン／オフと固定スケール（`main.ts` → `renderer.setAutoResolution` / `setFixedScale`）、ヒント、性能表示
 
 ## 10. テスト方針
 

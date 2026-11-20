@@ -48,6 +48,7 @@ export function TitleScreen({ actions }: { actions: UiActions }) {
       <div class="title-card">
         <h1>{t('app.title')}</h1>
         <p class="subtitle">{t('app.subtitle')}</p>
+        <p class="tagline">{t('title.tagline')}</p>
 
         <div class="row" role="group" aria-label={t('title.difficulty')}>
           <span class="label">{t('title.difficulty')}</span>
@@ -83,6 +84,7 @@ export function TitleScreen({ actions }: { actions: UiActions }) {
             ))}
           </div>
         )}
+        <span class="version">{t('title.version')}</span>
       </div>
     </div>
   );

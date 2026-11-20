@@ -3,6 +3,7 @@
 // and made the directional light follow whichever of the two is up.
 
 import * as THREE from 'three';
+import { settings } from '../settings.ts';
 import { daylight, hourFloat } from '../core/time.ts';
 import { RENDER } from '../data/render.ts';
 import type { RenderContext, SubRenderer } from './index.ts';
@@ -146,6 +147,9 @@ export function createSkyRenderer(): SubRenderer {
       skyColors(hour, colors);
       background.copy(colors.fog);
       fog.color.copy(colors.fog);
+      // Settings (08): a shorter view distance pulls the fog in (the scenery beyond is not drawn anyway).
+      fog.near = RENDER.fog.near * settings.viewDistance;
+      fog.far = RENDER.fog.far * settings.viewDistance;
       // Ambient: sky-coloured by day, a pale blue at night (so that the night is dark, not black).
       hemi.color.copy(ambientNight).lerp(colors.sky, colors.light);
       hemi.groundColor.copy(colors.ground);

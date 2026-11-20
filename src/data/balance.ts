@@ -36,6 +36,14 @@ export const BALANCE = {
     uiSyncHz: 10,
   },
 
+  // --- feel of the shot (08): the world stops for a moment when the player's round takes a head ---
+  feel: {
+    /** Seconds of real time; long-range kills (>= hitstopFarRange m) get a little more. Never slow motion. */
+    hitstop: 0.04,
+    hitstopFar: 0.08,
+    hitstopFarRange: 300,
+  },
+
   // --- docs/02_systems_spec.md §2.2 infection simulation (owner: 02 map / infection) ---
   infection: {
     /** Days simulated at build time; the game starts on the last one. */

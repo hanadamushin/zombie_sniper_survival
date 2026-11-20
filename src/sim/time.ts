@@ -41,7 +41,19 @@ export function advanceTime(state: GameState, ctx: SimContext): TimeBoundaries {
   return out;
 }
 
+/** Keys of `markSeen` (08): short identifiers only, so that a save cannot grow without bound. */
+const SEEN_KEY = /^[a-zA-Z0-9_.-]{1,32}$/;
+
 export const timeCommands: CommandHandlers = {
+  // Tutorial bookkeeping (08). Owned here because it belongs to no game domain.
+  markSeen(state, cmd, ctx) {
+    if (!SEEN_KEY.test(cmd.key)) {
+      ctx.emit({ type: 'commandRejected', command: cmd.type, reason: 'badKey' });
+      return;
+    }
+    state.flags[`seen.${cmd.key}`] = true;
+  },
+
   setSpeed(state, cmd, ctx) {
     if (!T.speeds.includes(cmd.speed)) {
       ctx.emit({ type: 'commandRejected', command: cmd.type, reason: 'invalidSpeed' });

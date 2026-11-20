@@ -32,7 +32,10 @@ export type Command =
   // --- world / tactical (02/03/04) ---
   /** `fast` (06): fast travel — both ends must be the base or an outpost. */
   | { type: 'travel'; to: CellId; fast?: boolean }
-  | { type: 'resupply' };
+  | { type: 'resupply' }
+  // --- presentation (08) ---
+  /** The player has seen a tutorial hint / notice: sets `state.flags['seen.<key>']` so that it is not shown again. */
+  | { type: 'markSeen'; key: string };
 
 export type CommandType = Command['type'];
 export type CommandOf<K extends CommandType> = Extract<Command, { type: K }>;

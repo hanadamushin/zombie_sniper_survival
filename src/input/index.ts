@@ -9,6 +9,7 @@ import { emptyInputFrame, type GameState, type InputFrame, type Mode, type Speed
 import { INPUT } from '../data/input.ts';
 import { TACTICAL } from '../data/tactical.ts';
 import { actionForCode, SPEED_KEYS, type Action } from './bindings.ts';
+import { settings } from '../settings.ts';
 
 export interface InputDeps {
   canvas: HTMLCanvasElement;
@@ -57,7 +58,7 @@ export function createInput(deps: InputDeps): Input {
   const keyLook = (heldBefore: number, dt: number, scoped: boolean): number => {
     const k = scoped ? K.scoped : K.hip;
     const u = Math.min(1, (heldBefore + dt / 2) / k.ramp);
-    return (k.start + (k.max - k.start) * u * u) * PX_PER_DEG * dt;
+    return (k.start + (k.max - k.start) * u * u) * PX_PER_DEG * dt * settings.keyLookSpeed;
   };
 
   const locked = (): boolean => document.pointerLockElement === canvas;
@@ -69,13 +70,18 @@ export function createInput(deps: InputDeps): Input {
     return s?.mode === 'tactical' && !overlayUp(s);
   };
 
+  /** A lock request is on its way (a second request while one is pending can make Chromium drop both). */
+  let lockPending = false;
   const requestLock = (): void => {
-    if (locked()) return;
+    if (locked() || lockPending) return;
     try {
       // May reject (no user gesture, headless): the game stays usable, just without mouse look.
-      void Promise.resolve(canvas.requestPointerLock()).catch(() => {});
+      lockPending = true;
+      void Promise.resolve(canvas.requestPointerLock()).catch(() => {}).finally(() => {
+        lockPending = false;
+      });
     } catch {
-      /* unsupported */
+      lockPending = false; /* unsupported */
     }
   };
 
@@ -86,15 +92,18 @@ export function createInput(deps: InputDeps): Input {
     scopeToggled = false;
   };
 
+  /** Mode asked for since the last poll (commands land in that frame): a quick second press toggles from it. */
+  let pendingMode: Mode | null = null;
   const toggleMode = (target: 'command' | 'world' | 'menu'): void => {
     const state = getState();
     if (!state) return;
-    const mode = state.mode;
+    const mode = pendingMode ?? state.mode;
     let next: Mode;
     if (target === 'command') next = mode === 'command' ? 'tactical' : 'command';
     else if (mode === target) next = target === 'menu' ? beforeMenu : beforeWorld;
     else next = target;
     dispatch({ type: 'setMode', mode: next });
+    pendingMode = next;
     // Request the lock inside the user gesture; the modeChanged handler alone may be too late.
     if (next === 'tactical' && !overlayUp(state)) requestLock();
   };
@@ -157,19 +166,23 @@ export function createInput(deps: InputDeps): Input {
       return;
     }
     if (e.button === 0) fireHeld = true;
-    if (e.button === 2) scopeHeld = true;
+    // 08: the right button either holds the scope up or toggles it (settings).
+    if (e.button === 2) {
+      if (settings.scopeMode === 'toggle') scopeToggled = !scopeToggled;
+      else scopeHeld = true;
+    }
   };
   const onMouseUp = (e: MouseEvent): void => {
     if (e.button === 0) fireHeld = false;
-    if (e.button === 2) {
+    if (e.button === 2 && settings.scopeMode === 'hold') {
       scopeHeld = false;
       scopeToggled = false;
     }
   };
   const onMouseMove = (e: MouseEvent): void => {
     if (!locked() || !tactical()) return;
-    frame.lookDX += e.movementX;
-    frame.lookDY += e.movementY;
+    frame.lookDX += e.movementX * settings.mouseSens;
+    frame.lookDY += e.movementY * settings.mouseSens;
   };
   const onWheel = (e: WheelEvent): void => {
     if (!tactical()) return;
@@ -216,6 +229,8 @@ export function createInput(deps: InputDeps): Input {
 
   return {
     poll() {
+      // The main loop applies queued commands right after polling: nothing is pending past this point.
+      pendingMode = null;
       const active = tactical();
       const has = (a: Action): boolean => active && held.has(a);
       // Arrow keys -> look deltas, in the same units as mouse movement. Nothing accumulates while paused.

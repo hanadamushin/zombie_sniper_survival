@@ -353,7 +353,7 @@ test('game over hands the cursor back: the pointer lock is released and clicks d
   const locks = await page.evaluate(() => (window as unknown as { __locks: number }).__locks);
   await page.mouse.click(20, 400);
   expect(await page.evaluate(() => (window as unknown as { __locks: number }).__locks)).toBe(locks);
-  await page.getByTestId('defeat').getByRole('button').click();
+  await page.getByTestId('defeat-title').click();
   await expect(page.getByTestId('title-screen')).toBeVisible();
   expect(errors).toEqual([]);
 });

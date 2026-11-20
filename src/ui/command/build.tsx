@@ -7,7 +7,7 @@ import { commandView, panView, rotateView, zoomView, type BuildPreviewTile } fro
 import type { GameState, ResourceId, Structure } from '../../core/types.ts';
 import { BUILD, BUILDING_LIST, BUILDINGS, footprint, type BuildCategory, type BuildingDef, type Cost } from '../../data/buildings.ts';
 import { TACTICAL } from '../../data/tactical.ts';
-import { placementError } from '../../sim/build/blueprints.ts';
+import { baseCentre, buildRadius, placementError } from '../../sim/build/blueprints.ts';
 import { deliveredShare } from '../../sim/build/construction.ts';
 import { towers } from '../../sim/build/defense.ts';
 import { defOf, isRuin, isUnlocked, maxHp, overlayOf } from '../../sim/build/structures.ts';
@@ -76,9 +76,58 @@ interface Props {
   setTool(next: BuildTool): void;
 }
 
+/** What a building does, in a few words (the tooltip and the card under the palette). */
+export function effectText(d: BuildingDef): string[] {
+  const out: string[] = [];
+  if (d.kind === 'wall') out.push(t('build.eff.wall', { hp: d.hp }));
+  if (d.kind === 'gate') out.push(t('build.eff.gate'));
+  if (d.kind === 'moat') out.push(t('build.eff.moat'));
+  if (d.kind === 'tower') out.push(t('build.eff.tower'));
+  if (d.beds) out.push(t('build.eff.beds', { n: d.beds }));
+  if (d.plots) out.push(t('build.eff.plots', { n: d.plots }));
+  for (const [job, mul] of Object.entries(d.job ?? {})) out.push(t('build.eff.job', { job: tk(`job.${job}`), n: num(mul ?? 1) }));
+  if (d.morale) out.push(t('build.eff.morale', { n: d.morale }));
+  if (d.capacity) out.push(t('build.eff.capacity'));
+  if (d.fuelPerDay) out.push(t('build.eff.fuel', { n: num(d.fuelPerDay) }));
+  const desc = tk(`bld.${d.id}.desc`);
+  if (desc !== `bld.${d.id}.desc`) out.unshift(desc);
+  return out;
+}
+
+function unlockText(d: BuildingDef): string {
+  return d.techAny ? d.techAny.map((x) => tk(`tech.${x}`)).join('／') : d.tech ? tk(`tech.${d.tech}`) : '';
+}
+
+function BuildTip({ state, def }: { state: GameState; def: BuildingDef }) {
+  const open = isUnlocked(def.id, state);
+  const [w, d] = def.size;
+  return (
+    <div class="build-tip" data-testid="build-tip">
+      <p><b>{tk(`bld.${def.id}`)}</b> <span class="note">{t('build.tip.size', { w, d })}</span></p>
+      <p><span class="k">{t('build.tip.cost')}</span>{costText(def.cost)}・{t('build.work', { n: def.work })}</p>
+      {effectText(def).length > 0 && <p><span class="k">{t('build.tip.effect')}</span>{effectText(def).join('・')}</p>}
+      {!open && <p class="level-warn"><span class="k">{t('build.tip.unlock')}</span>{unlockText(def)}</p>}
+    </div>
+  );
+}
+
+/** Put the overhead camera over the headquarters (building happens around it). */
+function lookAtBase(state: GameState): void {
+  const [x, z] = baseCentre(state);
+  commandView.x = x;
+  commandView.z = z;
+}
+
 /** The palette inside the command panel. */
 export function BuildTab({ state, actions, tool, setTool }: Props) {
-  if (!atHome(state)) return <p class="note" data-testid="build-away">{t('build.notHome')}</p>;
+  const home = atHome(state);
+  // Opening the palette brings the base into view when the camera is somewhere else.
+  useEffect(() => {
+    if (!home) return;
+    const [x, z] = baseCentre(state);
+    if (Math.hypot(commandView.x - x, commandView.z - z) > buildRadius(state) * 0.8) lookAtBase(state);
+  }, [home]);
+  if (!home) return <p class="note" data-testid="build-away">{t('build.notHome')}</p>;
   const build = state.build;
   const pending = build.structures.filter((s) => s.progress < 1).length;
   const builders = state.colony.survivors.filter((s) => s.job === 'construction' && isFit(s)).length;
@@ -101,7 +150,10 @@ export function BuildTab({ state, actions, tool, setTool }: Props) {
         <button class={tool.remove ? 'chip active' : 'chip'} data-testid="build-remove" onClick={() => setTool({ ...tool, def: null, remove: !tool.remove, selected: null })}>{t('build.remove')}</button>
         <button class="chip" onClick={() => setTool({ ...tool, rot: (tool.rot + 1) & 3 })}>{t('build.rotate')}</button>
         <button class="chip" onClick={() => setTool({ ...tool, def: null, remove: false, selected: null })}>{t('build.none')}</button>
+        <button class="chip" data-testid="build-to-base" onClick={() => lookAtBase(state)}>{t('build.toBase')}</button>
       </div>
+      <PlaceReason state={state} tool={tool} />
+      {tool.def && BUILDINGS[tool.def] && <BuildTip state={state} def={BUILDINGS[tool.def]!} />}
       <div class="build-list">
         {BUILDING_LIST.filter((d) => d.category === tool.category && !d.fixed).map((d) => {
           const open = isUnlocked(d.id, state);
@@ -111,10 +163,11 @@ export function BuildTab({ state, actions, tool, setTool }: Props) {
               class={d.id === tool.def ? 'build-item active' : 'build-item'}
               data-testid={`build-${d.id}`}
               disabled={!open}
+              title={[costText(d.cost), ...effectText(d), open ? '' : `${t('build.tip.unlock')}: ${unlockText(d)}`].filter(Boolean).join('\n')}
               onClick={() => setTool({ ...tool, def: d.id === tool.def ? null : d.id, remove: false, selected: null })}
             >
               <b>{tk(`bld.${d.id}`)}</b>
-              <small>{open ? costText(d.cost) : t('build.locked', { tech: d.techAny ? d.techAny.map((x) => tk(`tech.${x}`)).join('／') : d.tech ? tk(`tech.${d.tech}`) : '' })}</small>
+              <small>{open ? costText(d.cost) : t('build.locked', { tech: unlockText(d) })}</small>
               <small>
                 {t('build.work', { n: d.work })}
                 {d.hp > 0 ? `・${t('build.hp', { n: d.hp })}` : ''}
@@ -156,6 +209,21 @@ export function BuildTab({ state, actions, tool, setTool }: Props) {
       <p class="help">{t('build.help')}</p>
     </div>
   );
+}
+
+/** Why the blueprint under the cursor cannot go there (the cursor itself only turns red). */
+function PlaceReason({ state, tool }: { state: GameState; tool: BuildTool }) {
+  const def = tool.def ? BUILDINGS[tool.def] : undefined;
+  const at = commandView.cursor;
+  if (!def || !at) return null;
+  const [w, d] = footprint(def, tool.rot);
+  const tx = Math.floor(at[0] / TILE) - Math.floor((w - 1) / 2), ty = Math.floor(at[1] / TILE) - Math.floor((d - 1) / 2);
+  const err = placementError(state, mapOf(state), def.id, tx, ty, tool.rot);
+  if (!err) {
+    const short = (Object.keys(def.cost) as ResourceId[]).filter((r) => (def.cost[r as keyof Cost] ?? 0) > state.colony.stock[r]);
+    return short.length > 0 ? <p class="note level-warn" data-testid="build-short">{t('build.short', { list: short.map((r) => tk(`res.${r}`)).join('・') })}</p> : null;
+  }
+  return <p class="note level-warn" data-testid="build-reason" data-reason={err}>{tk(`build.err.${err}`)}</p>;
 }
 
 /** Tiles the tool would cover with the cursor at tile (cx, cy), dragging from `from` when given. */

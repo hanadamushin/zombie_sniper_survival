@@ -29,6 +29,8 @@ import { commandView } from './core/view.ts';
 import { buildNow } from './sim/build/blueprints.ts';
 import { createUi } from './ui/index.tsx';
 import { loadGrid, loadScenario } from './worldData.ts';
+import { createAudio } from './audio/index.ts';
+import { onSettings, settings } from './settings.ts';
 
 const FIXED = BALANCE.time.fixedStep;
 
@@ -44,6 +46,8 @@ const stepper = createStepper({ fixedStep: FIXED, ...BALANCE.loop });
 let state: GameState | null = null;
 
 const input = createInput({ canvas, dispatch: sim.dispatch, getState: () => state, events: sim.events });
+// 08: synthesised sound; starts on the first key press or click.
+const audio = createAudio({ events: sim.events, getState: () => state, getGrid: () => grid });
 
 // ---------------------------------------------------------------------------------------------
 // Session lifecycle
@@ -54,6 +58,7 @@ function start(next: GameState): void {
   state = next;
   stepper.reset();
   renderer.reset(next);
+  ui.reset();
   ui.sync(state);
 }
 
@@ -147,6 +152,8 @@ function leaveRange(): void {
 
 async function saveSlot(slot: SlotId): Promise<boolean> {
   if (!state || state.flags.range) return false;
+  // 08: a lost game never overwrites the autosave, so the defeat screen can offer to pick up from it.
+  if (state.flags.defeat && slot === AUTO_SLOT) return false;
   try {
     await saveGame(store, slot, state, Date.now());
     return true;
@@ -192,6 +199,26 @@ const ui = createUi(uiRoot, {
   leaveRange,
   toggleMode: input.toggleMode,
   togglePause: input.togglePause,
+}, { events: sim.events, click: () => audio.ui('click') });
+
+// 08: settings that the renderer applies (the input layer and the audio read theirs directly).
+const applyQuality = (): void => {
+  if (new URLSearchParams(location.search).get('res') === 'fixed') return; // tests and screenshots
+  if (settings.autoResolution) renderer.setAutoResolution(true);
+  else renderer.setFixedScale(settings.renderScale);
+};
+applyQuality();
+onSettings(applyQuality);
+// Mode changes sound like turning a page; the menu like opening one.
+sim.events.on('modeChanged', (e) => audio.ui(e.mode === 'menu' ? 'open' : e.prev === 'menu' ? 'close' : 'click'));
+
+/** 08: a very short stop of the world when the player's round takes a head (never a slow motion). */
+let hitstop = 0;
+sim.events.on('zombieKilled', (e) => {
+  if (e.by !== 'player' || !e.headshot || e.knife || !state) return;
+  const p = state.player.pos;
+  const range = Math.hypot(e.pos[0] - p[0], e.pos[2] - p[2]);
+  hitstop = Math.max(hitstop, range >= BALANCE.feel.hitstopFarRange ? BALANCE.feel.hitstopFar : BALANCE.feel.hitstop);
 });
 
 // Autosave: every morning (spec §10), when the menu opens, and when the tab is hidden.
@@ -239,11 +266,17 @@ function runFrame(now: number): void {
   if (realDt > 0) fps += (1 / realDt - fps) * 0.05;
 
   const s = state;
-  if (!s) return; // title screen: nothing to simulate or draw
+  if (!s) {
+    audio.frame(null, realDt);
+    return; // title screen: nothing to simulate or draw
+  }
 
   const inputFrame = debugInput ? { ...input.poll(), ...debugInput } : input.poll();
   sim.applyCommands(s); // commands must work while paused too
-  const alpha = stepper.advance(realDt, effectiveSpeed(s), (first) => {
+  // Hit stop (08): the world holds still for a few hundredths of a second; drawing goes on.
+  const simDt = hitstop > 0 ? 0 : realDt;
+  hitstop = Math.max(0, hitstop - realDt);
+  const alpha = stepper.advance(simDt, effectiveSpeed(s), (first) => {
     if (areaPending(s, grid)) return; // wait for the loading frames below
     sim.tick(s, FIXED, first ? inputFrame : continuationFrame(inputFrame));
     if (first) {
@@ -266,6 +299,8 @@ function runFrame(now: number): void {
   } else areaFrames = 0;
 
   renderer.draw(s, alpha, realDt);
+  ui.frame(s, realDt);
+  audio.frame(s, realDt);
 
   uiTimer += realDt;
   if (uiTimer >= 1 / BALANCE.loop.uiSyncHz) {
@@ -311,6 +346,10 @@ interface DebugApi {
   readonly view: typeof commandView;
   /** An empty input frame, for ticking the sim by hand. */
   readonly noInput: InputFrame;
+  /** 08: average ms of one UI paint (the 10 Hz sync), over n paints. */
+  uiPaintMs(n?: number): number;
+  /** 08: whether the AudioContext is running (it starts on the first key press or click). */
+  audioRunning(): boolean;
 }
 declare global {
   interface Window {
@@ -417,6 +456,13 @@ window.__game = {
     },
     view: commandView,
     noInput: emptyInputFrame(),
+    audioRunning: () => audio.running(),
+    uiPaintMs(n = 20) {
+      if (!state) return 0;
+      const t0 = performance.now();
+      for (let i = 0; i < n; i++) ui.sync(state);
+      return (performance.now() - t0) / n;
+    },
     give(res, amount) {
       if (state) state.colony.stock[res] += amount;
     },

@@ -21,6 +21,8 @@ import { cellName, formatDuration } from '../world/info.ts';
 import { BuildTab, type BuildTool } from './build.tsx';
 import { logText, logTime, num, statusText, tk } from './format.ts';
 import { ResearchTab } from './research.tsx';
+import { Delta, HintLine, Objectives, WarningList, readPref, writePref } from '../components/common.tsx';
+import { warnings } from '../warnings.ts';
 
 interface Props {
   state: GameState;
@@ -57,44 +59,101 @@ class SurvivorRow extends Component<RowProps> {
     return next.sig !== this.props.sig;
   }
   override render({ s, state, status, actions }: RowProps) {
+    const rec = recommendedJob(state, s);
     return (
-      <div class="row-card" data-testid="survivor-row" data-id={s.id} data-status={s.status}>
+      <div class="row-card" data-testid="survivor-row" data-id={s.id} data-status={s.status} data-job={s.job}>
         <div class="who">
           <b>{s.name}</b> <Trait s={s} />
         </div>
         <Stats s={s} />
-        <span class="wage">{s.job === 'farming' ? t('cmd.wageFarmer') : t('cmd.wage', { n: num(wageDue(state, s)) })}</span>
-        <span class="morale" title={t('cmd.morale', { n: Math.round(s.morale) })} data-low={s.morale < COLONY.morale.desertBelow}>
-          <span style={{ width: `${Math.round(s.morale)}%` }} />
-          <em>{t('cmd.morale', { n: Math.round(s.morale) })}</em>
-        </span>
-        <span class="status">{status}</span>
-        <select
-          data-testid={`job-${s.id}`}
-          value={s.job}
-          onChange={(e) => actions.dispatch({ type: 'assignJob', survivor: s.id, job: (e.target as HTMLSelectElement).value as JobId })}
-        >
-          {JOBS.map((j) => {
-            const open = techUnlocked(state, JOB_TECH[j]);
-            return (
-              <option key={j} value={j} disabled={!open}>
-                {tk(`job.${j}`)}{!open ? t('cmd.jobLocked') : j !== 'idle' ? ` ${t('cmd.output', { n: num(outputPerHour({ ...s, status: 'ok' }, j) * jobMul(state, j)) })}` : ''}
-              </option>
-            );
-          })}
-        </select>
-        <button class="chip" disabled={s.location.kind !== 'home'} onClick={() => actions.dispatch({ type: 'dismiss', survivor: s.id })}>{t('cmd.dismiss')}</button>
+        <div class="jobsel">
+          <select
+            data-testid={`job-${s.id}`}
+            value={s.job}
+            onChange={(e) => actions.dispatch({ type: 'assignJob', survivor: s.id, job: (e.target as HTMLSelectElement).value as JobId })}
+          >
+            {JOBS.map((j) => {
+              const open = techUnlocked(state, JOB_TECH[j]);
+              return (
+                <option key={j} value={j} disabled={!open}>
+                  {j === rec ? '★ ' : ''}{tk(`job.${j}`)}{!open ? t('cmd.jobLocked') : j !== 'idle' ? ` ${t('cmd.output', { n: num(outputPerHour({ ...s, status: 'ok' }, j) * jobMul(state, j)) })}` : ''}
+                </option>
+              );
+            })}
+          </select>
+          {rec && rec !== s.job && <span class="rec" title={t('cmd.recommendTitle', { job: tk(`job.${rec}`) })}>{t('cmd.recommend')}: {tk(`job.${rec}`)}</span>}
+        </div>
+        <div class="meta">
+          <span class="wage">{s.job === 'farming' ? t('cmd.wageFarmer') : t('cmd.wage', { n: num(wageDue(state, s)) })}</span>
+          <span class="morale" title={t('cmd.morale', { n: Math.round(s.morale) })} data-low={s.morale < COLONY.morale.desertBelow}>
+            <span style={{ width: `${Math.round(s.morale)}%` }} />
+            <em>{t('cmd.morale', { n: Math.round(s.morale) })}</em>
+          </span>
+          <span class="status">{status}</span>
+        </div>
+        <div class="act">
+          <button class="chip" disabled={s.location.kind !== 'home'} onClick={() => actions.dispatch({ type: 'dismiss', survivor: s.id })}>{t('cmd.dismiss')}</button>
+        </div>
       </div>
     );
   }
 }
 
+/** The job this survivor would do best (abilities and trait), among the jobs open now. */
+export function recommendedJob(state: GameState, s: Survivor): JobId | null {
+  let best: JobId | null = null;
+  let bestOut = 0;
+  for (const j of JOBS) {
+    if (j === 'idle' || !techUnlocked(state, JOB_TECH[j])) continue;
+    const out = outputPerHour({ ...s, status: 'ok' }, j);
+    if (out > bestOut * 1.0001) {
+      best = j;
+      bestOut = out;
+    }
+  }
+  return best;
+}
+
+type SortKey = 'name' | 'job' | 'morale' | 'wage' | 'ath' | 'kno';
+type Filter = 'all' | 'idle' | 'trouble' | JobId;
+
 function People({ state, actions }: Props) {
+  const [sort, setSort] = useState<SortKey>(() => readPref<SortKey>('people.sort', 'job'));
+  const [filter, setFilter] = useState<Filter>('all');
   const list = state.colony.survivors;
   if (list.length === 0) return <p class="empty">{t('cmd.noSurvivors')}</p>;
+  const counts = new Map<JobId, number>();
+  for (const x of list) counts.set(x.job, (counts.get(x.job) ?? 0) + 1);
+  const trouble = (x: Survivor): boolean => x.status !== 'ok' || x.morale < COLONY.morale.desertBelow + 10 || x.unpaidDays > 0;
+  const shown = list.filter((x) => filter === 'all' || (filter === 'idle' ? x.job === 'idle' : filter === 'trouble' ? trouble(x) : x.job === filter));
+  const by: Record<SortKey, (a: Survivor, b: Survivor) => number> = {
+    name: (a, b) => a.name.localeCompare(b.name, 'ja'),
+    job: (a, b) => JOBS.indexOf(a.job) - JOBS.indexOf(b.job) || a.id - b.id,
+    morale: (a, b) => a.morale - b.morale,
+    wage: (a, b) => wageDue(state, b) - wageDue(state, a),
+    ath: (a, b) => b.ath - a.ath,
+    kno: (a, b) => b.kno - a.kno,
+  };
+  shown.sort(by[sort]);
   return (
     <div class="rows">
-      {list.map((s) => {
+      <div class="job-summary" data-testid="job-summary">
+        <span class="label">{t('cmd.jobSummary')}</span>
+        <button class={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>{t('cmd.filter.all')} <b>{list.length}</b></button>
+        {JOBS.filter((j) => counts.has(j)).map((j) => (
+          <button key={j} class={filter === j ? 'active' : ''} data-testid={`job-count-${j}`} onClick={() => setFilter(filter === j ? 'all' : j)}>{tk(`job.${j}`)} <b>{counts.get(j)}</b></button>
+        ))}
+        <button class={filter === 'trouble' ? 'active' : ''} onClick={() => setFilter(filter === 'trouble' ? 'all' : 'trouble')}>{t('cmd.filter.trouble')} <b>{list.filter(trouble).length}</b></button>
+      </div>
+      <div class="people-tools">
+        <label class="field">
+          <span class="label">{t('cmd.sort')}</span>
+          <select data-testid="people-sort" value={sort} onChange={(e) => { const v = (e.target as HTMLSelectElement).value as SortKey; setSort(v); writePref('people.sort', v); }}>
+            {(['job', 'name', 'morale', 'wage', 'ath', 'kno'] as const).map((k) => <option key={k} value={k}>{t(`cmd.sort.${k}` as TextKey)}</option>)}
+          </select>
+        </label>
+      </div>
+      {shown.map((s) => {
         const status = statusText(state, s);
         return <SurvivorRow key={s.id} s={s} state={state} status={status} actions={actions} sig={`${s.job}|${Math.round(s.morale)}|${Math.round(s.hp / 5)}|${s.status}|${s.location.kind}|${status}|${state.research.done.length}|${s.kno}`} />;
       })}
@@ -334,42 +393,78 @@ export function LogList({ state, grid, limit }: { state: GameState; grid: Static
   );
 }
 
+/** The stores, with a short "+n" where a number just changed. */
+function StockStrip({ state }: { state: GameState }) {
+  const colony = state.colony;
+  return (
+    <div class="stock-strip" data-testid="stock">
+      {RESOURCE_IDS.map((r) => (
+        <span key={r} class="delta-host" data-res={r} data-amount={colony.stock[r]} data-low={r === 'food' && colony.survivors.length > 0 && foodDays(state) < 2} title={r === 'ears' ? '' : `/ ${colony.capacity[r]}`}>
+          {t(`res.${r}` as TextKey)} <b>{num(colony.stock[r])}</b>
+          {r === 'food' && colony.survivors.length > 0 ? <small> {t('cmd.foodDays', { d: num(foodDays(state)) })}</small> : null}
+          <Delta value={colony.stock[r]} format={num} />
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export function CommandPanel(props: PanelProps) {
   const { state } = props;
   const [tab, setTabRaw] = useState<Tab>('people');
+  const [collapsed, setCollapsed] = useState(false);
+  const [dock, setDock] = useState<'left' | 'right'>(() => readPref<'left' | 'right'>('dock', 'left'));
   // Leaving the build tab puts the tool away (the mouse goes back to looking around).
   const setTab = (next: Tab): void => {
     if (next !== 'build' && (props.tool.def || props.tool.remove)) props.setTool({ ...props.tool, def: null, remove: false });
+    setCollapsed(false);
     setTabRaw(next);
   };
   const colony = state.colony;
   const count: Partial<Record<Tab, number>> = { research: Object.keys(state.research.active).length || undefined, build: state.build.structures.filter((b) => b.progress < 1).length || undefined, people: colony.survivors.length, hire: colony.candidates.length, expedition: state.world.expeditions.length };
+  // Building wants the base in view: its panel sits on the right, the others where the player put them.
+  const side = tab === 'build' ? 'right' : dock;
+  const problems = warnings(state);
   return (
-    <div class="panel command-panel" data-testid="command-panel" data-tab={tab}>
-      <div class="stock" data-testid="stock">
-        {RESOURCE_IDS.map((r) => (
-          <span key={r} data-res={r} data-amount={colony.stock[r]} title={r === 'ears' ? '' : `/ ${colony.capacity[r]}`}>
-            {t(`res.${r}` as TextKey)} <b>{num(colony.stock[r])}</b>
-            {r === 'food' && colony.survivors.length > 0 ? <small> {t('cmd.foodDays', { d: num(foodDays(state)) })}</small> : null}
-          </span>
-        ))}
+    <>
+      <StockStrip state={state} />
+      <div class="panel command-panel" data-testid="command-panel" data-tab={tab} data-dock={side} data-collapsed={collapsed}>
+        <div class="panel-head">
+          <h2>{t(`cmd.tab.${tab}` as TextKey, { n: '' })}</h2>
+        </div>
+        <HintLine state={state} actions={props.actions} where="command" />
+        <div class="tab-body">
+          {tab === 'people' && <People {...props} />}
+          {tab === 'build' && <BuildTab state={state} actions={props.actions} tool={props.tool} setTool={props.setTool} />}
+          {tab === 'research' && <ResearchTab state={state} actions={props.actions} grid={props.grid} />}
+          {tab === 'hire' && <Hire {...props} />}
+          {tab === 'economy' && <Economy {...props} />}
+          {tab === 'expedition' && <Expeditions {...props} />}
+          {tab === 'log' && <LogList state={state} grid={props.grid} limit={80} />}
+        </div>
       </div>
-      <div class="tabs" role="tablist">
+      {tab !== 'research' && (
+        <div class="cmd-side" data-side={side === 'left' ? 'right' : 'left'}>
+          <Objectives state={state} grid={props.grid} inline />
+          {problems.length > 0 && (
+            <div class="panel" data-testid="cmd-warnings">
+              <span class="stamp">{t('warn.title')}</span>
+              <WarningList list={problems} onOpen={(x) => setTab(x)} />
+            </div>
+          )}
+        </div>
+      )}
+      <div class="cmd-bar" role="tablist" data-testid="cmd-bar">
         {TABS.map((x) => (
-          <button key={x} class={x === tab ? 'chip active' : 'chip'} data-testid={`tab-${x}`} onClick={() => setTab(x)}>
-            {t(`cmd.tab.${x}` as TextKey, { n: count[x] ?? '' })}
+          <button key={x} class={x === tab ? 'tab active' : 'tab'} data-testid={`tab-${x}`} onClick={() => setTab(x)}>
+            {t(`cmd.tab.${x}` as TextKey, { n: '' }).trim()}
+            {count[x] !== undefined && <span class="n">{count[x]}</span>}
           </button>
         ))}
+        <span class="spacer" />
+        <button class="icon-btn" data-testid="cmd-dock" title={t('bar.dock')} aria-label={t('bar.dock')} onClick={() => { const d = dock === 'left' ? 'right' : 'left'; setDock(d); writePref('dock', d); }}>⇆</button>
+        <button class="icon-btn" data-testid="cmd-collapse" title={collapsed ? t('bar.expand') : t('bar.collapse')} aria-label={collapsed ? t('bar.expand') : t('bar.collapse')} onClick={() => setCollapsed(!collapsed)}>{collapsed ? '▴' : '▾'}</button>
       </div>
-      <div class="tab-body">
-        {tab === 'people' && <People {...props} />}
-        {tab === 'build' && <BuildTab state={state} actions={props.actions} tool={props.tool} setTool={props.setTool} />}
-        {tab === 'research' && <ResearchTab state={state} actions={props.actions} grid={props.grid} />}
-        {tab === 'hire' && <Hire {...props} />}
-        {tab === 'economy' && <Economy {...props} />}
-        {tab === 'expedition' && <Expeditions {...props} />}
-        {tab === 'log' && <LogList state={state} grid={props.grid} limit={80} />}
-      </div>
-    </div>
+    </>
   );
 }

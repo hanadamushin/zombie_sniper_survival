@@ -14,6 +14,7 @@ import type { GameState } from '../core/types.ts';
 import { RENDER } from '../data/render.ts';
 import { createSkyRenderer } from './sky.ts';
 import { createCameraRig, type CameraRig } from './tactical/camera.ts';
+import { createShotRenderer } from './tactical/shots.ts';
 import { createEffectsRenderer } from './tactical/effects.ts';
 import { createTacticalRenderer } from './tactical/index.ts';
 import { createScopeRenderer } from './tactical/scope.ts';
@@ -65,6 +66,8 @@ export interface Renderer {
   /** Automatic resolution (RENDER.resolution): current scale, and a switch (screenshots / tests turn it off). */
   resolutionScale(): number;
   setAutoResolution(on: boolean): void;
+  /** Settings (08): automatic resolution off, drawing at this share of the full resolution (0.5..1). */
+  setFixedScale(scale: number): void;
   /** Draw calls of the last frame (performance budget: < 150). */
   drawCalls(): number;
   dispose(): void;
@@ -165,6 +168,10 @@ export function createRenderer(canvas: HTMLCanvasElement, events: EventBus): Ren
       auto = on;
       if (!on) setScale(1);
     },
+    setFixedScale(next) {
+      auto = false;
+      setScale(next);
+    },
     drawCalls: () => renderer.info.render.calls,
     dispose() {
       window.removeEventListener('resize', resize);
@@ -184,6 +191,7 @@ export function createRenderer(canvas: HTMLCanvasElement, events: EventBus): Ren
   api.register(createSignalRenderer()); // 07b: smoke / light over hideouts
   api.register(createBeaconRenderer()); // 07c: where to get ammunition
   api.register(createEffectsRenderer());
+  api.register(createShotRenderer()); // 08: the streak behind the player's own round
   api.register(createScopeRenderer()); // last: drawn over everything
   return api;
 }

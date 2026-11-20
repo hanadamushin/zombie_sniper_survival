@@ -104,6 +104,20 @@ export function createEffectsRenderer(): SubRenderer {
       points.visible = false;
       ctx.scene.add(points);
 
+      // 08: a little smoke at the muzzle (the suppressor keeps it to a wisp).
+      offs.push(ctx.events.on('shotFired', (e) => {
+        const [x, y, z] = e.pos;
+        const d = e.dir;
+        const S = RENDER.shots;
+        // Through the scope the field is a few degrees wide: keep the wisp low and short so it never fills the glass.
+        const scoped = e.scoped === true;
+        for (let i = 0; i < 6; i++) {
+          const ahead = 0.9 + Math.random() * 0.5;
+          const sp = 0.4 + Math.random() * 0.9;
+          if (scoped) emit(x + d[0] * ahead, y + d[1] * ahead - 0.25, z + d[2] * ahead, d[0] * sp + rnd(0.2), -0.1, d[2] * sp + rnd(0.2), S.smoke, 0.04, 0.2, 0.35 + Math.random() * 0.2, 0);
+          else emit(x + d[0] * ahead, y + d[1] * ahead - 0.08, z + d[2] * ahead, d[0] * sp + rnd(0.25), 0.25 + Math.random() * 0.35, d[2] * sp + rnd(0.25), S.smoke, 0.05, 0.35, 0.7 + Math.random() * 0.6, -0.15);
+        }
+      }));
       offs.push(ctx.events.on('bulletHit', (e) => {
         const [x, y, z] = e.pos;
         const d = e.dir ?? [0, 0, -1];

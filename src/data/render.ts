@@ -256,4 +256,20 @@ export const RENDER = {
     wood: 0x8a6a48,
     blood: 0x6a1410,
   },
+
+  // --- the player's own shot (08): a faint streak behind the bullet, smoke at the muzzle, a small shake ---
+  shots: {
+    /** Colour and opacity of the streak (additive): just enough to follow one's own round through the scope. */
+    tracer: 0xd8d2b8,
+    tracerOpacity: 0.32,
+    /** Streak length (m) and the distance flown before it shows (so it does not flash in front of the eye). */
+    tracerLength: 18,
+    tracerFrom: 12,
+    maxTracers: 16,
+    smoke: 0xb4b0a6,
+    /** Camera roll kick (radians) and how fast it settles (1/s). Scoped shots kick less. */
+    shakeRoll: 0.012,
+    shakeScoped: 0.4,
+    shakeDecay: 14,
+  },
 } as const;

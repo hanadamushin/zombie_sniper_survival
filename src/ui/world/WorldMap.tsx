@@ -15,7 +15,7 @@ import { tk } from '../command/format.ts';
 import { t, type TextKey } from '../i18n/ja.ts';
 import type { UiActions } from '../store.ts';
 import { cellName, fmt, formatDuration, intelOf, knownCount, roughly, zBand, zBandValue } from './info.ts';
-import { MapCanvas, SUPPLY_COLOR, setSupplyGlyph, type MapFocus, type MapMarker } from './MapCanvas.tsx';
+import { MapCanvas, MARKER_COLOR, SUPPLY_COLOR, setSupplyGlyph, type MapFocus, type MapMarker } from './MapCanvas.tsx';
 import { legendGradient, lootColor, popColor, UNKNOWN, zColor } from './palette.ts';
 
 type ViewMode = 'z' | 'loot' | 'pop';
@@ -140,6 +140,12 @@ export function WorldMap({ state, grid, actions }: Props) {
           <span class="legend-bar" style={{ background: legendGradient(mode) }} />
           <span>{t('world.legend.high')}</span>
         </div>
+        <p class="legend marker-legend" data-testid="map-marker-legend">
+          {(['player', 'home', 'outpost', 'target', 'cache'] as const).map((k) => (
+            <span key={k}><i class="dot" style={{ background: MARKER_COLOR[k] }} />{t(`world.legend.${k}` as TextKey)}</span>
+          ))}
+          <span><i class="dash" />{t('world.legend.sea')}</span>
+        </p>
         <p class="legend supply-legend" data-testid="map-supply-legend">
           <span class="supply-badge" style={{ background: SUPPLY_COLOR }}>{t('world.supplyGlyph')}</span>
           <span>{t('world.supplyLegend')}</span>
