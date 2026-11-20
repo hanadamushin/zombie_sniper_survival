@@ -155,7 +155,8 @@ function shop(spec: ShutterKind): BuildingDef {
     plinth: 0.12,
     roof: spec.roof,
     roofRise: spec.roofRise,
-    lootable: spec.enterable === true,
+    // Searchable when something can be reached: the pharmacy's shelves, a vending machine in the recess.
+    lootable: spec.enterable === true || spec.vendings > 0,
     generate: (rng, params) => generate(def, spec, rng, params),
   };
   return def;

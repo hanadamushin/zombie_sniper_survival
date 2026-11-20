@@ -121,7 +121,7 @@ k.thick = 0.2;                           // 外壁の厚さ（outerWalls が使�
 - **1 つの部屋の中では、出入口（扉・join・階段の端）の通過点どうしを直線で歩ける** こと（家具で塞がない）。テストが半径 0.28m で検査する。塞がるなら部屋を分けて `join` する（コンビニの通路が例）
 - 施錠で入れない部屋は `room(..., { locked: true })`（到達性の検査から外れる）。押し入れのように「見えるが入れない」場所は、`window(..., { sill: 0, head: 1.8, broken: true })` を開口にして部屋を `locked` にする（木造 2 階建ての押し入れ）
 - 階段室・吹き抜けの上は部屋にしない（階段の途中にいる者は直前の部屋を覚えている）
-- 探索ポイント: `kind`（`shelf` `desk` `locker` `cabinet` `fridge` `counter` `closet` `crate` `bed` `table`）と収穫表 `table`。`table` を省くと部屋の用途（`RoomUse`）。表は `src/data/colony.ts` の `ROOM_LOOT`（05 の値 × 07e の `LOOT_SCALE`）。用途を足したら表にも行を足す（無い id は土地の表になる）。特別な棚は `pharmacy` `grocery` `tools` `weapons`
+- 探索ポイント: `kind`（`shelf` `desk` `locker` `cabinet` `fridge` `counter` `closet` `crate` `bed` `table`）と収穫表 `table`。`table` を省くと部屋の用途（`RoomUse`）。表は `src/data/colony.ts` の `ROOM_LOOT`（05 の値 × 07e の `LOOT_SCALE`）。用途を足したら表にも行を足す（無い id は土地の表になる）。特別な棚は `pharmacy` `grocery` `tools` `weapons` `fuel`（燃料。07d-2b のガソリンスタンド）
 - 区域の探索ポイントの総数は今までどおり `params.lootSpots`。中に入れる建物が選ばれると、その建物の探索ポイントが 1 つずつ地図の探索ポイントになる（施錠の部屋のものは除く）。潜伏者は 1 階の探索ポイントにだけ隠れる
 
 ## 9. 三角形の上限（描いたときの数）
@@ -157,7 +157,7 @@ k.thick = 0.2;                           // 外壁の厚さ（outerWalls が使�
 
 目で見る:
 - `npm run buildings:preview` → `tmp/buildings/<id>.png`（各階の平面図＋正面の立面。灰 = 壁、水色 = ガラス、茶 = 階段、黄 = 探索ポイント、緑線 = 扉の通り道、橙線 = 階段の通り道、赤み = 施錠の部屋）
-- ゲームで `?yard=1`（または `window.__game.debug.openYard()`）: 全種類が平らな地面に 2 列（南向き・北向き）で並ぶ。`debug.enterables()` で一覧、`debug.enterable(i)` で部屋・通過点、`debug.pathTo(x, y, z)` で経路、`debug.teleport(x, z, yaw, pitch, y)` で中へ（y を渡さないと屋根の上に立つ）
+- ゲームで `?yard=1`（または `window.__game.debug.openYard()`）: 全種類が平らな地面に 2 列（南向き・北向き）で並ぶ（07d-2b: 地図の東端 x = 990 を越えると次の通り z = 600, 680, 440… に折り返す。通りは建物の正面から 9m）。`debug.enterables()` で一覧、`debug.enterable(i)` で部屋・通過点、`debug.pathTo(x, y, z)` で経路、`debug.teleport(x, z, yaw, pitch, y)` で中へ（y を渡さないと屋根の上に立つ）
 - e2e の雛形: `e2e/buildings.spec.ts`（歩いて入る・上る・窓から撃つ・ゾンビが追ってくる・段階の切り替え・性能）
 
 ## 11. よくある失敗
