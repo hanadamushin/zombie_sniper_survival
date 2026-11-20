@@ -4,12 +4,18 @@
 export const AUDIO = {
   /** Speed of sound (m/s): a far impact is heard range / speed seconds after the round lands. */
   soundSpeed: 343,
-  /** Overall level of each bus before the player's volume settings. */
-  bus: { sfx: 0.9, ambience: 0.55, ui: 0.5 },
+  /**
+   * Overall level of each bus before the player's volume settings. The recipes are band-filtered
+   * noise and soft tones, which lose most of their energy in the filters: these trims bring a shot
+   * to a peak of about 0.6 at the default volume (measured with debug.audioStatus()).
+   */
+  bus: { sfx: 3.6, ambience: 1.1, ui: 2.0 },
+  /** Gain into the final limiter: catches a volley of impacts before it clips. */
+  limiter: { threshold: -6, knee: 4, ratio: 12 },
   /** Distance falloff: full level within `near` m, then near / d, silent beyond `far`. */
   falloff: { near: 6, far: 420 },
 
-  shot: { level: 0.55, bolt: [0.28, 0.55, 0.82] as readonly number[], casing: 0.95 },
+  shot: { level: 0.45, bolt: [0.28, 0.55, 0.82] as readonly number[], casing: 0.95 },
   impact: { level: 0.5, minRange: 25 },
   headshot: { level: 0.22 },
 

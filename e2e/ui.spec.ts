@@ -92,6 +92,7 @@ test('first steps: the hints lead from walking to the first fence', async ({ pag
 
   // 4. Ears.
   await expect(hint(page)).toHaveAttribute('data-hint', 'ears');
+  await page.waitForFunction(() => window.__game!.state!.tactical!.corpses.some((x) => x.ears > 0), null, { timeout: 30_000 });
   await page.evaluate(() => {
     const g = window.__game!;
     const c = g.state!.tactical!.corpses.find((x) => x.ears > 0)!;
@@ -186,12 +187,39 @@ test('defeat: the game can be picked up from the last autosave', async ({ page }
   expect(errors).toEqual([]);
 });
 
+test('sound: a key press starts the audio, and the test sound is clearly audible without clipping', async ({ page }) => {
+  const errors = trackErrors(page);
+  await page.goto('/');
+  await expect(page.getByTestId('title-screen')).toBeVisible();
+  expect(await page.evaluate(() => window.__game!.debug.audioStatus().state)).toBe('none');
+  await page.keyboard.press('KeyA'); // any gesture
+  await expect.poll(() => page.evaluate(() => window.__game!.debug.audioStatus().state)).toBe('running');
+  await page.waitForTimeout(300); // the output settles just after the context starts
+  // The title screen draws nothing, so the meter can be read often enough to catch the shot.
+  const peak = await page.evaluate(async () => {
+    const d = window.__game!.debug;
+    d.audioTest();
+    let max = 0;
+    const t0 = performance.now();
+    while (performance.now() - t0 < 1500) {
+      max = Math.max(max, d.audioStatus().peak);
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    return max;
+  });
+  console.log(`08 test sound peak ${peak.toFixed(2)}`);
+  expect(peak).toBeGreaterThan(0.4);
+  expect(peak).toBeLessThan(1.05);
+  expect(errors).toEqual([]);
+});
+
 test('settings stick, the help has its pages, problems and notices open from the top bar', async ({ page }) => {
   test.setTimeout(240_000);
   const errors = trackErrors(page);
   await startNewGame(page);
   await page.keyboard.press('Escape');
   await page.getByTestId('menu-tab-settings').click();
+  await expect(page.getByTestId('set-audio-state')).toHaveAttribute('data-state', 'running');
   await page.getByTestId('set-mouse').fill('1.5');
   await page.getByTestId('set-scope-toggle').click();
   await page.getByTestId('set-autores').uncheck();

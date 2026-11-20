@@ -199,6 +199,8 @@ const ui = createUi(uiRoot, {
   leaveRange,
   toggleMode: input.toggleMode,
   togglePause: input.togglePause,
+  audioTest: () => audio.test(),
+  audioState: () => audio.status().state,
 }, { events: sim.events, click: () => audio.ui('click') });
 
 // 08: settings that the renderer applies (the input layer and the audio read theirs directly).
@@ -350,6 +352,10 @@ interface DebugApi {
   uiPaintMs(n?: number): number;
   /** 08: whether the AudioContext is running (it starts on the first key press or click). */
   audioRunning(): boolean;
+  /** 08: AudioContext state and the output peak right now. */
+  audioStatus(): { state: string; peak: number };
+  /** 08: play the settings screen's test sound (a shot and the bolt). */
+  audioTest(): void;
 }
 declare global {
   interface Window {
@@ -457,6 +463,8 @@ window.__game = {
     view: commandView,
     noInput: emptyInputFrame(),
     audioRunning: () => audio.running(),
+    audioStatus: () => audio.status(),
+    audioTest: () => audio.test(),
     uiPaintMs(n = 20) {
       if (!state) return 0;
       const t0 = performance.now();

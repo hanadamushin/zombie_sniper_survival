@@ -23,6 +23,10 @@ export interface Audio {
   ui(kind: 'click' | 'open' | 'close' | 'notice' | 'warn'): void;
   /** True once the AudioContext is running. */
   running(): boolean;
+  /** State of the AudioContext ('none' before it exists) and the current output peak (0..1). */
+  status(): { state: string; peak: number };
+  /** A short test sound (settings screen). Call from a click: it also starts / resumes the context. */
+  test(): void;
 }
 
 interface Deps {
@@ -44,20 +48,20 @@ export function createAudio(deps: Deps): Audio {
   };
   onSettings(applyLevels);
 
+  /**
+   * Create the context, or wake it up. Called synchronously from inside a key press, click or touch:
+   * browsers only let sound start within a user gesture (Safari strictly inside the handler), and a
+   * context they suspend later (another tab, the system) is resumed by the next gesture.
+   */
   const start = (): void => {
-    if (started) {
-      if (synth && synth.ctx.state === 'suspended') void synth.ctx.resume().catch(() => {});
-      return;
+    if (!started) {
+      started = true;
+      synth = createSynth();
+      if (synth) applyLevels();
     }
-    started = true;
-    synth = createSynth();
-    if (!synth) return;
-    applyLevels();
-    void synth.ctx.resume().catch(() => {});
+    if (synth && synth.ctx.state !== 'running') void synth.ctx.resume().catch(() => {});
   };
-  // On the release, not the press: the press may be the one that asks for the pointer lock, and the
-  // two are kept apart. The page has been interacted with by then, so the context may play.
-  for (const ev of ['pointerup', 'keyup'] as const) window.addEventListener(ev, () => window.setTimeout(start, 0), { capture: true });
+  for (const ev of ['keydown', 'pointerdown', 'touchend'] as const) window.addEventListener(ev, start, { capture: true, passive: true });
 
   // ---------------------------------------------------------------------------------------------
   // Where the listener is
@@ -437,6 +441,12 @@ export function createAudio(deps: Deps): Audio {
   return {
     ui,
     running: () => synth?.ctx.state === 'running',
+    status: () => ({ state: synth ? synth.ctx.state : 'none', peak: synth ? synth.peak() : 0 }),
+    test() {
+      start();
+      shot(true);
+      bolt();
+    },
     frame(state, realDt) {
       if (!synth) return;
       if (!wind) startBeds(synth);
