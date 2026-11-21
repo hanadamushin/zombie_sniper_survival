@@ -72,6 +72,8 @@ export const TACTICAL = {
     lostRate: 0.25,
     /** ...and within this distance of the player it does not lose track at all (it hears them inside). */
     hear: 25,
+    /** 07d-2d: a route between two rooms of a building that steps outside (out of one door, in at another) counts this many extra links, so a way inside wins when there is one. */
+    outsideCost: 4,
   },
   /**
    * 07d samples standing in for some of 03's generated buildings (the rest stay boxes until 07d-3

@@ -63,25 +63,35 @@ function graph(det: BuildingDetail, radius: number): Map<number, [number, boolea
 }
 const graphs = new WeakMap<BuildingDetail, Map<number, Map<number, [number, boolean][]>>>();
 
-/** Breadth-first: the links (with direction) from room `from` to room `to` (-1 = outside). */
+/**
+ * Fewest links from room `from` to room `to` (-1 = outside), a step outside counting
+ * `outsideCost` extra between two rooms (07d-2d: big buildings with several doors would otherwise
+ * route out of one door and in at another, straight through their own walls).
+ */
 export function roomRoute(det: BuildingDetail, from: number, to: number, radius: number): [number, boolean][] | null {
   if (from === to) return [];
   const g = graph(det, radius);
   const prev = new Map<number, [number, number, boolean]>();
-  prev.set(from, [-2, -1, true]);
-  const queue = [from];
-  while (queue.length > 0) {
-    const cur = queue.shift()!;
-    if (cur === to) break;
+  const cost = new Map<number, number>([[from, 0]]);
+  const done = new Set<number>();
+  for (;;) {
+    let cur = NaN;
+    let best = Infinity;
+    for (const [room, c] of cost) if (!done.has(room) && c < best) [cur, best] = [room, c];
+    if (Number.isNaN(cur) || cur === to) break;
+    done.add(cur);
     for (const [li, fwd] of g.get(cur) ?? []) {
       const l = det.links[li]!;
       const next = fwd ? l.b : l.a;
-      if (prev.has(next)) continue;
-      prev.set(next, [cur, li, fwd]);
-      queue.push(next);
+      if (done.has(next)) continue;
+      const c = best + 1 + (next === -1 && to !== -1 ? I.outsideCost : 0);
+      if (c < (cost.get(next) ?? Infinity)) {
+        cost.set(next, c);
+        prev.set(next, [cur, li, fwd]);
+      }
     }
   }
-  if (!prev.has(to)) return null;
+  if (!cost.has(to)) return null;
   const out: [number, boolean][] = [];
   for (let c = to; c !== from; ) {
     const [p, li, fwd] = prev.get(c)!;

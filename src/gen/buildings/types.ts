@@ -88,7 +88,8 @@ export interface Opening {
 export type RoomUse =
   | 'hall' | 'stairs' | 'living' | 'kitchen' | 'bedroom' | 'tatami' | 'closet' | 'bath' | 'toilet' | 'genkan'
   | 'sales' | 'backroom' | 'storage' | 'office' | 'clinic' | 'bar' | 'classroom' | 'lab' | 'workshop' | 'canteen'
-  | 'barracks' | 'command' | 'garage' | 'machine' | 'roof' | 'lobby' | 'platform' | 'armory';
+  | 'barracks' | 'command' | 'garage' | 'machine' | 'roof' | 'lobby' | 'platform' | 'armory'
+  | 'ward';
 
 /** A rectangular room on one storey. Spaces that are not rectangles are several rooms joined by `join` links. */
 export interface Room {
@@ -110,7 +111,8 @@ export type FurnitureKind = 'shelf' | 'desk' | 'locker' | 'cabinet' | 'fridge' |
 
 /** Loot table ids (data/colony.ts ROOM_LOOT). Default: the room's use. */
 export type LootTableId = RoomUse | 'pharmacy' | 'grocery' | 'tools' | 'weapons'
-  | 'fuel';
+  | 'fuel'
+  | 'stock';
 
 export interface SearchPoint {
   /** Where the searcher stands (local; y = floor). */

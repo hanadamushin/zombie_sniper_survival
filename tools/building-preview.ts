@@ -1,5 +1,5 @@
 // Floor plans and a side elevation of every enterable building type (07d), for checking a new type by eye:
-//   node tools/building-preview.ts [outDir] [seed]      (npm run buildings:preview)
+//   node tools/building-preview.ts [outDir] [seed] [id prefix]      (npm run buildings:preview)
 // writes <id>.png: one plan per storey (and the roof when it can be reached) side by side, then
 // the front elevation. 20 px = 1 m, front (the entrance side, z = d) at the bottom of each plan.
 // Plan legend: grey = walls / solid at body height, light blue = glass (stops people only),
@@ -99,8 +99,11 @@ function render(bp: BuildingBlueprint): { png: Buffer; w: number; h: number } {
 
 const out = process.argv[2] ?? 'tmp/buildings';
 const seed = Number(process.argv[3] ?? 1);
+/** Optional: only the types whose id starts with this (07d-2d), e.g. `public.`. */
+const only = process.argv[4] ?? '';
 mkdirSync(out, { recursive: true });
 for (const def of BUILDING_DEFS) {
+  if (!def.id.startsWith(only)) continue;
   const w = (def.size.w[0] + def.size.w[1]) / 2;
   const d = (def.size.d[0] + def.size.d[1]) / 2;
   const bp = generateBlueprint(def, w, d, seed);
