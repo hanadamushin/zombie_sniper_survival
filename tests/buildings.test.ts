@@ -35,15 +35,25 @@ function oneBuilding(defId: string, w: number, d: number, rot: Rot = 0): Tactica
   return finishMap(b);
 }
 
-/** Is a walker of `radius` at (x, z) on the floor `y` clear of the building's boxes (body height)? */
-function clearAt(bp: BuildingBlueprint, x: number, y: number, z: number, radius: number): boolean {
-  for (const c of colliderCache(bp)) {
+/** Is a walker of `radius` at (x, z) on the floor `y` clear of the building's boxes (body height)? `among`: only these (07d-2e). */
+function clearAt(bp: BuildingBlueprint, x: number, y: number, z: number, radius: number, among?: ReturnType<typeof localColliders>): boolean {
+  for (const c of among ?? colliderCache(bp)) {
     if (c.y1 <= y + 0.5 || c.y0 >= y + 1.7) continue;
     const qx = Math.min(c.x1, Math.max(c.x0, x));
     const qz = Math.min(c.z1, Math.max(c.z0, z));
     if ((x - qx) ** 2 + (z - qz) ** 2 < radius * radius) return false;
   }
   return true;
+}
+/** 07d-2e: the colliders that overlap the box round the points (padded by `pad`) at body height over their floors. */
+function nearWays(bp: BuildingBlueprint, pts: readonly [number, number, number][], pad: number): ReturnType<typeof localColliders> {
+  const x0 = Math.min(...pts.map((p) => p[0])) - pad;
+  const x1 = Math.max(...pts.map((p) => p[0])) + pad;
+  const z0 = Math.min(...pts.map((p) => p[2])) - pad;
+  const z1 = Math.max(...pts.map((p) => p[2])) + pad;
+  const y0 = Math.min(...pts.map((p) => p[1])) + 0.5;
+  const y1 = Math.max(...pts.map((p) => p[1])) + 1.7;
+  return colliderCache(bp).filter((c) => c.x1 >= x0 && c.x0 <= x1 && c.z1 >= z0 && c.z0 <= z1 && c.y1 > y0 && c.y0 < y1);
 }
 const colliders = new WeakMap<BuildingBlueprint, ReturnType<typeof localColliders>>();
 function colliderCache(bp: BuildingBlueprint): ReturnType<typeof localColliders> {
@@ -176,7 +186,9 @@ describe('every building type in the catalog (07d)', () => {
               add(l.b, l.pts[l.pts.length - 1]!);
             }
             for (const [room, pts] of ends) {
-              for (const p of pts) expect(clearAt(bp, p[0], p[1], p[2], 0.3), `${def.id} seed ${seed}: a way point in room ${room} is inside something`).toBe(true);
+              // 07d-2e: only the colliders near the room's ways can be within reach (the same check, faster on big sites).
+              const near = nearWays(bp, pts, 0.3);
+              for (const p of pts) expect(clearAt(bp, p[0], p[1], p[2], 0.3, near), `${def.id} seed ${seed}: a way point in room ${room} is inside something`).toBe(true);
               for (let i = 0; i < pts.length; i++) {
                 for (let j = i + 1; j < pts.length; j++) {
                   const a = pts[i]!;
@@ -185,7 +197,7 @@ describe('every building type in the catalog (07d)', () => {
                   for (let k = 0; k <= n; k++) {
                     const x = a[0] + ((b[0] - a[0]) * k) / n;
                     const z = a[2] + ((b[2] - a[2]) * k) / n;
-                    expect(clearAt(bp, x, a[1], z, 0.28), `${def.id} seed ${seed}: something stands between two ways in room ${room} (${bp.rooms[room]!.use}) at (${x.toFixed(2)}, ${z.toFixed(2)})`).toBe(true);
+                    expect(clearAt(bp, x, a[1], z, 0.28, near), `${def.id} seed ${seed}: something stands between two ways in room ${room} (${bp.rooms[room]!.use}) at (${x.toFixed(2)}, ${z.toFixed(2)})`).toBe(true);
                   }
                 }
               }

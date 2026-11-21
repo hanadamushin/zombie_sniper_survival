@@ -13,7 +13,17 @@ import { BUILDING_DEFS, generateBlueprint, localColliders, triangleCount, type B
 import { encodePng } from './lib/png.ts';
 
 type Rgb = [number, number, number];
-const PX = 20;
+const MAX_PX = 20;
+
+/** Levels with something on them: the storeys, and floors above them (07d-2e: control and hotel towers rise past `storeys`). */
+function levelsOf(bp: BuildingBlueprint): number[] {
+  return [...new Set([...bp.storeys.map((_, l) => l), ...bp.rooms.map((r) => r.level)])].sort((a, b) => a - b);
+}
+
+/** Floor height of a level. */
+function yOf(bp: BuildingBlueprint, l: number): number {
+  return bp.storeys[l]?.y ?? bp.rooms.find((r) => r.level === l)?.y ?? 0;
+}
 
 /** Storeys to draw: the first, the last and every one laid out differently from the storey below. */
 function shown(bp: BuildingBlueprint): number[] {
@@ -22,17 +32,35 @@ function shown(bp: BuildingBlueprint): number[] {
     ...bp.openings.filter((o) => o.level === l).map((o) => `${o.kind}${o.state}${o.x.toFixed(2)},${o.z.toFixed(2)}`),
     bp.search.filter((s) => s.room >= 0 && bp.rooms[s.room]!.level === l).length,
   ].join(';');
-  const n = bp.storeys.length;
-  return bp.storeys.map((_, l) => l).filter((l) => l === 0 || l === n - 1 || sig(l) !== sig(l - 1));
+  const ls = levelsOf(bp);
+  return ls.filter((l, i) => i === 0 || i === ls.length - 1 || sig(l) !== sig(ls[i - 1]!));
+}
+
+/** 07d-2e: pixels per metre (fewer for the sites hundreds of metres across). */
+function scaleOf(bp: BuildingBlueprint): number {
+  return Math.max(2, Math.min(MAX_PX, Math.floor(6000 / (Math.max(bp.w, bp.d) + 2))));
+}
+
+/** 07d-2e: the part of the footprint a plan shows: all of it for the ground storey and small buildings, else round the level's rooms. */
+function viewOf(bp: BuildingBlueprint, l: number): [number, number, number, number] {
+  const rooms = bp.rooms.filter((r) => r.level === l);
+  if (l === 0 || Math.max(bp.w, bp.d) <= 150 || rooms.length === 0) return [0, 0, bp.w, bp.d];
+  const pad = 4;
+  return [
+    Math.max(0, Math.min(...rooms.map((r) => r.x0)) - pad), Math.max(0, Math.min(...rooms.map((r) => r.z0)) - pad),
+    Math.min(bp.w, Math.max(...rooms.map((r) => r.x1)) + pad), Math.min(bp.d, Math.max(...rooms.map((r) => r.z1)) + pad),
+  ];
 }
 
 function render(bp: BuildingBlueprint): { png: Buffer; w: number; h: number } {
   const draw = shown(bp);
-  const levels = draw.length;
-  const pw = Math.ceil((bp.w + 2) * PX);
-  const ph = Math.ceil((bp.d + 2) * PX);
+  const PX = scaleOf(bp);
+  const views = draw.map((l) => viewOf(bp, l));
+  const pws = views.map((v) => Math.ceil((v[2] - v[0] + 2) * PX));
+  const offs = pws.map((_, i) => pws.slice(0, i).reduce((a, b) => a + b, 0));
+  const ph = Math.max(...views.map((v) => Math.ceil((v[3] - v[1] + 2) * PX)));
   const eh = Math.ceil((bp.height + 4) * PX);
-  const W = pw * levels;
+  const W = Math.max(offs[offs.length - 1]! + pws[pws.length - 1]!, Math.ceil((bp.w + 2) * PX));
   const H = ph + eh;
   const rgb = new Uint8Array(W * H * 3).fill(250);
   const put = (x: number, y: number, c: Rgb, a = 1): void => {
@@ -43,7 +71,7 @@ function render(bp: BuildingBlueprint): { png: Buffer; w: number; h: number } {
     for (let k = 0; k < 3; k++) rgb[i + k] = rgb[i + k]! * (1 - a) + c[k]! * a;
   };
   const rect = (x0: number, y0: number, x1: number, y1: number, c: Rgb, a = 1): void => {
-    for (let y = Math.floor(Math.min(y0, y1)); y < Math.max(y0, y1); y++) for (let x = Math.floor(Math.min(x0, x1)); x < Math.max(x0, x1); x++) put(x, y, c, a);
+    for (let y = Math.max(0, Math.floor(Math.min(y0, y1))); y < Math.min(H, Math.max(y0, y1)); y++) for (let x = Math.max(0, Math.floor(Math.min(x0, x1))); x < Math.min(W, Math.max(x0, x1)); x++) put(x, y, c, a);
   };
   const line = (x0: number, y0: number, x1: number, y1: number, c: Rgb): void => {
     const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0)));
@@ -54,18 +82,18 @@ function render(bp: BuildingBlueprint): { png: Buffer; w: number; h: number } {
   };
   const cols = localColliders(bp);
   draw.forEach((l, slot) => {
-    const st = bp.storeys[l]!;
+    const v = views[slot]!;
     // Plan l: x right, z down, with a 1 m margin.
-    const ox = slot * pw + PX;
-    const oz = PX;
+    const ox = offs[slot]! + PX - v[0] * PX;
+    const oz = PX - v[1] * PX;
     const P = (x: number, z: number): [number, number] => [ox + x * PX, oz + z * PX];
-    rect(slot * pw + 2, 2, (slot + 1) * pw - 2, ph - 2, [236, 236, 232]);
+    rect(offs[slot]! + 2, 2, offs[slot]! + pws[slot]! - 2, ph - 2, [236, 236, 232]);
     for (const r of bp.rooms.filter((q) => q.level === l)) {
       const [a, b] = P(r.x0, r.z0);
       const [c, d] = P(r.x1, r.z1);
       rect(a, b, c, d, r.locked ? [240, 200, 200] : [250, 246, 226]);
     }
-    const y = st.y;
+    const y = yOf(bp, l);
     for (const c of cols) {
       if (c.y1 <= y + 0.5 || c.y0 >= y + 1.7) continue;
       const [a, b] = P(c.x0, c.z0);
@@ -122,5 +150,5 @@ for (const def of BUILDING_DEFS.filter((d) => d.id.startsWith(only))) {
   const { png } = render(bp);
   writeFileSync(join(out, `${def.id}.png`), png);
   const t = triangleCount(bp);
-  console.log(`${def.id}: ${w.toFixed(1)} × ${d.toFixed(1)} m, ${bp.storeys.length} levels (${shown(bp).length} drawn), ${bp.rooms.length} rooms, ${bp.search.length} search points, triangles outside ${t.shell} / inside ${t.interior.join(' ')}`);
+  console.log(`${def.id}: ${w.toFixed(1)} × ${d.toFixed(1)} m, ${levelsOf(bp).length} levels (${shown(bp).length} drawn), ${bp.rooms.length} rooms, ${bp.search.length} search points, triangles outside ${t.shell} / inside ${t.interior.join(' ')}`);
 }

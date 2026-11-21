@@ -2,8 +2,11 @@
 // street — the first row's fronts face south (rot 0), the second row's north (rot 2). Like the firing
 // range it needs no world data (state.flags.range + state.flags.yard; area.ts). Tests and e2e walk
 // into the buildings here; the 07d-2 sessions see their new types appear in it automatically.
+//
+// 07d-2e: types too big for the streets (the stations of the big cities, airports: up to 850 × 270 m)
+// stand in a second yard instead (`?yard=2`, state.flags.yard === 2), once each, fronts facing south.
 
-import { BUILDING_DEFS } from '../../gen/buildings/index.ts';
+import { BUILDING_DEFS, type BuildingDef } from '../../gen/buildings/index.ts';
 import { addEnterable, createFlatBuilder } from '../../gen/builder.ts';
 import { finishMap, type TacticalMap } from '../../gen/index.ts';
 
@@ -17,6 +20,12 @@ export const YARD = { street: 520, startX: 120, gap: 14, streetHalf: 9 } as cons
  */
 const END_X = 990;
 const STREET_GAP = 6;
+/** 07d-2e: a type whose middle size is wider or deeper than this (m) goes to the big yard. */
+export const YARD_BIG = { w: 300, d: 100 } as const;
+
+export function bigForYard(def: BuildingDef): boolean {
+  return (def.size.w[0] + def.size.w[1]) / 2 > YARD_BIG.w || (def.size.d[0] + def.size.d[1]) / 2 > YARD_BIG.d;
+}
 
 export interface YardEntry {
   def: string;
@@ -26,16 +35,18 @@ export interface YardEntry {
 }
 
 let cached: { map: TacticalMap; entries: YardEntry[] } | null = null;
+let cachedBig: { map: TacticalMap; entries: YardEntry[] } | null = null;
 
 function build(): { map: TacticalMap; entries: YardEntry[] } {
   const b = createFlatBuilder(0, { mapSeed: 11, land: 'suburb', lootSpots: 100000 });
   const entries: YardEntry[] = [];
+  const defs = BUILDING_DEFS.filter((def) => !bigForYard(def));
   // Where each type stands along which street (both rows break at the same types).
   const slots: { x: number; street: number }[] = [];
   const depth: number[] = [0];
   let x = YARD.startX;
   let street = 0;
-  for (const def of BUILDING_DEFS) {
+  for (const def of defs) {
     const w = (def.size.w[0] + def.size.w[1]) / 2;
     if (x + w > END_X) {
       street++;
@@ -61,7 +72,7 @@ function build(): { map: TacticalMap; entries: YardEntry[] } {
     }
   }
   for (const rot of [0, 2] as const) {
-    BUILDING_DEFS.forEach((def, i) => {
+    defs.forEach((def, i) => {
       const w = (def.size.w[0] + def.size.w[1]) / 2;
       const d = (def.size.d[0] + def.size.d[1]) / 2;
       const { x: x0, street: si } = slots[i]!;
@@ -77,10 +88,54 @@ function build(): { map: TacticalMap; entries: YardEntry[] } {
   return { map, entries };
 }
 
-export function yardMap(): TacticalMap {
-  return (cached ??= build()).map;
+/**
+ * 07d-2e: the big yard. Rows from the south edge northwards, each as deep as its deepest type, the
+ * fronts facing south onto a street in front of the row; a row ends where the next type would run
+ * past END_X.
+ */
+function buildBig(): { map: TacticalMap; entries: YardEntry[] } {
+  const b = createFlatBuilder(0, { mapSeed: 12, land: 'suburb', lootSpots: 100000 });
+  const entries: YardEntry[] = [];
+  const defs = BUILDING_DEFS.filter(bigForYard);
+  const rows: BuildingDef[][] = [];
+  let x = END_X;
+  for (const def of defs) {
+    const w = (def.size.w[0] + def.size.w[1]) / 2;
+    if (x + w > END_X) {
+      rows.push([]);
+      x = BIG_START_X;
+    }
+    rows[rows.length - 1]!.push(def);
+    x += w + YARD.gap;
+  }
+  let z0 = BIG_START_Z;
+  let first = YARD.street;
+  for (const row of rows) {
+    const deep = Math.max(...row.map((def) => (def.size.d[0] + def.size.d[1]) / 2));
+    let rx = BIG_START_X;
+    for (const def of row) {
+      const w = (def.size.w[0] + def.size.w[1]) / 2;
+      const d = (def.size.d[0] + def.size.d[1]) / 2;
+      // Fronts on the row's street, at its back edge if shallower than the row.
+      const bd = addEnterable(b, def.id, rx, z0 + deep - d, w, d, 0);
+      entries.push({ def: def.id, enter: bd.enter!, rot: 0 });
+      rx += w + YARD.gap;
+    }
+    if (row === rows[0]) first = z0 + deep + YARD.streetHalf;
+    z0 += deep + 2 * YARD.streetHalf + STREET_GAP;
+  }
+  const map = finishMap(b);
+  map.spawn.edge = [BIG_START_X - 8, first];
+  map.spawn.edgeYaw = -Math.PI / 2;
+  return { map, entries };
+}
+const BIG_START_X = 30;
+const BIG_START_Z = 20;
+
+export function yardMap(big = false): TacticalMap {
+  return big ? (cachedBig ??= buildBig()).map : (cached ??= build()).map;
 }
 
-export function yardEntries(): YardEntry[] {
-  return (cached ??= build()).entries;
+export function yardEntries(big = false): YardEntry[] {
+  return big ? (cachedBig ??= buildBig()).entries : (cached ??= build()).entries;
 }

@@ -89,7 +89,10 @@ export type RoomUse =
   | 'hall' | 'stairs' | 'living' | 'kitchen' | 'bedroom' | 'tatami' | 'closet' | 'bath' | 'toilet' | 'genkan'
   | 'sales' | 'backroom' | 'storage' | 'office' | 'clinic' | 'bar' | 'classroom' | 'lab' | 'workshop' | 'canteen'
   | 'barracks' | 'command' | 'garage' | 'machine' | 'roof' | 'lobby' | 'platform' | 'armory'
-  | 'ward';
+  | 'ward'
+  | 'train'
+  | 'baggage'
+  | 'tower';
 
 /** A rectangular room on one storey. Spaces that are not rectangles are several rooms joined by `join` links. */
 export interface Room {
