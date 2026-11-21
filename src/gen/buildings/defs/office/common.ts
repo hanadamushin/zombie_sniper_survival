@@ -144,7 +144,7 @@ export interface PutOpts {
   tint?: number;
   search?: { kind: FurnitureKind; face: Dir; table?: LootTableId };
   solid?: boolean;
-  /** Distance kept from the room's straight ways (default 0.45; 0 for low pieces). */
+  /** Distance kept from the room's straight ways (default 0.45; 0 for pieces drawn only). */
   margin?: number;
 }
 
@@ -218,7 +218,8 @@ export class Fit {
   /** Place a piece of furniture standing on its room's floor; false when it does not fit. */
   put(room: number, r: Rect, h: number, mat: MaterialId, o: PutOpts = {}): boolean {
     if (!this.ways) return false;
-    const blocking = h > 0.45 && o.solid !== false;
+    // Anything solid keeps off the ways: even a low bench would lift a walker off the way's height.
+    const blocking = h > 0.1 && o.solid !== false;
     if (!this.free(room, r, o.margin ?? (blocking ? 0.45 : 0))) return false;
     let spot: [number, number] | null = null;
     if (o.search) {

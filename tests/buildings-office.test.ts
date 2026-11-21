@@ -12,7 +12,7 @@ import { ARCH } from '../src/data/architecture.ts';
 import { BALANCE } from '../src/data/balance.ts';
 import { ROOM_LOOT } from '../src/data/colony.ts';
 import { addEnterable, createFlatBuilder } from '../src/gen/builder.ts';
-import { BUILDING_DEFS, detailOf, generateBlueprint, triangleCount, type BuildingBlueprint, type BuildingDef, type Rot } from '../src/gen/buildings/index.ts';
+import { BUILDING_DEFS, detailOf, generateBlueprint, localColliders, triangleCount, type BuildingBlueprint, type BuildingDef, type Rot } from '../src/gen/buildings/index.ts';
 import { clearOf, segRectDist, twoPass } from '../src/gen/buildings/defs/office/common.ts';
 import { finishMap, type TacticalMap } from '../src/gen/index.ts';
 import { supportAt, type Vec3 } from '../src/sim/tactical/collision.ts';
@@ -229,6 +229,22 @@ describe('office buildings (07d-2c)', () => {
     const b = generateBlueprint(d, 10, 11, 9);
     expect(JSON.stringify(a)).toBe(JSON.stringify(b));
     expect(typeof twoPass).toBe('function');
+  });
+
+  it('leaves nothing low and solid (a bench, a crate) under a way point: walkers would be lifted off it', () => {
+    for (const id of MINE) {
+      for (const seed of [1, 2, 3, 4]) {
+        const d = def(id);
+        const b = generateBlueprint(d, d.size.w[1], d.size.d[1], seed);
+        const low = localColliders(b).filter((c) => c.kind === 'prop');
+        for (const l of b.links) {
+          for (const p of [l.pts[0]!, l.pts[l.pts.length - 1]!]) {
+            const under = low.find((c) => c.y0 >= p[1] - 0.05 && c.y0 < p[1] + 0.1 && c.y1 > p[1] + 0.1 && segRectDist(p[0], p[2], p[0], p[2], [c.x0, c.z0, c.x1, c.z1]) < 0.3);
+            expect(under, `${id} seed ${seed}: something ${(under?.y1 ?? 0) - p[1]} m high at the way (${p[0].toFixed(2)}, ${p[2].toFixed(2)}) on y ${p[1].toFixed(2)}`).toBeUndefined();
+          }
+        }
+      }
+    }
   });
 
   it('walks in from the street to the highest open room of each (the roof), turned east', () => {
