@@ -387,7 +387,7 @@ export interface InputFrame { moveX: number; moveZ: number; lookDX: number; look
   - ゾンビ・生存者の経路: `sim/tactical/indoor.ts`（`whereIs` / `indoorStep` / `indoorPath` / `roomRoute`）。追跡中のゾンビは `zombies.ts` の chase で使う（プレイヤーから 90m 以内）。4m の通行グリッドでは建物のタイルは通れないまま
   - 区域の生成: 03 の配置のまま、一部の家・コンビニ・オフィスを見本に差し替える（`lands.ts` の `enterableIn`、割合は `TACTICAL.enterable`、別の乱数列なので他の配置は変わらない）。配置の規則は 07d-3
   - 拠点: 06 の機能建物は `defs/base/hall.ts` の設計図（`base.<構造物 id>`）。`sim/build/structures.ts` の `syncMap` が完成した建物ごとに placements の後ろへ足す（生成時の数より後ろは毎回作り直し）。生存者の行き先は `sim/colony/ai.ts` の `indoorSpot`、道のりは `routeTo`
-  - 試験用の地図: `state.flags.range` ＋ `state.flags.yard`（`sim/tactical/yard.ts`、`?yard=1`）に全種類が並ぶ
+  - 試験用の地図: `state.flags.range` ＋ `state.flags.yard`（`sim/tactical/yard.ts`、`?yard=1`）に全種類が並ぶ。07d-2e: 中間の大きさが間口 300m か奥行き 100m を超える種類（大都市の駅・空港）は別の試験用の地図（`state.flags.yard === 2`、`?yard=2`、`debug.openYard(true)`）に 1 棟ずつ南向きで並び、ふつうの試験用の地図には出ない（`bigForYard`）
 
 ## 8. 描画方針（性能予算）
 
