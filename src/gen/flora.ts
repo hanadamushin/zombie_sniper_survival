@@ -3,6 +3,7 @@
 
 import { chance, fork, rand, randRange, seedRng } from '../core/rng.ts';
 import { TACTICAL } from '../data/tactical.ts';
+import { REAL_AREA } from '../data/realmap.ts';
 import { hAt, homeDist, N, rngOf, SIZE, TILE, tileIndex, type Builder } from './builder.ts';
 import { sampleGradient } from './height.ts';
 import { fbm, smoothstep } from './noise.ts';
@@ -61,7 +62,8 @@ export function scatterFlora(b: Builder): void {
 
   // --- trees: one candidate per 5 m cell ---
   const C = 5;
-  const perCell = ((real ? Math.max(F.treesPerHa, T.flora.forest.treesPerHa) : F.treesPerHa) / 10000) * C * C;
+  // R0: in a real area the woods follow the land use (often most of the area), at their own density.
+  const perCell = ((real ? REAL_AREA.forestTreesPerHa : F.treesPerHa) / 10000) * C * C;
   for (let cz = 0; cz < SIZE / C; cz++) {
     for (let cx = 0; cx < SIZE / C; cx++) {
       const x = (cx + rand(rng)) * C;

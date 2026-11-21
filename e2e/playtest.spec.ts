@@ -166,7 +166,7 @@ test('the firing range is one click from the title and from the pause menu, and 
   expect(errors).toEqual([]);
 });
 
-for (const seed of [3, 12, 21]) {
+for (const seed of [3, 12, 24]) {
   test(`seed ${seed}: smoke shows where the first survivor hides; walk there, talk, hire`, async ({ page }) => {
     test.setTimeout(240_000);
     const errors = trackErrors(page);

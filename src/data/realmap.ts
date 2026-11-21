@@ -101,6 +101,11 @@ export const REAL_AREA = {
     apartmentShare: 0.12,
     climbable: 6,
   },
+  /**
+   * Trees per hectare of land-use forest (a fully wooded real area then has about as many trees as
+   * the densest random forest map; measured against the overhead view budget of e2e/build.spec.ts).
+   */
+  forestTreesPerHa: 80,
   /** Field plots on the land-use lattice: largest side and smallest side (m). */
   fields: { max: 72, min: 10 },
   /** Facilities R0 builds as boxes at their real place: footprint (m), height range, kind, school yard depth. */

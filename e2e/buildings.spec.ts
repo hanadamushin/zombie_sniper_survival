@@ -201,7 +201,9 @@ test('city: far buildings are boxes, closer ones show their outside, the nearest
   await page.getByTestId('intro-skip').click();
   await page.getByTestId('start-0').click();
   await page.waitForFunction(() => window.__game?.map != null, null, { timeout: 60_000 });
-  await page.evaluate(() => window.__game!.debug.gotoLand('urban', 40));
+  // R0: central Sendai (an urban cell ringed by suburbs; the 40th urban cell of the real grid is in
+  // the middle of Tokyo, where all eight neighbours are dense city too).
+  await page.evaluate(() => window.__game!.debug.gotoLatLon(38.2601, 140.8822));
   await page.waitForFunction(() => window.__game?.map?.params.land === 'urban', null, { timeout: 90_000 });
   // An office sample away from the edges, the street in front of it.
   const b = await page.evaluate(() => {

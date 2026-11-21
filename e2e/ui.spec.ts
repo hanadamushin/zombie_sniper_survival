@@ -60,12 +60,19 @@ test('first steps: the hints lead from walking to the first fence', async ({ pag
       const s = g.state!;
       const p = s.player;
       s.flags.noSway = true;
+      p.weapon.mag = Math.max(p.weapon.mag, 3); // R0: a miss into the woods must not leave the rifle empty
+      // R0: the start may be a real, wooded area: the target stands in the open middle of the base
+      // (flat and clear for 120 m), 70 m from the player, so trees and hills cannot take the shot.
+      const mid = 512;
+      const zid = g.debug.placeZombie(mid + 70, mid);
+      g.debug.teleport(mid, mid, Math.PI / 2, 0);
       const eye = [p.pos[0], p.pos[1] + p.eye, p.pos[2]] as const;
       let best: { z: NonNullable<typeof s.tactical>["zombies"][number]; d: number } | null = null;
       for (const z of s.tactical!.zombies) {
         const d = Math.hypot(z.pos[0] - eye[0], z.pos[2] - eye[2]);
-        if (z.state === 'down' || d < 40 || d > 260) continue;
-        if (!best || d < best.d) best = { z, d };
+        if (z.state === 'down' || (z.id !== zid && (d < 40 || d > 260))) continue;
+        if (z.id === zid || !best || d < best.d) best = { z, d };
+        if (z.id === zid) break;
       }
       if (!best) return false;
       const { z, d } = best;
