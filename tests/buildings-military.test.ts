@@ -111,8 +111,11 @@ describe('self-defense force sites (07d-2f)', () => {
       for (let grew = true; grew; ) {
         grew = false;
         for (const l of o.links) {
-          if (reach.has(l.a) && !reach.has(l.b)) reach.add(l.b), (grew = true);
-          if (reach.has(l.b) && !reach.has(l.a)) reach.add(l.a), (grew = true);
+          for (const [p, q] of [[l.a, l.b], [l.b, l.a]] as const) {
+            if (!reach.has(p) || reach.has(q)) continue;
+            reach.add(q);
+            grew = true;
+          }
         }
       }
       for (const r of armory) expect(reach.has(r.id), `${def.id}: armory ${r.id} after the key`).toBe(true);
