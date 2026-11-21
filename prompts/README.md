@@ -44,11 +44,28 @@
 | R7 | [R7_realmap_shikoku.md](R7_realmap_shikoku.md) | 四国（R0 の試験台の仕上げ） |
 | R8 | [R8_realmap_kyushu.md](R8_realmap_kyushu.md) | 九州・沖縄 |
 
+## 名所（L1〜L8）
+
+- 発注者の要望で、各地の主要な観光名所を **外観だけ** で再現する（中には入れない）。R1〜R8 の後、L1 から順に 1 本ずつ。L1 が名所の共通の仕組みも作る
+- 環境は「zombie_sniper_survival」でなくてもよい（実データを取得しない）
+
+| # | ファイル | 地方 |
+|---|---|---|
+| L1 | [L1_landmarks_hokkaido.md](L1_landmarks_hokkaido.md) | 北海道（＋名所の共通の仕組み） |
+| L2 | [L2_landmarks_tohoku.md](L2_landmarks_tohoku.md) | 東北 |
+| L3a | [L3a_landmarks_tokyo.md](L3a_landmarks_tokyo.md) | 東京都 |
+| L3b | [L3b_landmarks_kanto.md](L3b_landmarks_kanto.md) | 関東（東京都以外） |
+| L4 | [L4_landmarks_chubu.md](L4_landmarks_chubu.md) | 中部 |
+| L5 | [L5_landmarks_kinki.md](L5_landmarks_kinki.md) | 近畿 |
+| L6 | [L6_landmarks_chugoku.md](L6_landmarks_chugoku.md) | 中国 |
+| L7 | [L7_landmarks_shikoku.md](L7_landmarks_shikoku.md) | 四国 |
+| L8 | [L8_landmarks_kyushu.md](L8_landmarks_kyushu.md) | 九州・沖縄 |
+
 ## 07d・07e の進め方
 
 - 07e は単独で、いつでも実行できる（07d と並行可）
 - 07d-1 → （07d-2a〜2f を並行）→ 07d-3 の順。07d-2 の 6 本は、07d-1 が `main` に入ってから同時に別チャットで始めてよい（触るファイルが分かれている）
-- 07d-3 は 07d-2 と R0〜R8 が全部 `main` に入ってから。すべて終わったら 09 → 10
+- 07d-3 は 07d-2 と R0〜R8 が全部 `main` に入ってから（L1〜L8 の前でも後でもよい）。すべて終わったら 09 → 10
 
 ## 使い方
 
