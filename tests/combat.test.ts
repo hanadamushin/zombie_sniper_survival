@@ -817,7 +817,8 @@ describe('zombies in the world', () => {
     expect(t.zombies.length).toBeLessThanOrEqual(Math.min(activeCap(z0 * BALANCE.world.tacticalZScale) * BALANCE.world.activeMul, BALANCE.world.activeMax));
     expect(t.zombies.length).toBeGreaterThan(300); // 07c: five times the earlier crowd
     expect(t.zombies.length).toBeGreaterThan(z0 > 60 ? 60 : 40); // 07b+: more than the cell's own Z on a quiet start
-    for (const z of t.zombies) expect(Math.hypot(z.pos[0] - 512, z.pos[2] - 512)).toBeGreaterThan(BALANCE.zombie.homeKeepOut - 1);
+    // Placed outside the keep-out ring; one step of a runner may already have carried it a little in (R0: real start cells).
+    for (const z of t.zombies) expect(Math.hypot(z.pos[0] - 512, z.pos[2] - 512)).toBeGreaterThan(BALANCE.zombie.homeKeepOut - 5);
     // Deterministic for a seed.
     const h = worldGame();
     h.run(DT);

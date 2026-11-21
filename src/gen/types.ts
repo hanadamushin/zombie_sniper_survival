@@ -7,6 +7,7 @@
 
 import type { Land } from '../core/types.ts';
 import type { BuildingPlacement } from './buildings/types.ts';
+import type { RealArea } from './real/format.ts';
 
 export type BuildingKind = 'house' | 'barn' | 'shed' | 'shop' | 'apartment' | 'office' | 'warehouse' | 'tower';
 
@@ -167,7 +168,7 @@ export interface Vantage {
 }
 
 /** Tile surface classes (TacticalMap.ground). */
-export const GROUND = { grass: 0, road: 1, track: 2, field: 3, paved: 4, rock: 5, forest: 6, park: 7 } as const;
+export const GROUND = { grass: 0, road: 1, track: 2, field: 3, paved: 4, rock: 5, forest: 6, park: 7, water: 8, sand: 9 } as const;
 
 export interface StaticHash {
   cell: number;
@@ -193,7 +194,7 @@ export interface WorldContext {
   gy: number;
   gridW: number;
   /** 3 × 3 neighbourhood, row by row from the north-west; index 4 is this cell. null: sea or off the grid. */
-  around: ({ land: Land; mapSeed: number } | null)[];
+  around: ({ land: Land; mapSeed: number; real?: boolean } | null)[];
 }
 
 export interface GenParams {
@@ -204,6 +205,19 @@ export interface GenParams {
   lootSpots: number;
   /** 07c: absent for stand-alone maps (tests, the firing range) — then nothing continues past the edge. */
   world?: WorldContext;
+  /** R0: the cell's real-map data (public/data/areas/<region>/<cell>.bin); absent: the random layout of 03. */
+  real?: RealArea;
+}
+
+/** R0: a facility of the real map at its shrunk place (src/gen/real/format.ts POI kinds). */
+export interface MapPoi {
+  kind: number;
+  grade: number;
+  x: number;
+  z: number;
+  name: string;
+  /** Building id when R0 built something for it. */
+  building?: number;
 }
 
 export interface TacticalMap {
@@ -250,6 +264,10 @@ export interface TacticalMap {
   /** Coarse heights around the playable square (render only): (apronN x apronN) samples, origin at -apronRings * apronCell. */
   apron: Float32Array;
   apronN: number;
+  /** R0: water surface height per height sample (n × n, NaN: dry) — sea, rivers and lakes of a real area. */
+  water?: Float32Array;
+  /** R0: facilities of the real map (07d-3 chooses their buildings). */
+  pois?: MapPoi[];
 }
 
 /** Trunk radius of a tree of total height h (collision and render agree on this). */

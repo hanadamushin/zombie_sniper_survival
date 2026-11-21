@@ -21,6 +21,7 @@ import { buildEnterables, type EnterablePart } from './enterables.ts';
 import { around, cellOffset, groundPixelsOf, neighbourMap } from './neighbours.ts';
 import { buildTerrain, type Built, type TerrainPart } from './terrain.ts';
 import { buildVegetation, type Vegetation } from './vegetation.ts';
+import { buildWater } from './water.ts';
 import * as THREE from 'three';
 
 let lastBuildMs = 0;
@@ -36,7 +37,7 @@ interface Entry {
   brush: BrushPart | null;
   enterables: EnterablePart | null;
   /** Parts still to build, in order. */
-  todo: ('terrain' | 'buildings' | 'enterables' | 'vegetation' | 'brush')[];
+  todo: ('terrain' | 'water' | 'buildings' | 'enterables' | 'vegetation' | 'brush')[];
 }
 
 let pendingWork = 0;
@@ -54,7 +55,7 @@ export function createTacticalRenderer(): SubRenderer {
   const start = (map: TacticalMap): Entry => {
     const group = new THREE.Group();
     ctx.scene.add(group);
-    const entry: Entry = { map, group, parts: [], terrain: null, vegetation: null, brush: null, enterables: null, todo: ['terrain', 'buildings', 'enterables', 'vegetation', 'brush'] };
+    const entry: Entry = { map, group, parts: [], terrain: null, vegetation: null, brush: null, enterables: null, todo: map.water ? ['terrain', 'water', 'buildings', 'enterables', 'vegetation', 'brush'] : ['terrain', 'buildings', 'enterables', 'vegetation', 'brush'] };
     entries.set(map, entry);
     return entry;
   };
@@ -63,6 +64,7 @@ export function createTacticalRenderer(): SubRenderer {
     const what = e.todo.shift();
     let part: Built;
     if (what === 'terrain') part = e.terrain = buildTerrain(e.map, ctx.renderer, { apron: !e.map.params.world, pixels: groundPixelsOf(e.map) });
+    else if (what === 'water') part = buildWater(e.map);
     else if (what === 'buildings') part = buildBuildings(e.map);
     else if (what === 'enterables') part = e.enterables = buildEnterables(e.map);
     else if (what === 'vegetation') part = e.vegetation = buildVegetation(e.map);

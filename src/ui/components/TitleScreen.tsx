@@ -3,6 +3,7 @@ import { AUTO_SLOT, type SaveMeta } from '../../core/save.ts';
 import type { Difficulty } from '../../core/types.ts';
 import { formatClock, t, type TextKey } from '../i18n/ja.ts';
 import type { UiActions } from '../store.ts';
+import { CreditsPanel } from './Credits.tsx';
 
 export function slotLabel(slot: string): string {
   return slot === AUTO_SLOT ? t('slot.auto') : t('slot.manual', { n: slot.replace(/\D/g, '') });
@@ -18,6 +19,7 @@ export function TitleScreen({ actions }: { actions: UiActions }) {
   const [error, setError] = useState(false);
   const [busy, setBusy] = useState(false);
   const [dataError, setDataError] = useState(false);
+  const [credits, setCredits] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -43,6 +45,15 @@ export function TitleScreen({ actions }: { actions: UiActions }) {
   };
   const latest = saves?.[0];
 
+  if (credits) {
+    return (
+      <div class="title-screen" data-testid="title-screen">
+        <div class="title-card">
+          <CreditsPanel onClose={() => setCredits(false)} />
+        </div>
+      </div>
+    );
+  }
   return (
     <div class="title-screen" data-testid="title-screen">
       <div class="title-card">
@@ -84,6 +95,9 @@ export function TitleScreen({ actions }: { actions: UiActions }) {
             ))}
           </div>
         )}
+        <button data-testid="open-credits" onClick={() => setCredits(true)}>
+          {t('credits.title')}
+        </button>
         <span class="version">{t('title.version')}</span>
       </div>
     </div>

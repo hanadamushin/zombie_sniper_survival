@@ -51,6 +51,9 @@ export const TACTICAL = {
     ladderDownPitch: -0.6,
     /** Keep-out margin at the edge of the map (m). */
     edgeMargin: 2,
+    /** R0: deepest water walked into (m), and the speed factor while wading. */
+    wadeMax: 1.2,
+    wadeFactor: 0.55,
   },
 
   /**

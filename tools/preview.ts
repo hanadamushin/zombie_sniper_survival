@@ -9,7 +9,8 @@ import type { StaticGrid } from '../src/core/types.ts';
 import { BALANCE } from '../src/data/balance.ts';
 import { parseGrid } from '../src/sim/world/grid.ts';
 import { runScenario } from '../src/sim/world/infection.ts';
-import { buildGrid } from './build-grid.ts';
+import { readFileSync } from 'node:fs';
+import type { GridFile } from '../src/sim/world/grid.ts';
 import { encodePng } from './lib/png.ts';
 
 const SCALE = 4;
@@ -42,8 +43,30 @@ const LAND_COLORS: Record<string, Rgb> = { urban: [230, 70, 60], suburb: [235, 1
 if (import.meta.main) {
   const out = process.argv[2] ?? 'tmp/preview';
   mkdirSync(out, { recursive: true });
-  const grid = parseGrid(buildGrid().file);
+  // R0: the built grid (public/data/grid.json, real data).
+  const grid = parseGrid(JSON.parse(readFileSync(new URL('../public/data/grid.json', import.meta.url), 'utf8')) as GridFile);
   writeFileSync(join(out, 'land.png'), renderMap(grid, (id) => LAND_COLORS[grid.cells[id]!.land]!));
+  // Prefectures: a colour per prefecture, darker on cells whose neighbour is in another prefecture.
+  const prefColor = (p: number): Rgb => [80 + ((p * 97) % 160), 80 + ((p * 57) % 160), 80 + ((p * 151) % 160)];
+  writeFileSync(join(out, 'pref.png'), renderMap(grid, (id) => {
+    const c = grid.cells[id]!;
+    const w = grid.gridW;
+    const border = [id - 1, id + 1, id - w, id + w].some((n) => grid.cells[n] && grid.cells[n]!.pref !== c.pref);
+    const col = prefColor(c.pref);
+    return border ? [col[0] * 0.55, col[1] * 0.55, col[2] * 0.55] as Rgb : col;
+  }));
+  writeFileSync(join(out, 'elev.png'), renderMap(grid, (id) => {
+    const e = grid.cells[id]!.real?.elev ?? 0;
+    const t = Math.min(1, e / 1500);
+    return [Math.round(60 + 170 * t), Math.round(110 + 120 * t * t), Math.round(60 + 160 * t * t)];
+  }));
+  writeFileSync(join(out, 'facilities.png'), renderMap(grid, (id) => {
+    const r = grid.cells[id]!.real;
+    if (r?.airports) return [80, 200, 255];
+    if (r?.station && r.station.grade >= 3) return [255, 230, 80];
+    if (r?.station) return [200, 140, 60];
+    return [40, 50, 44];
+  }));
   writeFileSync(join(out, 'pop.png'), renderMap(grid, (id) => heat(grid.cells[id]!.pop0, 6.2)));
   const days = BALANCE.infection.precomputeDays;
   BALANCE.infection.scenarioSeeds.forEach((seed, n) => {

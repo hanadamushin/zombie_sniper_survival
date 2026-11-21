@@ -170,6 +170,9 @@ export interface WorldState {
 // sim へは createSim({ grid }) / sim.setGrid(grid) で渡し、システムは ctx.grid で読む。
 // StaticGrid = { gridW, gridH, cellKm, proj, cells: (StaticCell|null)[], landIds, hubs: Hub[], prefNames, regionNames, places }
 // 読み込みは src/worldData.ts（fetch）→ sim/world/grid.ts の parseGrid。同梱シナリオは sim/world/scenario.ts。
+// R0: StaticCell.real?: CellFacts（平均標高・起伏、市区町村と格、学校・病院・警察・消防の数、最も乗降の多い駅、
+//     空港、自衛隊、区域データの地方）。places[].grade?（地名の格）。地方の index.json の値は
+//     sim/world/realAreas.ts の addRealRegion が起動時に上書きする（警察・消防・自衛隊・area）。
 
 export interface PlayerState {
   cell: CellId;
@@ -389,6 +392,12 @@ export interface InputFrame { moveX: number; moveZ: number; lookDX: number; look
   - 拠点: 06 の機能建物は `defs/base/hall.ts` の設計図（`base.<構造物 id>`）。`sim/build/structures.ts` の `syncMap` が完成した建物ごとに placements の後ろへ足す（生成時の数より後ろは毎回作り直し）。生存者の行き先は `sim/colony/ai.ts` の `indoorSpot`、道のりは `routeTo`
   - 試験用の地図: `state.flags.range` ＋ `state.flags.yard`（`sim/tactical/yard.ts`、`?yard=1`）に全種類が並ぶ。07d-2e: 中間の大きさが間口 300m か奥行き 100m を超える種類（大都市の駅・空港）は別の試験用の地図（`state.flags.yard === 2`、`?yard=2`、`debug.openYard(true)`）に 1 棟ずつ南向きで並び、ふつうの試験用の地図には出ない（`bigForYard`）
 
+- **実在の地図（R0、`src/gen/real/`、手引きは `docs/realmap_guide.md`）**: 区域ファイル（`public/data/areas/<地方>/<セル>.bin`、形は `gen/real/format.ts` の `RealArea`: 標高 129²・土地利用 129²・堅ろう建物 64²・人口 10²・線・点）があるセルは、`GenParams.real` を持って `generateTacticalMap` が `gen/real/layout.ts`（`realTerrain` / `layoutReal`）の手順で作る。無いセルは従来の乱数の生成
+  - 読み込み: `sim/world/realAreas.ts`（純粋な登録簿: どのセルにデータがあるか `hasRealData`、読み込み済みの `realAreaOf`、未着なら `realPending` が要求を積む）と `src/realData.ts`（アプリ側: 起動時に 8 地方の `index.json`、毎フレーム `pumpRealLoads()` が要求されたファイルを fetch → gzip 展開 → `decodeRealArea` → `provideRealArea`）。`areaParams` は読み込み済みならデータを付ける。`ensureArea` はデータが未着の間は区域を作らない（`areaPending` が真のまま＝読み込み画面）。区域に入るときと隣へ歩くときに周囲 3×3 を先読みする（`prefetchReal`）。データ未着の隣へは越えられない。描画の隣の区域（Worker）も未着の間は要求しない
+  - 地図のキャッシュのキーに実データの有無を含める（`…:r`）。`WorldContext.around[i].real` で隣が実データかを知り、隣が乱数の区域なら境界の 120m で 07c の地形へ混ぜる
+  - 追加したもの（追加のみ）: `GROUND.water` / `GROUND.sand`、`TacticalMap.water`（高さの標本ごとの水面、NaN は乾いた所。水面のタイルは通行不可）、`TacticalMap.pois`（`MapPoi`: 施設の種類・格・位置・名前・建てた建物）、`Builder.forestAt`（森の分布を土地利用から）、`collision.ts` の `waterDepthAt`（プレイヤーは 0.9m より深い水へ入らない・浅い所は 0.55 倍の速さ）
+  - 確認: `node tools/real/area-map.ts <セル>`（ゲームが作る区域の PNG）、`node tools/real/check.ts <地方>`（自動点検）
+
 ## 8. 描画方針（性能予算）
 
 - 目標: 内蔵GPUのノートPCで 60fps（最低 30fps）。ドローコール < 150
@@ -414,6 +423,8 @@ export interface InputFrame { moveX: number; moveZ: number; lookDX: number; look
 - 音（08、`src/audio/`）: Web Audio の合成のみ（`synth.ts` の発振器・ノイズ・フィルタ・包絡）。最初のキー入力かクリックで AudioContext を開始。位置のある音は聞き手（戦術ではプレイヤー、指揮層では俯瞰カメラの注視点）からの方角で左右に振り、距離で減衰・こもらせ、遠い着弾・壁・防衛担当の銃声は距離 ÷ 343 m/s 遅らせる。数値は `data/audio.ts`
 
 - 中に入れる建物（07d、`render/tactical/enterables.ts`）: 区域ごとに、外形の箱 1 ＋外形の屋根 1（設計図なし、遠景）と、部品の形ごとの InstancedMesh（箱・切妻・寄棟・くさび・ガラス）の最大 7 ドローコール。建物ごとに距離で段階（遠景・外観・内部、`RENDER.enterables`）を決め、段階を上げるのは 1 フレームに 1 棟（近い順、設計図の生成と書き込み）、下げるのはその場（スロットを 0 にして返す）。スロットは形ごとのプールから範囲で借り、足りなければ倍に作り直す。色は `RENDER.materials`。06 の構造物の描画（`structures.ts`）は中に入れる建物を描かない
+
+- **水面（R0、`render/tactical/water.ts`）**: 実在の区域の海・川・湖の水面を区域ごとに 1 メッシュ（1 ドローコール）。平らな海のタイルは長方形にまとめる
 
 ## 9. UI 方針
 

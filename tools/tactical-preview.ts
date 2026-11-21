@@ -20,6 +20,8 @@ const GROUND_RGB: Record<number, Rgb> = {
   [GROUND.rock]: [120, 116, 110],
   [GROUND.forest]: [70, 96, 62],
   [GROUND.park]: [96, 140, 80],
+  [GROUND.water]: [50, 90, 150],
+  [GROUND.sand]: [214, 200, 160],
 };
 
 export function renderTacticalMap(map: TacticalMap): Buffer {

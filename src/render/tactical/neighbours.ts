@@ -9,6 +9,7 @@
 import type { CellId, GameState, StaticGrid } from '../../core/types.ts';
 import type { GenParams, TacticalMap } from '../../gen/index.ts';
 import { areaParams, cachedMap, provideMap } from '../../sim/tactical/area.ts';
+import { realPending } from '../../sim/world/realAreas.ts';
 
 let grid: StaticGrid | null = null;
 export function setRenderGrid(g: StaticGrid | null): void {
@@ -37,7 +38,7 @@ export function groundPixelsOf(map: TacticalMap): Uint8Array | undefined {
 let worker: Worker | null | undefined;
 const pending = new Map<string, number>();
 let nextId = 1;
-const keyOf = (p: GenParams): string => `${p.mapSeed}:${p.land}:${p.isHome ? 1 : 0}:${p.lootSpots}`;
+const keyOf = (p: GenParams): string => `${p.mapSeed}:${p.land}:${p.isHome ? 1 : 0}:${p.lootSpots}${p.real ? ':r' : ''}`;
 
 function startWorker(): Worker | null {
   if (worker !== undefined) return worker;
@@ -75,7 +76,9 @@ export function requestMap(params: GenParams): boolean {
 
 /** Generation parameters of a cell (null for the sea / without a grid). */
 export function paramsOf(state: GameState, cell: CellId): GenParams | null {
-  return grid ? areaParams(state, grid, cell) : null;
+  // R0: not before the cell's real-map data have arrived (the random map would be another place).
+  if (!grid || realPending(cell)) return null;
+  return areaParams(state, grid, cell);
 }
 
 /** A neighbour's map if it is ready; otherwise it is requested and null is returned. */

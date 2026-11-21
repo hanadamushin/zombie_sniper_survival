@@ -18,6 +18,8 @@ import { BALANCE } from '../data/balance.ts';
 import { heightStats, scatterFlora } from './flora.ts';
 import { sampleHeight } from './height.ts';
 import { layout, terrainFn } from './lands.ts';
+import { layoutReal, realForest, realTerrain } from './real/layout.ts';
+import type { RealArea } from './real/format.ts';
 import { smoothstep } from './noise.ts';
 import { detailOf } from './buildings/index.ts';
 import { GROUND, type Brush, type GenParams, type LootSpot, type Solid, type StaticHash, type TacticalMap } from './types.ts';
@@ -227,6 +229,8 @@ function buildWalkGrid(b: Builder): Uint8Array {
       }
     }
   };
+  // R0: rivers, lakes and the sea are not walked through.
+  for (let t = 0; t < TILES * TILES; t++) if (b.ground[t] === GROUND.water) walk[t] = 0;
   for (const s of b.solids) {
     if (s.kind === 'building') block(s.x0, s.z0, s.x1, s.z1, 0.6);
     else if (s.kind === 'stair') block(s.x0, s.z0, s.x1, s.z1, 0.2);
@@ -329,6 +333,7 @@ export function finishMap(b: Builder, terrain?: (x: number, z: number) => number
 }
 
 export function generateTacticalMap(params: GenParams): TacticalMap {
+  if (params.real) return generateRealMap(params, params.real);
   const b = createBuilder(params);
   const terrain = terrainFn(b);
   for (let iz = 0; iz < N; iz++) for (let ix = 0; ix < N; ix++) b.height[iz * N + ix] = terrain(ix * TILE, iz * TILE);
@@ -350,6 +355,36 @@ export function generateTacticalMap(params: GenParams): TacticalMap {
     }
   }
   return finishMap(b, terrain);
+}
+
+/** R0: an operation area from the cell's real-map data (gen/real/layout.ts). */
+function generateRealMap(params: GenParams, real: RealArea): TacticalMap {
+  const b = createBuilder(params);
+  // The random world's terrain, for the edges next to cells without real data.
+  const synth = params.world ? terrainFn(b) : null;
+  const terrain = realTerrain(params, real, synth);
+  for (let iz = 0; iz < N; iz++) for (let ix = 0; ix < N; ix++) b.height[iz * N + ix] = terrain(ix * TILE, iz * TILE);
+  if (params.land === 'urban') b.ground.fill(GROUND.paved);
+  if (params.isHome) flattenHome(b);
+  const { water, pois } = layoutReal(b, real, terrain);
+  b.forestAt = realForest(real);
+  const { median } = heightStats(b);
+  findHillVantages(b, median);
+  fillVantages(b, median);
+  scatterFlora(b);
+  scatterCover(b);
+  for (let ty = 0; ty < TILES; ty++) {
+    for (let tx = 0; tx < TILES; tx++) {
+      const i = ty * N + tx;
+      const slope = Math.max(Math.abs(b.height[i + 1]! - b.height[i]!), Math.abs(b.height[i + N]! - b.height[i]!)) / TILE;
+      const t = ty * TILES + tx;
+      if (slope > 0.85 && (b.ground[t] === GROUND.grass || b.ground[t] === GROUND.forest)) b.ground[t] = GROUND.rock;
+    }
+  }
+  const map = finishMap(b, terrain);
+  map.water = water;
+  map.pois = pois;
+  return map;
 }
 
 /** Seed of the operation area of a cell: stable for a given game, different per cell. */

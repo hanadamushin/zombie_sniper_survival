@@ -10,6 +10,15 @@ import { OFFICE } from './office.ts';
 import { PUBLIC } from './public.ts';
 import { SHOP } from './shop.ts';
 import { TRANSPORT } from './transport.ts';
+// R0: landmarks, one list per region (R1..R8 fill their own).
+import { LANDMARK_HOKKAIDO } from './landmark_hokkaido.ts';
+import { LANDMARK_TOHOKU } from './landmark_tohoku.ts';
+import { LANDMARK_KANTO } from './landmark_kanto.ts';
+import { LANDMARK_CHUBU } from './landmark_chubu.ts';
+import { LANDMARK_KINKI } from './landmark_kinki.ts';
+import { LANDMARK_CHUGOKU } from './landmark_chugoku.ts';
+import { LANDMARK_SHIKOKU } from './landmark_shikoku.ts';
+import { LANDMARK_KYUSHU } from './landmark_kyushu.ts';
 
 export const CATALOG: Readonly<Record<BuildingCategory, readonly BuildingDef[]>> = {
   house: HOUSE,
@@ -20,6 +29,7 @@ export const CATALOG: Readonly<Record<BuildingCategory, readonly BuildingDef[]>>
   transport: TRANSPORT,
   military: MILITARY,
   base: BASE,
+  landmark: [...LANDMARK_HOKKAIDO, ...LANDMARK_TOHOKU, ...LANDMARK_KANTO, ...LANDMARK_CHUBU, ...LANDMARK_KINKI, ...LANDMARK_CHUGOKU, ...LANDMARK_SHIKOKU, ...LANDMARK_KYUSHU],
 };
 
 export const BUILDING_DEFS: readonly BuildingDef[] = Object.values(CATALOG).flat();

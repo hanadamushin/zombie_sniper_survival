@@ -2,7 +2,7 @@
 // is the `travel` command.
 
 import { useMemo, useState } from 'preact/hooks';
-import type { CellId, GameState, StaticGrid } from '../../core/types.ts';
+import type { CellFacts, CellId, GameState, StaticGrid } from '../../core/types.ts';
 import { dangerOf, isCleared } from '../../sim/world/derive.ts';
 import { findRoute, travelFactor, travelMinutesLeft } from '../../sim/world/travel.ts';
 import { forecastInfection } from '../../sim/research/forecast.ts';
@@ -185,6 +185,7 @@ export function WorldMap({ state, grid, actions }: Props) {
             </>
           )}
         </dl>
+        {info.real && <RealFacts facts={info.real} />}
         {hub && <p class="help">{t('world.hub', { name: hub.name })}</p>}
         {sea && <p class="help">{t('world.sea', { name: sea.name })}</p>}
 
@@ -254,6 +255,25 @@ export function WorldMap({ state, grid, actions }: Props) {
           <p class="help">{t('world.hint')}</p>
         )}
       </div>
+    </div>
+  );
+}
+
+/** R0: what the real map says about the cell (municipality, station, airports, facilities, SDF, area data). */
+function RealFacts({ facts }: { facts: CellFacts }) {
+  const lines: string[] = [];
+  if (facts.muni) lines.push(t('world.real.muni', { name: facts.muni, grade: t(`world.real.town.${facts.town}` as TextKey) }));
+  if (facts.station) lines.push(t('world.real.station', { name: facts.station.name, grade: t(`world.real.station.${facts.station.grade}` as TextKey) }));
+  for (const a of facts.airports ?? []) lines.push(t('world.real.airport', { name: a.name, size: t(`world.real.airport.${a.size}` as TextKey) }));
+  for (const s of facts.sdf ?? []) lines.push(t('world.real.sdf', { name: s.name }));
+  lines.push(t('world.real.facilities', { schools: facts.schools, hospitals: facts.hospitals, police: facts.police, fire: facts.fire }));
+  lines.push(t('world.real.elev', { m: fmt(facts.elev) }));
+  if (facts.area) lines.push(t('world.real.area'));
+  return (
+    <div class="real-facts" data-testid="real-facts">
+      {lines.map((l, i) => (
+        <p class="help" key={i}>{l}</p>
+      ))}
     </div>
   );
 }

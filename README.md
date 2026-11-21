@@ -23,9 +23,21 @@ npm run e2e      # Playwright スモーク
 | [docs/04_architecture.md](docs/04_architecture.md) | 技術構成、ディレクトリ、状態スキーマ、モジュール間契約 |
 | [docs/05_roadmap.md](docs/05_roadmap.md) | マイルストーンとセッション実行順 |
 | [docs/PROGRESS.md](docs/PROGRESS.md) | セッション間の引き継ぎログ（各セッションが追記） |
+| [docs/realmap_guide.md](docs/realmap_guide.md) | 実在の日本地図（R0〜R8）: 取得・変換・点検・手直しの手引き |
 | [CLAUDE.md](CLAUDE.md) | 全セッション共通の開発ルール（自動で読み込まれる） |
 | [prompts/](prompts/README.md) | 役割ごとのセッション用プロンプト（10本） |
 
 ## 進め方
 
 `prompts/README.md` の順番どおりに、1プロンプト＝1セッションで実行する。
+
+## 地図データの出典
+
+戦略地図と戦術区域は、次の公的なオープンデータをビルド時に変換・縮小して作っています（`npm run data`・`npm run data:region -- <地方>`。手順は [docs/realmap_guide.md](docs/realmap_guide.md)）。ゲーム内でもタイトルとメニューの「出典」で表示します。
+
+- 国土地理院ベクトルタイル提供実験・標高タイル（国土地理院コンテンツ利用規約に基づき加工）
+- 国土数値情報（国土交通省）: 土地利用細分メッシュ（L03-b 2021）、行政区域（N03 2024）、駅別乗降客数（S12 2024）、空港（C28 2021）、鉄道（N02 2024）、学校（P29 2023）、医療機関（P04 2020）、市町村役場等及び公的集会施設（P05 2022）
+- 政府統計の総合窓口（e-Stat）: 令和2年国勢調査 地域メッシュ統計（1km、総務省統計局）
+- Natural Earth（world-atlas）: 取得範囲の決定のみ
+
+建物の形・種類・細かな配置の多くはゲームが生成したもので、実在のものを写したものではありません。

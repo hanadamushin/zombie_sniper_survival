@@ -16,6 +16,7 @@ import { BALANCE } from './data/balance.ts';
 import { createInput } from './input/index.ts';
 import { createRenderer } from './render/index.ts';
 import { setRenderGrid } from './render/tactical/neighbours.ts';
+import { loadRealIndex, pumpRealLoads, realLoadTimes } from './realData.ts';
 import { enterableStats, worldBuildMs, worldPending } from './render/tactical/index.ts';
 import { enterableStageOf, enterableUpgradeMaxMs } from './render/tactical/enterables.ts';
 import { indoorPath } from './sim/tactical/indoor.ts';
@@ -71,6 +72,7 @@ let grid: StaticGrid | null = null;
 async function ensureGrid(): Promise<StaticGrid> {
   if (!grid) {
     grid = await loadGrid();
+    await loadRealIndex(grid); // R0: which cells have real-map areas
     sim.setGrid(grid);
     setRenderGrid(grid); // 07c: the renderer draws the neighbouring cells
     ui.setGrid(grid);
@@ -295,6 +297,7 @@ function runFrame(now: number): void {
 
   // Entering an operation area (new game, arrival, load): let the loading screen paint, then
   // generate the map. The sim would do the same inside its next tick, just without the notice.
+  pumpRealLoads(); // R0: real-map areas the sim has asked for
   if (areaPending(s, grid)) {
     if (areaFrames === 0) ui.sync(s);
     if (++areaFrames > 2) {
@@ -331,6 +334,11 @@ requestAnimationFrame(frame);
 interface DebugApi {
   /** Jump to the first cell of a land class (optionally the n-th), as if arriving by road. */
   gotoLand(land: string, nth?: number): number | null;
+  /** R0: go to a cell (by id, or the cell holding lat / lon); returns the cell or null for the sea. */
+  gotoCell(cell: number): number | null;
+  gotoLatLon(lat: number, lon: number): number | null;
+  /** R0: real-map data of the current map (null: random layout), its facilities and the last area load times (ms). */
+  realInfo(): { cell: number; real: boolean; pois: { kind: number; name: string; x: number; z: number }[]; loadMs: number[] } | null;
   /** Put the player at (x, z) on the ground (or at height y) and look along yaw / pitch (radians). */
   teleport(x: number, z: number, yaw?: number, pitch?: number, y?: number): void;
   setClock(hour: number): void;
@@ -402,6 +410,24 @@ window.__game = {
   sim,
   renderer,
   debug: {
+    gotoCell(cell) {
+      if (!state || !grid || !grid.cells[cell]) return null;
+      state.world.travel = null;
+      state.player.cell = cell;
+      state.tactical = null;
+      return cell;
+    },
+    gotoLatLon(lat, lon) {
+      if (!grid) return null;
+      const { lon0, latTop, kmPerLon, kmPerLat } = grid.proj;
+      const cell = Math.floor(((latTop - lat) * kmPerLat) / grid.cellKm) * grid.gridW + Math.floor(((lon - lon0) * kmPerLon) / grid.cellKm);
+      return window.__game!.debug.gotoCell(cell);
+    },
+    realInfo() {
+      const map = state ? mapOf(state) : null;
+      if (!state || !map) return null;
+      return { cell: state.player.cell, real: Boolean(map.params.real), pois: (map.pois ?? []).map((p) => ({ kind: p.kind, name: p.name, x: p.x, z: p.z })), loadMs: [...realLoadTimes] };
+    },
     gotoLand(land, nth = 0) {
       if (!state || !grid) return null;
       const cells = grid.landIds.filter((id) => grid!.cells[id]!.land === land);

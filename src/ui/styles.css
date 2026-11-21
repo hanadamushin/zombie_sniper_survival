@@ -903,3 +903,10 @@ kbd { display: inline-block; min-width: 1.6em; padding: 0 5px; border: 1px solid
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition: none !important; }
 }
+
+/* R0: data sources (出典) */
+.credits { display: flex; flex-direction: column; gap: var(--s2); max-height: calc(100vh - 120px); overflow-y: auto; }
+.credits h3 { margin: 0; font-size: var(--fs-m); letter-spacing: 0.12em; }
+.credit-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s2); }
+.credit-list li { display: flex; flex-direction: column; gap: 2px; border-left: 2px solid var(--line); padding-left: var(--s2); overflow-wrap: anywhere; }
+.credit-list small { color: var(--paper-2); }

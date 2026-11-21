@@ -969,6 +969,18 @@ function shadeRow(c: GroundCtx, z: number): void {
       case 7:
         grassColor(P, lt, true);
         break;
+      case 8: // R0: river / sea bed (the water surface is drawn over it)
+        dirtColor(P);
+        scale(P, 0.55);
+        natural = false;
+        break;
+      case 9: // R0: beach sand
+        setLerp(P, G.verge, G.gravel, S[S_FINE]! * 0.4);
+        P[0]! = P[0]! * 0.6 + 214 * 0.4;
+        P[1]! = P[1]! * 0.6 + 200 * 0.4;
+        P[2]! = P[2]! * 0.6 + 160 * 0.4;
+        natural = false;
+        break;
       default:
         grassColor(P, lt, false);
     }

@@ -170,7 +170,10 @@ export function MapCanvas(props: Props) {
       ctx.fillStyle = 'rgba(255,255,255,0.88)';
       const all = scale >= 16;
       for (const p of grid.places) {
-        if (!all && !(MAJOR.has(p.name) || (scale >= 9 && grid.cells[p.cell]?.hubId !== undefined))) continue;
+        // R0: designated cities and prefectural capitals always; cities and hubs when zoomed in.
+        const major = p.grade !== undefined ? p.grade >= 4 : MAJOR.has(p.name);
+        const mid = p.grade !== undefined ? p.grade >= 3 && scale >= 13 : false;
+        if (!all && !(major || mid || (scale >= 9 && grid.cells[p.cell]?.hubId !== undefined))) continue;
         const x = cx(p.cell);
         const y = cy(p.cell);
         if (x < -40 || y < -10 || x > w + 10 || y > h + 10) continue;

@@ -20,6 +20,20 @@ export function heightAt(map: TacticalMap, x: number, z: number): number {
   return sampleHeight(map.height, map.n, map.tile, x, z);
 }
 
+/**
+ * R0: depth of the water at (x, z) above the ground (0 where dry): the sea, rivers and lakes of a
+ * real area (map.water). The nearest height sample with water decides the surface.
+ */
+export function waterDepthAt(map: TacticalMap, x: number, z: number): number {
+  const W = map.water;
+  if (!W) return 0;
+  const ix = Math.min(map.n - 1, Math.max(0, Math.round(x / map.tile)));
+  const iz = Math.min(map.n - 1, Math.max(0, Math.round(z / map.tile)));
+  const level = W[iz * map.n + ix]!;
+  if (!Number.isFinite(level)) return 0;
+  return Math.max(0, level - heightAt(map, x, z));
+}
+
 /** Terrain gradient (dh/dx, dh/dz) at (x, z). */
 export function gradientAt(map: TacticalMap, x: number, z: number, out: [number, number]): [number, number] {
   return sampleGradient(map.height, map.n, map.tile, x, z, out);

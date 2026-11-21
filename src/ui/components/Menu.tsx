@@ -10,11 +10,12 @@ import { tk } from '../command/format.ts';
 import { t, type TextKey } from '../i18n/ja.ts';
 import type { UiActions } from '../store.ts';
 import { saveSummary, slotLabel } from './TitleScreen.tsx';
+import { CreditsPanel } from './Credits.tsx';
 
 /** Controls listed in the help (07b: includes the keyboard-only way to aim and shoot). */
 export const HELP_KEYS: readonly TextKey[] = ['help.move', 'help.look', 'help.scope', 'help.fire', 'help.breath', 'help.zoom', 'help.zero', 'help.stance', 'help.reload', 'help.knife', 'help.interact', 'help.resupply', 'help.layers', 'help.layers2', 'help.time', 'help.menu'];
 
-type MenuTab = 'game' | 'settings' | 'help';
+type MenuTab = 'game' | 'settings' | 'help' | 'credits';
 
 export function MenuOverlay({ state, actions }: { state: GameState; actions: UiActions }) {
   const range = state.flags.range === true;
@@ -24,13 +25,14 @@ export function MenuOverlay({ state, actions }: { state: GameState; actions: UiA
       <div class="panel menu-panel">
         <h2>{t('menu.title')}<small class="note"> — {t('menu.paused')}</small></h2>
         <div class="menu-tabs" role="tablist">
-          {(['game', 'settings', 'help'] as const).map((x) => (
+          {(['game', 'settings', 'help', 'credits'] as const).map((x) => (
             <button key={x} class={x === tab ? 'active' : ''} data-testid={`menu-tab-${x}`} onClick={() => setTab(x)}>{t(`menu.tab.${x}` as TextKey)}</button>
           ))}
         </div>
         {tab === 'game' && <GameTab state={state} actions={actions} range={range} />}
         {tab === 'settings' && <SettingsPanel actions={actions} />}
         {tab === 'help' && <HelpPanel />}
+        {tab === 'credits' && <CreditsPanel />}
       </div>
     </div>
   );

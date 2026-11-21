@@ -153,7 +153,7 @@ function tryBuilding(
  * `rot`: as large as the type allows, its front on the rectangle's front edge, centred along it.
  * Returns null when the rectangle is too small (the caller builds its box instead).
  */
-function enterableIn(b: Builder, defId: string, x0: number, z0: number, x1: number, z1: number, rot: Rot): Building | null {
+export function enterableIn(b: Builder, defId: string, x0: number, z0: number, x1: number, z1: number, rot: Rot): Building | null {
   const frontAlongX = rot % 2 === 0;
   const lw = frontAlongX ? x1 - x0 : z1 - z0;
   const ld = frontAlongX ? z1 - z0 : x1 - x0;
@@ -411,7 +411,7 @@ function layoutTown(b: Builder, land: 'urban' | 'suburb'): void {
 // Countryside
 // ---------------------------------------------------------------------------------------------
 
-function farmstead(b: Builder, rng: RngState, x: number, z: number, enterRng: RngState): void {
+export function farmstead(b: Builder, rng: RngState, x: number, z: number, enterRng: RngState): void {
   const hw = randRange(rng, 8, 11);
   const hd = randRange(rng, 6.5, 8.5);
   const hh = chance(rng, 0.4) ? 3.4 : 5.8;

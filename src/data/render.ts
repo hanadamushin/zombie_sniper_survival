@@ -13,6 +13,8 @@ export const RENDER = {
   /** Visibility 800 m + fog (docs/04_architecture.md §8). */
   /** 04 moved the start of the fog from 150 m to 260 m: targets at 300 m+ must keep their silhouette. */
   fog: { near: 260, far: 800 },
+  /** R0: water of the real areas (sea, rivers, lakes): colour, opacity, lift above the level (m). */
+  water: { color: 0x2c4c58, opacity: 0.86, lift: 0.02 },
   maxPixelRatio: 2,
   /**
    * Automatic resolution (04): when the average frame time (smoothed over `smooth` seconds) stays

@@ -107,3 +107,8 @@
 ## 07d-2f（自衛隊）から: 取りまとめ役へ
 - 共有ファイルの追加: `types.ts` の `MaterialId` に `'olive'`（直前の `| 'asphalt'` の行のセミコロンだけ動いた）、`LootTableId` に `'field'` `'safe'`（同じく `| 'stock'` の行）、任意の項目 `Part.key` `Opening.key` `Room.key` `SearchPoint.key` `BuildingBlueprint.keyLinks` `BuildingPlacement.open`。`materials.ts`・`render.ts` に `olive` の 1 行、`colony.ts` の `ROOM_LOOT` に `field` `safe` の 2 行
 - 鍵の仕組みで触ったもの: `gen/buildings/index.ts`（`placementKey` に `open`、`openBlueprint`）、`gen/index.ts`（`placeLootSpots`）、`gen/types.ts`（`LootSpot.key/.enter`）、`core/types.ts`（`lootSpots` の要素に `key?` `enter?`）、`render/tactical/enterables.ts`（開いた扉板を描かない 1 行）、`sim/tactical/area.ts`（`applyKeys` と呼ぶ 4 か所）、`sim/colony/encounters.ts`（金庫を探索したら `applyKeys`・ログ）、`ui/i18n/ja.ts`（`log.keyFound`）。試験用の地図 3 つ目: `yard.ts`（`sdfYard`、`yardMap(3)`）、`area.ts`・`main.ts`（`?yard=3`・`openYard(3)`）
+
+## R0 からの注意（R0 が追記）
+- 実在の地図の区域（`map.params.real` がある区域）では、施設が実在の位置に置かれている: `map.pois`（`MapPoi`: `kind` は `src/gen/real/format.ts` の `POI`、`grade`、`x / z`、`name`、R0 が建てた建物の `building`）。R0 は箱（`REAL_AREA.facilities` の大きさ）と、陸自は `base.jgsdf_s` を置いただけ。駅の格・病院の大小・学校の種類（`grade`）・県庁・市役所・役場・警察・消防・大学・空港・海自・空自をここから 07d-2 の種類へ当てはめる（`src/gen/real/layout.ts` の `facility`）
+- 戦略地図のセルの事実（`StaticCell.real`: 市区町村の格、駅の格と乗降客数、空港の大きさ、学校・病院・警察・消防の数、自衛隊）も使える。区域データの無いセル（乱数の区域）はこちらから建物を選ぶ
+- 町並みは `realTowns`（街区の格 1〜4: 戸建て・密集した低層・中層・高層）で「今ある種類か箱」を置いている。格ごとの種類の選び方を差し替えるのが自然な口

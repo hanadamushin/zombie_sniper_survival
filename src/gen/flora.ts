@@ -42,15 +42,17 @@ export function scatterFlora(b: Builder): void {
     sampleGradient(b.height, N, TILE, x, z, grad);
     return Math.hypot(grad[0], grad[1]);
   };
-  const wood = (x: number, z: number): number => {
+  // R0: a real area says where its woods are (land use); the noise mask is for the random layout.
+  const real = b.forestAt;
+  const wood = real ?? ((x: number, z: number): number => {
     let m = fbm((x + ox) / 170, (z + oz) / 170, seedW, 3);
     // Rural hills are wooded; their fields lie on the low ground.
     if (land === 'rural') m += Math.min(0.5, Math.max(0, (hAt(b, x, z) - stats.median - 6) / 30));
     return m;
-  };
+  });
   const probe: number[] = [];
-  for (let z = 16; z < SIZE; z += 32) for (let x = 16; x < SIZE; x += 32) probe.push(wood(x, z));
-  const th = F.wooded > 0 ? quantile(probe, 1 - F.wooded) : Infinity;
+  if (!real) for (let z = 16; z < SIZE; z += 32) for (let x = 16; x < SIZE; x += 32) probe.push(wood(x, z));
+  const th = real ? 0.5 : F.wooded > 0 ? quantile(probe, 1 - F.wooded) : Infinity;
   const clearOfVantage = (x: number, z: number): boolean => b.vantages.every((v) => Math.hypot(v.pos[0] - x, v.pos[2] - z) > (v.kind === 'hill' ? T.vantage.hillClear : 13));
   const homeClear = (x: number, z: number): boolean => !b.params.isHome || homeDist(x, z) > T.homeFlatRadius + 8;
   const parks = b.areas.filter((a) => a.kind === 'park');
@@ -59,7 +61,7 @@ export function scatterFlora(b: Builder): void {
 
   // --- trees: one candidate per 5 m cell ---
   const C = 5;
-  const perCell = (F.treesPerHa / 10000) * C * C;
+  const perCell = ((real ? Math.max(F.treesPerHa, T.flora.forest.treesPerHa) : F.treesPerHa) / 10000) * C * C;
   for (let cz = 0; cz < SIZE / C; cz++) {
     for (let cx = 0; cx < SIZE / C; cx++) {
       const x = (cx + rand(rng)) * C;
@@ -90,7 +92,7 @@ export function scatterFlora(b: Builder): void {
     }
   }
   // Forest floor under the wooded patches, even where no trunk landed in the tile.
-  if (F.wooded > 0) {
+  if (F.wooded > 0 || real) {
     for (let ty = 0; ty < SIZE / TILE; ty++) {
       for (let tx = 0; tx < SIZE / TILE; tx++) {
         const i = ty * (SIZE / TILE) + tx;

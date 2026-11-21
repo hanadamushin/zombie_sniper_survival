@@ -32,8 +32,10 @@ function newGame(scenario = 0, seed = 7): GameState {
 describe('grid', () => {
   it('covers Japan with ~10 km cells', () => {
     expect(grid.landIds.length).toBeGreaterThan(3500);
-    expect(grid.landIds.length).toBeLessThan(4100);
-    expect(TOTAL).toBe(125_000_000);
+    expect(grid.landIds.length).toBeLessThan(4300);
+    // R0: the 2020 census (126.1 million; a few thousand on far islands outside the grid are left out).
+    expect(TOTAL).toBeGreaterThan(125_900_000);
+    expect(TOTAL).toBeLessThan(126_200_000);
     expect(grid.hubs.filter((h) => h.intl !== null)).toHaveLength(5);
   });
 
@@ -231,7 +233,7 @@ describe('travel', () => {
     // Hokkaido is reached through the Seikan tunnel (06); islands without a crossing stay out of reach.
     const north = findRoute(grid, tokyo, sapporo)!;
     expect(north.minutes).toBeGreaterThan((north.path.length - 2) * 180 + 400);
-    expect(findRoute(grid, tokyo, grid.places.find((p) => p.name === '対馬')!.cell)).toBeNull();
+    expect(findRoute(grid, tokyo, grid.places.find((p) => p.name === '対馬市')!.cell)).toBeNull();
     const mountain = grid.landIds.find((id) => grid.cells[id]!.land === 'mountain' && grid.cells[id - 1]?.land === 'forest')!;
     expect(legMinutes(grid, mountain - 1, mountain)).toBe(270);
     expect(legMinutes(grid, mountain, mountain - 1)).toBe(180);
@@ -261,7 +263,7 @@ describe('travel', () => {
     const { state, sim } = setup();
     const rejected: string[] = [];
     sim.events.on('commandRejected', (e) => rejected.push(e.reason));
-    const sado = grid.places.find((p) => p.name === '対馬')!.cell; // no crossing leads to Tsushima
+    const sado = grid.places.find((p) => p.name === '対馬市')!.cell; // no crossing leads to Tsushima
     sim.dispatch({ type: 'travel', to: sado });
     sim.dispatch({ type: 'travel', to: 0 });
     run(sim, state, 1);

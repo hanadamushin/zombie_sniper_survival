@@ -15,7 +15,7 @@
 import type { RngState } from '../../core/rng.ts';
 import type { BuildingKind } from '../types.ts';
 
-export type BuildingCategory = 'house' | 'apartment' | 'shop' | 'office' | 'public' | 'transport' | 'military' | 'base';
+export type BuildingCategory = 'house' | 'apartment' | 'shop' | 'office' | 'public' | 'transport' | 'military' | 'base' | 'landmark';
 
 /** Surface materials (render colours: data/render.ts RENDER.materials; behaviour: materials.ts). */
 export type MaterialId =

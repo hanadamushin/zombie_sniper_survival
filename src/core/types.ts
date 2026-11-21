@@ -89,7 +89,34 @@ export interface StaticCell {
   region: number; // index into StaticGrid.regionNames (0..7)
   pref: number; // JIS prefecture code 1..47 (index into StaticGrid.prefNames)
   hubId?: number; // index into StaticGrid.hubs
+  /** R0: facts from the real open data (absent in grids built before R0). */
+  real?: CellFacts;
 }
+/**
+ * R0: what the real map says about a cell (tools/real/grid.ts; police / fire / SDF are refined by the
+ * region builds, public/data/areas/<region>/index.json, merged in by sim/world/realAreas.ts).
+ */
+export interface CellFacts {
+  /** Mean elevation of the land (m) and its standard deviation. */
+  elev: number;
+  relief: number;
+  /** Municipality holding most of the population (or the area) of the cell. */
+  muni: string;
+  /** Grade of that municipality: 0 none, 1 village, 2 town, 3 city, 4 prefectural capital, 5 ordinance-designated city. */
+  town: number;
+  schools: number;
+  hospitals: number;
+  police: number;
+  fire: number;
+  /** Busiest station: grade 0 unstaffed, 1 town, 2 city, 3 prefectural capital, 4 designated city (from daily passengers). */
+  station?: { name: string; grade: number; pax: number };
+  airports?: { name: string; size: number }[];
+  /** Self-Defense Force sites (from the GSI annotations of a region build). */
+  sdf?: { kind: SdfKind; name: string }[];
+  /** Region whose area data covers this cell (public/data/areas/<region>/<cell>.bin), when built. */
+  area?: string;
+}
+export type SdfKind = 'gsdf_s' | 'gsdf_m' | 'gsdf_l' | 'msdf' | 'asdf';
 /** Transport hub (Shinkansen station / airport cell). `links` are hub ids. Added by 02. */
 export interface Hub {
   id: number;
@@ -114,7 +141,7 @@ export interface StaticGrid {
   prefNames: string[];
   regionNames: string[];
   /** Named places (largest town of a cell) for map labels. */
-  places: { name: string; cell: CellId }[];
+  places: { name: string; cell: CellId; grade?: number }[];
   /** Fixed crossings between landmasses (tunnels, bridges, ferries; 06). People use them, the dead do not. */
   seaLinks?: SeaLink[];
 }

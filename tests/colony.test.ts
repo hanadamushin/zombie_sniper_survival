@@ -1,3 +1,5 @@
+import { heightAt } from '../src/sim/tactical/collision.ts';
+import { mapOf } from '../src/sim/tactical/area.ts';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { GameEvent } from '../src/core/events.ts';
@@ -506,7 +508,9 @@ describe('the player and the colony', () => {
     const h0 = state.world.cells.H[cell]!;
     const hide = t.hideouts![0]!;
     state.mode = 'tactical';
-    state.player.pos = [hide.pos[0], state.player.pos[1], hide.pos[1]];
+    // At the search point's floor (07d: inside a building it is not the ground the player stood on).
+    const spotY = t.lootSpots.find((s) => s.id === hide.spot)?.y;
+    state.player.pos = [hide.pos[0], spotY ?? heightAt(mapOf(state)!, hide.pos[0], hide.pos[1]), hide.pos[1]];
     expect(interactionAt(state)?.kind).toBe('talk');
     r.sim.tick(state, DT, { ...idle, interact: true });
     const found = state.colony.candidates.length;
@@ -518,7 +522,9 @@ describe('the player and the colony', () => {
     const loot0 = state.world.cells.loot[cell]!;
     r.sim.tick(state, DT, { ...idle, interact: true });
     expect(state.world.cells.loot[cell]!).toBeLessThan(loot0);
-    expect(interactionAt(state)).toBeNull();
+    // That spot is done (07d: the next shelf of the same room may be within reach).
+    const after = interactionAt(state);
+    expect(after === null || (after.kind === 'search' && 'spot' in after && after.spot !== hide.spot)).toBe(true);
 
     // Hiring: not without ears; with them the fee leaves and the newcomer walks in.
     const cand = state.colony.candidates[0]!;

@@ -43,6 +43,8 @@ export const ARCH = {
     transport: { shell: 4000, interior: 4000 },
     military: { shell: 3000, interior: 3000 },
     base: { shell: 1500, interior: 3000 },
+    /** R0: landmarks of the regions (castles, towers...): as the tallest office tower (25+ storeys). */
+    landmark: { shell: 6000, interior: 3000 },
   },
   /** Generating one blueprint must stay below this (ms, Node) — tests. */
   generateMs: 4,

@@ -17,7 +17,8 @@
     "data": "node tools/build-data.ts",
     "tactical:preview": "node tools/tactical-preview.ts tmp/tactical",
     "buildings:preview": "node tools/building-preview.ts tmp/buildings",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "data:region": "node tools/real/region.ts"
   },
   "dependencies": {
     "preact": "^11.2.0",

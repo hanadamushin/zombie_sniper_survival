@@ -19,6 +19,7 @@ import { TACTICAL } from '../../data/tactical.ts';
 import { rangeMap } from './range.ts';
 import { yardMap } from './yard.ts';
 import { BALANCE } from '../../data/balance.ts';
+import { hasRealData, realAreaOf, realPending, requestRealArea } from '../world/realAreas.ts';
 
 export interface TacticalArea {
   map: TacticalMap;
@@ -63,7 +64,7 @@ const cache = new Map<string, TacticalMap>();
 /** 07c: the 3 × 3 neighbourhood the renderer shows, plus a few just left. */
 const CACHE_SIZE = 14;
 
-const keyOf = (p: GenParams): string => `${p.mapSeed}:${p.land}:${p.isHome ? 1 : 0}:${p.lootSpots}`;
+const keyOf = (p: GenParams): string => `${p.mapSeed}:${p.land}:${p.isHome ? 1 : 0}:${p.lootSpots}${p.real ? ':r' : ''}`;
 
 function mapFor(params: GenParams): TacticalMap {
   const key = keyOf(params);
@@ -87,7 +88,7 @@ export function worldContext(state: GameState, grid: StaticGrid, cell: CellId): 
       const y = gy + dy;
       const id = y * w + x;
       const info = x >= 0 && y >= 0 && x < w && y < grid.gridH ? grid.cells[id] : undefined;
-      around.push(info ? { land: info.land, mapSeed: mapSeedFor(state.seed, id) } : null);
+      around.push(info ? (hasRealData(id) ? { land: info.land, mapSeed: mapSeedFor(state.seed, id), real: true } : { land: info.land, mapSeed: mapSeedFor(state.seed, id) }) : null);
     }
   }
   return { seed: state.seed >>> 0, gx, gy, gridW: w, around };
@@ -97,7 +98,17 @@ export function worldContext(state: GameState, grid: StaticGrid, cell: CellId): 
 export function areaParams(state: GameState, grid: StaticGrid, cell: CellId, lootSpots?: number): GenParams | null {
   const info = cellTactical(state, grid, cell);
   if (!info) return null;
-  return { mapSeed: mapSeedFor(state.seed, cell), land: info.land, isHome: cell === state.world.homeCell, lootSpots: lootSpots ?? info.lootSpots, world: worldContext(state, grid, cell) };
+  const params: GenParams = { mapSeed: mapSeedFor(state.seed, cell), land: info.land, isHome: cell === state.world.homeCell, lootSpots: lootSpots ?? info.lootSpots, world: worldContext(state, grid, cell) };
+  // R0: the real map of the cell when its data are loaded (callers check realPending first).
+  const real = realAreaOf(cell);
+  if (real) params.real = real;
+  return params;
+}
+
+/** R0: ask for the real-map data of the 3 × 3 cells around `cell` (loaded in the background by the app). */
+export function prefetchReal(grid: StaticGrid, cell: CellId): void {
+  const w = grid.gridW;
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) requestRealArea(cell + dy * w + dx);
 }
 
 /** The live area of this game, or null while it has not been generated (or on the road). */
@@ -112,7 +123,14 @@ export function mapOf(state: GameState): TacticalMap | null {
 export function areaPending(state: GameState, grid: StaticGrid | null): boolean {
   if (state.flags.range) return !state.tactical || !areas.has(state.tactical);
   if (!grid || state.world.travel || state.world.homeCell === null || !grid.cells[state.player.cell]) return false;
-  return !state.tactical || state.tactical.cell !== state.player.cell || !areas.has(state.tactical);
+  const need = !state.tactical || state.tactical.cell !== state.player.cell || !areas.has(state.tactical);
+  if (need) prefetchReal(grid, state.player.cell);
+  return need;
+}
+
+/** R0: true while the area to be made waits for the cell's real-map data. */
+export function areaWaiting(state: GameState, grid: StaticGrid | null): boolean {
+  return Boolean(grid) && areaPending(state, grid) && realPending(state.player.cell);
 }
 
 /**
@@ -148,6 +166,7 @@ export function ensureArea(state: GameState, grid: StaticGrid | null): TacticalA
   if (tactical && tactical.cell === cell) {
     const known = areas.get(tactical);
     if (known) return known;
+    if (realPending(cell)) return null; // R0: wait for the real-map data
     // Loaded game: rebuild the same map and keep what the save knows (taken loot spots, position).
     const params = areaParams(state, grid, cell, tactical.lootSpots.length);
     if (!params) return null;
@@ -160,6 +179,8 @@ export function ensureArea(state: GameState, grid: StaticGrid | null): TacticalA
     return area;
   }
 
+  if (realPending(cell)) return null; // R0: wait for the real-map data
+  prefetchReal(grid, cell);
   const params = areaParams(state, grid, cell);
   if (!params) return null;
   const map = mapFor(params);
@@ -205,6 +226,7 @@ export function provideMap(params: GenParams, map: TacticalMap): void {
 
 /** Map of a cell for this game, generating it if needed (the renderer's neighbours, tests). */
 export function mapForCell(state: GameState, grid: StaticGrid, cell: CellId): TacticalMap | null {
+  if (realPending(cell)) return null;
   const params = areaParams(state, grid, cell);
   return params ? mapFor(params) : null;
 }
@@ -241,13 +263,15 @@ export function walkAcross(state: GameState, grid: StaticGrid | null, emit: (e: 
       dx = 0;
     }
   }
-  if (!land(gx + dx, gy + dz)) {
+  // R0: a neighbour whose real-map data have not arrived is closed for a moment (they are asked for).
+  if (!land(gx + dx, gy + dz) || (!parked.has((gy + dz) * w + gx + dx) && realPending((gy + dz) * w + gx + dx))) {
     p[0] = Math.min(S, Math.max(0, p[0]));
     p[2] = Math.min(S, Math.max(0, p[2]));
     return null;
   }
   const from = t.cell;
   const to = (gy + dz) * w + gx + dx;
+  prefetchReal(grid, to);
   const shiftX = -dx * S;
   const shiftZ = -dz * S;
 

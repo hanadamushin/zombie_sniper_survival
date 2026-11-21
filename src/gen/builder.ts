@@ -41,6 +41,8 @@ export interface Builder {
   trees: number[];
   /** x, z, size — 3 numbers per tuft. */
   grass: number[];
+  /** R0: share 0..1 of woodland at a point (real land use); the flora follows it instead of noise. */
+  forestAt?: (x: number, z: number) => number;
 }
 
 export function createBuilder(params: GenParams): Builder {
@@ -152,6 +154,10 @@ export function resample(pts: readonly [number, number][], step: number): [numbe
   return out;
 }
 
+let accH: Float32Array | null = null;
+let accW: Float32Array | null = null;
+let maxW: Float32Array | null = null;
+
 /**
  * Add a road: marks ground / occupied tiles, and (when `grade` is set) cuts a smooth road bed
  * into the terrain so that it can be walked along hillsides.
@@ -182,9 +188,11 @@ export function addRoad(b: Builder, kind: RoadKind, width: number, pts: [number,
       prof = next;
     }
     const reach = half + 7;
-    const accH = new Float32Array(N * N);
-    const accW = new Float32Array(N * N);
-    const maxW = new Float32Array(N * N);
+    // Scratch arrays shared by every road (R0: real areas have hundreds); `touched` resets them.
+    const AH = (accH ??= new Float32Array(N * N));
+    const AW = (accW ??= new Float32Array(N * N));
+    const MW = (maxW ??= new Float32Array(N * N));
+    const touched: number[] = [];
     samples.forEach(([x, z], s) => {
       const ix0 = Math.max(0, Math.ceil((x - reach) / TILE));
       const ix1 = Math.min(N - 1, Math.floor((x + reach) / TILE));
@@ -197,15 +205,19 @@ export function addRoad(b: Builder, kind: RoadKind, width: number, pts: [number,
           // 07c: the road bed fades out at the map edge, where the ground must match the neighbour's.
           const w = (1 - smoothstep(half, reach, d)) * editFade(ix * TILE, iz * TILE);
           const i = iz * N + ix;
-          accH[i] = accH[i]! + prof[s]! * w;
-          accW[i] = accW[i]! + w;
-          if (w > maxW[i]!) maxW[i] = w;
+          if (MW[i] === 0 && AW[i] === 0) touched.push(i);
+          AH[i] = AH[i]! + prof[s]! * w;
+          AW[i] = AW[i]! + w;
+          if (w > MW[i]!) MW[i] = w;
         }
       }
     });
-    for (let i = 0; i < N * N; i++) {
-      const w = maxW[i]!;
-      if (w > 0) b.height[i] = b.height[i]! * (1 - w) + (accH[i]! / accW[i]!) * w;
+    for (const i of touched) {
+      const w = MW[i]!;
+      if (w > 0) b.height[i] = b.height[i]! * (1 - w) + (AH[i]! / AW[i]!) * w;
+      AH[i] = 0;
+      AW[i] = 0;
+      MW[i] = 0;
     }
   }
 
