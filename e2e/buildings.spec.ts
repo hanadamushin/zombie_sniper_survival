@@ -39,6 +39,8 @@ async function walk(page: Page, pts: [number, number, number][]): Promise<boolea
 
 /** Let the renderer finish what it has to build (neighbours, building stages), then a moment more. */
 async function settle(page: Page, ms = 1200): Promise<void> {
+  // Let the renderer see the new camera position first (two frames), or `pending` is still the old view's.
+  await page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
   await page.waitForFunction(() => window.__game!.debug.renderInfo().pending === 0, null, { timeout: 60_000 });
   await page.waitForTimeout(ms);
 }
