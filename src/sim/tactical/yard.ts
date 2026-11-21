@@ -9,9 +9,14 @@ import { finishMap, type TacticalMap } from '../../gen/index.ts';
 
 /** The street between the two rows (z) and where the first building starts (x). */
 export const YARD = { street: 520, startX: 120, gap: 14, streetHalf: 9 } as const;
-/** 07d-2b: when a row would run off the map (x past `endX`) it goes on along the next street (z). */
-const MORE_STREETS = [600, 680, 440, 360, 760, 280] as const;
+/**
+ * 07d-2b: when a row would run off the map (x past `endX`) it goes on along the next street (z).
+ * 07d-2d: the streets are spaced by the depth of what stands on them (school sites and campuses
+ * are 60–80 m deep): the next street goes on the +z side, then the -z side, then +z... of the
+ * streets laid out so far, clear of their rows by `STREET_GAP`.
+ */
 const END_X = 990;
+const STREET_GAP = 6;
 
 export interface YardEntry {
   def: string;
@@ -27,22 +32,40 @@ function build(): { map: TacticalMap; entries: YardEntry[] } {
   const entries: YardEntry[] = [];
   // Where each type stands along which street (both rows break at the same types).
   const slots: { x: number; street: number }[] = [];
+  const depth: number[] = [0];
   let x = YARD.startX;
   let street = 0;
   for (const def of BUILDING_DEFS) {
     const w = (def.size.w[0] + def.size.w[1]) / 2;
-    if (x + w > END_X && street < MORE_STREETS.length) {
+    if (x + w > END_X) {
       street++;
+      depth.push(0);
       x = YARD.startX;
     }
-    slots.push({ x, street: street === 0 ? YARD.street : MORE_STREETS[street - 1]! });
+    slots.push({ x, street });
+    depth[street] = Math.max(depth[street]!, (def.size.d[0] + def.size.d[1]) / 2);
     x += w + YARD.gap;
+  }
+  // Street z: the first at YARD.street, the others alternately on the +z and the -z side of the band used so far.
+  const zs: number[] = [YARD.street];
+  let north = YARD.street + YARD.streetHalf + depth[0]!;
+  let south = YARD.street - YARD.streetHalf - depth[0]!;
+  for (let i = 1; i < depth.length; i++) {
+    const half = YARD.streetHalf + depth[i]!;
+    if (i % 2 === 1) {
+      zs.push(north + STREET_GAP + half);
+      north += STREET_GAP + 2 * half;
+    } else {
+      zs.push(south - STREET_GAP - half);
+      south -= STREET_GAP + 2 * half;
+    }
   }
   for (const rot of [0, 2] as const) {
     BUILDING_DEFS.forEach((def, i) => {
       const w = (def.size.w[0] + def.size.w[1]) / 2;
       const d = (def.size.d[0] + def.size.d[1]) / 2;
-      const { x: x0, street: z } = slots[i]!;
+      const { x: x0, street: si } = slots[i]!;
+      const z = zs[si]!;
       const z0 = rot === 0 ? z - YARD.streetHalf - d : z + YARD.streetHalf;
       const bd = addEnterable(b, def.id, x0, z0, w, d, rot);
       entries.push({ def: def.id, enter: bd.enter!, rot });

@@ -66,3 +66,10 @@
   - 家具の型: `officeDesks` `meeting` `classroom` `clinicRoom` `waiting` `salesFloor` `storeRoom` `canteen` `kitchen` `barRoom` `karaoke` `barricade` `toppled`。`defs/office/tower.ts` の `flatUnit`（住戸を区画に）・`shopUnit`・`clinicUnit`
 - 生成時間（4ms）に注意: 階の多い建物は `finish()` の「通過点 → 部屋」の検索が部屋×通過点で効く。**入れない階には部屋を作らない**（施錠の扉だけ）と速い。`twoPass` の 1 回目は部屋と階段と通過点の記録だけ。テストは並列で走るので、Node 単独で 2ms を超える種類は 4ms の検査を時々落とす（1.5ms 以下を目安に）
 - `npm run buildings:preview [出力先] [シード] [id の頭]` で種類を絞れる。同じ間取りが続く階は 1 枚にまとめて描く（07d-2c で追加）
+
+## 07d-2d（公共施設・工場）からの注意
+- `src/gen/buildings/defs/public/common.ts` の補助は自由に使ってよい（kit.ts は変えていない）: `wing`（x 方向の多層の棟を 1 回で。廊下・部屋の列・両端の折り返し階段・1 階の扉と連窓・2 階以上の `facade`・屋上の塔屋。駅舎・兵舎・オフィスの中廊下に向く）、`hall`（体育館・格納庫・倉庫のような高い 1 部屋。連窓・切妻／陸／鋸屋根）、`catwalk`（壁沿いの鉄骨通路と壁へ向かう直階段）、`mesh`（金網。弾と視線は通す）、`truck`、`slab`。使い方は `docs/buildings_guide.md` の「大きな建物の部品」
+- **長い廊下を 1 部屋にしない**。出入口が 20 前後ある部屋はカタログの直線の検査（`tests/buildings.test.ts`）が 5 秒の上限を超える。`wing` は部屋の区切りごとに廊下を分けて `join` している
+- 大きな広間は扉の並ぶ壁沿いに通路を空け、機械・荷物はその奥に置くと直線の検査が通る
+- 屋内の経路（`roomRoute`）は外を経由する経路につながり 4 本ぶん余計に数えるようにした（`TACTICAL.interior.outsideCost`）。扉の多い建物でも中を通る経路が選ばれる
+- 試験用の地図の通りの間隔は、その通りに並ぶ種類の最大の奥行きで決まるようにした（1 本目 z = 520、以降 +z・−z へ交互）。e2e では通りの z を決め打ちせず `z1 + 9` を使うこと

@@ -56,3 +56,10 @@
 - `src/gen/buildings/defs/shop/common.ts` の補助は自由に使ってよい（kit.ts は変えていない）: `facade`（多層の長い壁を「柱＋階ごとの腰壁＋階ごとのガラス 1 枚」で作る。窓ごとに 4 箱の `kit.wall` より三角形がずっと少ない。10 階建てでも外観 1,500 前後）、`guestRoom`（廊下から入る客室・和室。施錠なら空の施錠の部屋）、`clearOfWays`（部屋の出入口どうしの直線から家具を離す判定。置く前に呼べば「something stands between two ways」を避けられる）、`table` / `booth` / `stools` / `vending` / `car` / `sign` / `awning` / `poleSign` / `graffiti` / `rust` / `toppled`
 - 試験用の地図（`sim/tactical/yard.ts`）は地図の東端 x = 990 を越えると次の通り（z = 600, 680, 440, 360, 760, 280）に折り返すようにした（全種類が 1 本の通りに入りきらなくなったため）。各種類の通りは `debug.enterables()` の `z1 + 9`（南向きの列）。e2e で通りの z を 520 と決め打ちしないこと
 - `shop.konbini_tenant` はビルの 1 階だけの設計図（階高 `ARCH.storey.concrete`、左の 1.8m はビルの入口ロビーと施錠の階段室）。ビルの上の階と組み合わせる仕組みは無い
+
+## 07d-2d（公共施設・工場）からの注意
+- `src/gen/buildings/defs/public/common.ts` の補助は自由に使ってよい（kit.ts は変えていない）: `wing`（x 方向の多層の棟を 1 回で。廊下・部屋の列・両端の折り返し階段・1 階の扉と連窓・2 階以上の `facade`・屋上の塔屋。駅舎・兵舎・オフィスの中廊下に向く）、`hall`（体育館・格納庫・倉庫のような高い 1 部屋。連窓・切妻／陸／鋸屋根）、`catwalk`（壁沿いの鉄骨通路と壁へ向かう直階段）、`mesh`（金網。弾と視線は通す）、`truck`、`slab`。使い方は `docs/buildings_guide.md` の「大きな建物の部品」
+- **長い廊下を 1 部屋にしない**。出入口が 20 前後ある部屋はカタログの直線の検査（`tests/buildings.test.ts`）が 5 秒の上限を超える。`wing` は部屋の区切りごとに廊下を分けて `join` している
+- 大きな広間は扉の並ぶ壁沿いに通路を空け、機械・荷物はその奥に置くと直線の検査が通る
+- 屋内の経路（`roomRoute`）は外を経由する経路につながり 4 本ぶん余計に数えるようにした（`TACTICAL.interior.outsideCost`）。扉の多い建物でも中を通る経路が選ばれる
+- 試験用の地図の通りの間隔は、その通りに並ぶ種類の最大の奥行きで決まるようにした（1 本目 z = 520、以降 +z・−z へ交互）。e2e では通りの z を決め打ちせず `z1 + 9` を使うこと
