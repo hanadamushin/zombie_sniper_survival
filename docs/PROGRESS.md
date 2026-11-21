@@ -1371,3 +1371,7 @@
 - 型: `MaterialId` に `'olive'`、`LootTableId` に `'field'` `'safe'`、`Part.key?` `Opening.key?` `Room.key?` `SearchPoint.key?` `BuildingBlueprint.keyLinks?` `BuildingPlacement.open?`（`gen/buildings/types.ts`）、`LootSpot.key?` `.enter?`（`gen/types.ts`）、`TacticalState.lootSpots[]` の `key?` `enter?`（`core/types.ts`、追加のみ・セーブの形は互換）。関数: `openBlueprint`（`gen/buildings/index.ts`）、`applyKeys`（`sim/tactical/area.ts`）、`sdfYard`・`yardMap(3)`・`yardEntries(3)`（`sim/tactical/yard.ts`）。データ: `ROOM_LOOT.field` / `.safe`、`RENDER.materials.olive`。文言: `log.keyFound`。フラグ: `flags.yard` に 3、URL `?yard=3`、`debug.openYard(3)`。コマンド・イベントの追加なし
 - 新しいファイル: `defs/military/{parts,camps}.ts`、`defs/base/{sdf_parts,jgsdf,jmsdf,jasdf}.ts`、`tests/buildings-military.test.ts`、`e2e/buildings-military.spec.ts`
 - 依存の追加なし
+
+### 取りまとめ: 生成時間のテストを負荷に強く — 2026-11-21
+- 07d-2c〜2f が続けて報告した「`npm run check` を通しで流すと、建物の生成時間（4ms）・フローフィールド（5ms）・区域の生成（150ms）の検査が負荷でまれに落ちる」への対応。並列のテストワーカーの負荷を拾う中央値をやめ、**複数回のうち最速の値** で判定するようにした（`tests/buildings.test.ts`・`build.test.ts`・`cover.test.ts`）。上限の値は変えていない。仕事そのものの重さが上限を超えれば従来どおり落ちる
+
