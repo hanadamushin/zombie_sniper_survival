@@ -312,10 +312,11 @@ async function buildCell(ctx: Ctx, cell: number, ov: RegionOverrides): Promise<C
   // middle, so that both cells sharing a road decide the same way.
   const meshPopEarly = new Map<number, number>();
   for (const m of meshes) for (const [code, p] of await estatPopulation(m)) meshPopEarly.set(code, p);
-  const sparseAt = (pts: P[]): boolean => {
+  const popAt = (pts: P[]): number => {
     const [x, z] = pts[Math.floor(pts.length / 2)]!;
-    return (meshPopEarly.get(mesh3Code(ctx.latOfZ(z), ctx.lonOfX(x))) ?? 0) < A.denseLocalRoads;
+    return meshPopEarly.get(mesh3Code(ctx.latOfZ(z), ctx.lonOfX(x))) ?? 0;
   };
+  const sparseAt = (pts: P[]): boolean => popAt(pts) < A.denseLocalRoads;
   for (const [tx, ty] of tiles) {
     const layers = await bvmap(VZ, tx, ty);
     if (!layers) continue;
@@ -345,6 +346,7 @@ async function buildCell(ctx: Ctx, cell: number, ov: RegionOverrides): Promise<C
           for (const part of f.geom) {
             for (const piece of clipLine(part.map(toG), ...box)) {
               if (kind === LINE.local && !sparseAt(piece)) continue;
+              if (kind === LINE.wide && ov.dropWideRoadsAbove !== undefined && popAt(piece) >= ov.dropWideRoadsAbove) continue;
               rawLines.push({ kind, flags, width, pts: piece });
             }
           }
@@ -352,12 +354,15 @@ async function buildCell(ctx: Ctx, cell: number, ov: RegionOverrides): Promise<C
       } else if (layer.name === 'railway') {
         for (const f of layer.features) {
           const p = f.props;
-          // railState: 0 ordinary, 100 bridge / viaduct, 200 tunnel, 300 underground, 400 on the street (trams: no bed of their own).
+          // railState at zoom 13: 0 ordinary (viaducts: lvOrder > 0), 100 tunnel / underground, 400 on the
+          // street (trams: no bed of their own). R1 checked it against zoom 14, which spells it out (1 bridge,
+          // 2 tunnel, 3 underground): the Sapporo subway and the Seikan approach tunnels are 100 at zoom 13,
+          // the viaducts by Sapporo station 0 with lvOrder 1. (R0 read 100 as a bridge.)
           const state = Number(p.railState ?? 0);
           if (state === 400) continue;
           let flags = 0;
-          if (state === 200 || state === 300) flags |= LINE_TUNNEL;
-          if (state === 100 || Number(p.lvOrder ?? 0) > 0) flags |= LINE_BRIDGE;
+          if (state === 100 || state === 200 || state === 300) flags |= LINE_TUNNEL;
+          else if (Number(p.lvOrder ?? 0) > 0) flags |= LINE_BRIDGE;
           const width = Number(p.snglDbl ?? 1) >= 2 ? A.width.railDouble : A.width.rail;
           for (const part of f.geom) for (const piece of clipLine(part.map(toG), ...box)) rawLines.push({ kind: LINE.rail, flags, width, pts: piece });
         }

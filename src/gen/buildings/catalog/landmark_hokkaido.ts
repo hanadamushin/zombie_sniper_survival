@@ -1,8 +1,10 @@
-// Landmark buildings of the hokkaido region (R0 created the list empty; the region's R session adds up
-// to three: castles, towers, great temples, bridge towers...). Each type lives in its own file under
-// src/gen/buildings/defs/landmark/hokkaido/ and is listed here. Category 'landmark', id
-// 'landmark.<variant>' (e.g. 'landmark.matsuyama_castle'). See docs/realmap_guide.md §7.
+// Landmark buildings of the hokkaido region (R1): the two observation towers. Each type lives in its
+// own file under src/gen/buildings/defs/landmark/hokkaido/ and is listed here. Category 'landmark',
+// id 'landmark.<variant>'. Placed at the shrunk real position by src/gen/real/layout.ts (by the
+// annotation's name). See docs/realmap_guide.md §7.
 
 import type { BuildingDef } from '../types.ts';
+import { LANDMARK_GORYOKAKU_TOWER } from '../defs/landmark/hokkaido/goryokaku_tower.ts';
+import { LANDMARK_SAPPORO_TV_TOWER } from '../defs/landmark/hokkaido/sapporo_tv_tower.ts';
 
-export const LANDMARK_HOKKAIDO: readonly BuildingDef[] = [];
+export const LANDMARK_HOKKAIDO: readonly BuildingDef[] = [LANDMARK_SAPPORO_TV_TOWER, LANDMARK_GORYOKAKU_TOWER];
