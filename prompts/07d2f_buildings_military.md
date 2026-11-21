@@ -61,5 +61,5 @@
   - `coreAt` / `coreLevel` / `coreRoof`（折り返し階段・使えないエレベーター・トイレ・前のホールの「コア」、屋上の塔屋と機械室）、`stripStair` / `stripRoof`（外壁沿いの階段の帯）、`ringRooms`（コアの周りの 4 部屋を角で join）、`corridorPlate`（コアの周りの廊下と、その外側の区画。客室・住戸・店・診療所を `fill` で詰める）、`towerFloors`（中央コアの高層: 入れる階だけ部屋を作り、他の階は階段室の扉を施錠して部屋を作らない）
   - `curtain` / `curtainAll`（多層の外壁を「階ごとの帯 1 本＋全高の柱＋側面ごとのガラス 1 枚」で。三角形は階数×側面の帯ぶんしか増えない。30 階でも外観 2,300 前後）、`helipad` / `guardRail` / `mast`、`embedGround`（別の種類の 1 階だけの設計図を、完成した建物の 1 階の空き枠に入れる。テナントビルがコンビニを入れるのに使用）
   - 家具の型: `officeDesks` `meeting` `classroom` `clinicRoom` `waiting` `salesFloor` `storeRoom` `canteen` `kitchen` `barRoom` `karaoke` `barricade` `toppled`。`defs/office/tower.ts` の `flatUnit`（住戸を区画に）・`shopUnit`・`clinicUnit`
-- 生成時間（4ms）に注意: 階の多い建物は `finish()` の「通過点 → 部屋」の検索が部屋×通過点で効く。**入れない階には部屋を作らない**（施錠の扉だけ）と速い。`twoPass` は 1 回目で箱と床を作らない
+- 生成時間（4ms）に注意: 階の多い建物は `finish()` の「通過点 → 部屋」の検索が部屋×通過点で効く。**入れない階には部屋を作らない**（施錠の扉だけ）と速い。`twoPass` の 1 回目は部屋と階段と通過点の記録だけ。テストは並列で走るので、Node 単独で 2ms を超える種類は 4ms の検査を時々落とす（1.5ms 以下を目安に）
 - `npm run buildings:preview [出力先] [シード] [id の頭]` で種類を絞れる。同じ間取りが続く階は 1 枚にまとめて描く（07d-2c で追加）

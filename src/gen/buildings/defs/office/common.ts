@@ -39,16 +39,23 @@ export function flightDepth(storeyHeight: number, lane = LANE): number {
 // Two passes
 // ---------------------------------------------------------------------------------------------
 
-export type Ways = Map<number, [number, number][]>;
+/** Each room's ways in and out, keyed by the room's storey and rectangle (roomKey). */
+export type Ways = Map<string, [number, number][]>;
+
+/** A room's key: the same in both passes even when the first one leaves rooms out. */
+export function roomKey(r: { level: number; x0: number; z0: number; x1: number; z1: number }): string {
+  return `${r.level}|${r.x0.toFixed(3)}|${r.z0.toFixed(3)}|${r.x1.toFixed(3)}|${r.z1.toFixed(3)}`;
+}
 
 /** Every room's ways in and out (the ends of its links, local x / z). */
 export function waysOf(bp: BuildingBlueprint): Ways {
   const ways: Ways = new Map();
   const add = (room: number, p: [number, number, number]): void => {
     if (room < 0) return;
-    const list = ways.get(room) ?? [];
+    const key = roomKey(bp.rooms[room]!);
+    const list = ways.get(key) ?? [];
     list.push([p[0], p[2]]);
-    ways.set(room, list);
+    ways.set(key, list);
   };
   for (const l of bp.links) {
     add(l.a, l.pts[0]!);
@@ -60,22 +67,105 @@ export function waysOf(bp: BuildingBlueprint): Ways {
 /**
  * Build a blueprint in two passes from the same random state. `body` must make the same rooms and
  * links in both (draw the structure from `k`, the furniture from `f`): the first pass has no
- * furniture and tells the second where every room's ways are.
+ * furniture and tells the second where every room's ways are (by the room's storey and rectangle,
+ * so the first pass may leave out parts that hold no furniture placed by Fit — towerFloors skips
+ * the locked storeys there).
  */
 export function twoPass(def: BuildingDef, rng: RngState, params: GenerateParams, body: (k: Kit, f: Fit) => void): BuildingBlueprint {
   const s = [...rng.s] as RngState['s'];
   const a = createKit(def, params, { s: [...s] as RngState['s'] });
-  // The first pass only needs the rooms and links: plain boxes (steps, slabs, signs) and floors are
-  // left out (they never make a link nor draw from the random state).
+  const ways = recorder(a);
+  body(a, new Fit(a, null));
+  const b = createKit(def, params, { s: [...s] as RngState['s'] });
+  body(b, new Fit(b, ways()));
+  return b.finish();
+}
+
+/**
+ * Turn a kit into the first pass's: nothing is built but the rooms and the stairs; walls, joins and
+ * stairs only note their way points (with the kit's own formulas: ARCH.doorReach past the wall's
+ * faces, 0.5 m either side of a join, the stair's foot and top). Returns a function giving the ways
+ * once the body has run.
+ */
+function recorder(a: Kit): () => Ways {
+  const pts: [number, number, number][] = []; // level, x, z
+  const rooms: number[] = [];
   const none = { shape: 'box', x0: 0, y0: 0, z0: 0, x1: 0, y1: 0, z1: 0, mat: 'concrete', layer: 'shell', level: -1 } as const;
   a.box = () => ({ ...none });
   a.part = () => ({ ...none });
   a.floor = () => {};
-  body(a, new Fit(a, null));
-  const ways = waysOf(a.finish());
-  const b = createKit(def, params, { s: [...s] as RngState['s'] });
-  body(b, new Fit(b, ways));
-  return b.finish();
+  a.wall = (level, x0, z0, x1, z1, holes) => {
+    const alongX = x1 - x0 >= z1 - z0;
+    const u0 = alongX ? x0 : z0;
+    const u1 = alongX ? x1 : z1;
+    const tc = alongX ? (z0 + z1) / 2 : (x0 + x1) / 2;
+    const r = ARCH.doorReach + (alongX ? z1 - z0 : x1 - x0) / 2;
+    for (const h of holes) {
+      if (h.kind !== 'door' || h.state !== 'open') continue;
+      const mid = (Math.max(u0, u0 + h.at - h.width / 2) + Math.min(u1, u0 + h.at + h.width / 2)) / 2;
+      if (alongX) pts.push([level, mid, tc - r], [level, mid, tc + r]);
+      else pts.push([level, tc - r, mid], [level, tc + r, mid]);
+    }
+    return [];
+  };
+  const room = a.room.bind(a);
+  a.room = (...args) => {
+    const id = room(...args);
+    rooms.push(id);
+    return id;
+  };
+  const stairs = a.stairs.bind(a);
+  a.stairs = (o) => {
+    const res = stairs(o);
+    pts.push([o.level, res.bottom[0], res.bottom[2]], [o.to ?? o.level + 1, res.top[0], res.top[2]]);
+    return res;
+  };
+  a.join = (ia, ib) => {
+    const ra = a.roomById(ia);
+    const rb = a.roomById(ib);
+    const ox0 = Math.max(ra.x0, rb.x0);
+    const ox1 = Math.min(ra.x1, rb.x1);
+    const oz0 = Math.max(ra.z0, rb.z0);
+    const oz1 = Math.min(ra.z1, rb.z1);
+    if (ox1 - ox0 > 1e-6 && Math.abs(oz1 - oz0) < 0.3) {
+      const sign = ra.z0 < rb.z0 ? 1 : -1;
+      const z = (oz0 + oz1) / 2;
+      pts.push([ra.level, (ox0 + ox1) / 2, z - sign * 0.5], [rb.level, (ox0 + ox1) / 2, z + sign * 0.5]);
+    } else {
+      const sign = ra.x0 < rb.x0 ? 1 : -1;
+      const x = (ox0 + ox1) / 2;
+      pts.push([ra.level, x - sign * 0.5, (oz0 + oz1) / 2], [rb.level, x + sign * 0.5, (oz0 + oz1) / 2]);
+    }
+  };
+  return () => {
+    // Each way point belongs to the smallest room round it on its storey (as kit.finish decides).
+    const ways: Ways = new Map();
+    const byLevel = new Map<number, ReturnType<Kit['roomById']>[]>();
+    for (const id of rooms) {
+      const r = a.roomById(id);
+      const l = byLevel.get(r.level) ?? [];
+      l.push(r);
+      byLevel.set(r.level, l);
+    }
+    for (const [level, x, z] of pts) {
+      let best: ReturnType<Kit['roomById']> | undefined;
+      let area = Infinity;
+      for (const r of byLevel.get(level) ?? []) {
+        if (x < r.x0 - 0.05 || x > r.x1 + 0.05 || z < r.z0 - 0.05 || z > r.z1 + 0.05) continue;
+        const ar = (r.x1 - r.x0) * (r.z1 - r.z0);
+        if (ar < area) {
+          area = ar;
+          best = r;
+        }
+      }
+      if (!best) continue;
+      const key = roomKey(best);
+      const w = ways.get(key) ?? [];
+      w.push([x, z]);
+      ways.set(key, w);
+    }
+    return ways;
+  };
 }
 
 /** Distance from point (x, z) to rectangle r. */
@@ -161,6 +251,7 @@ export class Fit {
   private readonly rng: RngState;
   private readonly taken = new Map<number, Rect[]>();
   private readonly spots = new Map<number, [number, number][]>();
+  private readonly byRoom = new Map<number, [number, number][]>();
 
   constructor(k: Kit, ways: Ways | null) {
     this.k = k;
@@ -182,6 +273,13 @@ export class Fit {
     return items[Math.min(items.length - 1, Math.floor(rand(this.rng) * items.length))]!;
   }
 
+  /** The room's ways (from the first pass). */
+  waysIn(room: number): [number, number][] {
+    let w = this.byRoom.get(room);
+    if (!w) this.byRoom.set(room, (w = this.ways?.get(roomKey(this.k.roomById(room))) ?? []));
+    return w;
+  }
+
   roomRect(room: number): Rect {
     const r = this.k.roomById(room);
     return [r.x0, r.z0, r.x1, r.z1];
@@ -194,7 +292,7 @@ export class Fit {
     if (r[0] < R.x0 - 1e-6 || r[1] < R.z0 - 1e-6 || r[2] > R.x1 + 1e-6 || r[3] > R.z1 + 1e-6) return false;
     for (const q of this.taken.get(room) ?? []) if (r[0] < q[2] - 1e-6 && r[2] > q[0] + 1e-6 && r[1] < q[3] - 1e-6 && r[3] > q[1] + 1e-6) return false;
     for (const s of this.spots.get(room) ?? []) if (segRectDist(s[0], s[1], s[0], s[1], r) < 0.36) return false;
-    return margin <= 0 || clearOf(this.ways.get(room) ?? [], r, margin);
+    return margin <= 0 || clearOf(this.waysIn(room), r, margin);
   }
 
   private standable(room: number, x: number, z: number): boolean {
@@ -301,7 +399,7 @@ export class Fit {
       if (this.put(room, r, h, mat, { tint: o.tint, search }) || (search && this.put(room, r, h, mat, { tint: o.tint }))) {
         n++;
         a += len + (o.gap ?? 0.05);
-      } else a += 0.3;
+      } else a += 0.5;
     }
     return n;
   }
@@ -319,11 +417,14 @@ export class Fit {
     const x0 = R[0] + (R[2] - R[0] - nx * sx - (nx - 1) * ax) / 2;
     const z0 = R[1] + (R[3] - R[1] - nz * sz - (nz - 1) * az) / 2;
     let n = 0;
+    let tries = 0;
     for (let j = 0; j < nz; j++) {
       for (let i = 0; i < nx; i++) {
+        // A big room with many ways: stop trying once enough cells have been looked at.
+        if (n >= max || tries++ >= max * 3) return n;
         const x = x0 + i * (sx + ax);
         const z = z0 + j * (sz + az);
-        if (n < max && make([x, z, x + sx, z + sz], i, j)) n++;
+        if (make([x, z, x + sx, z + sz], i, j)) n++;
       }
     }
     return n;
@@ -380,7 +481,8 @@ export function coreAt(k: Kit, x0: number, z0: number, o: { shafts?: number; sha
   }
   const x1 = cur + P;
   const z1 = zs + (o.hall ?? 2.2) + P;
-  for (const s of shafts) k.shaft(s, 0, k.storeys - 1);
+  // One hole through the floors for the whole row of shafts (cheaper to cut than one per shaft).
+  if (shafts.length) k.shaft([shafts[0]![0], z0 + P, shafts[shafts.length - 1]![2], zs], 0, k.storeys - 1);
   return { x0, z0, x1, z1, zs, sx0, sx1, hall: [x0 + P, zs, x1 - P, z1 - P], shafts, wc, lane };
 }
 
@@ -933,6 +1035,8 @@ export interface TowerSpec {
   cz?: number;
   tint: number;
   floorMat?: (level: number) => MaterialId;
+  /** The slab of each storey (default: inside the outer walls). */
+  floorRect?: Rect;
   /** Which storeys can be entered (the rest: the stair hall's door is locked). */
   open: (level: number) => boolean;
   /** Fill an open storey round the core (rooms and furniture); `hole` is the core's outside. */
@@ -960,23 +1064,72 @@ export function towerFloors(k: Kit, f: Fit, s: TowerSpec): Core {
   const hole = coreRect(c);
   const outer: Rect = [t, t, w - t, d - t];
   for (let level = 0; level < k.storeys; level++) {
-    k.floor(level, s.floorMat?.(level) ?? (level === 0 ? 'tileFloor' : 'carpet'));
+    k.floor(level, s.floorMat?.(level) ?? (level === 0 ? 'tileFloor' : 'carpet'), s.floorRect);
     const open = s.open(level);
+    // The first pass only needs the ways of rooms that get furniture: a locked storey has none
+    // (its barricade stands clear of the stair by construction), and it draws nothing from k.rand.
+    if (!open && !f.live) {
+      k.room(level, c.hall[0], c.hall[1], c.hall[2], c.hall[3], 'stairs'); // where a stair from below arrives
+      continue;
+    }
+    if (!open) {
+      const h = coreLocked(k, level, c, (c.hall[0] + c.hall[2]) / 2, s.tint);
+      // Nobody gets onto a locked storey: no rooms there, only what is seen through the glass.
+      s.stamp?.(level, ringRects(outer, hole));
+      if (f.chance(0.3)) barricade(f, h, (c.hall[0] + c.hall[2]) / 2 + 1.4, c.hall[3] - 0.45, 'x');
+      if (f.chance(0.25)) f.stain(h);
+      continue;
+    }
     const { hall: h, wc } = coreLevel(k, level, c, { front: [{ x: (c.hall[0] + c.hall[2]) / 2, state: open ? 'open' : 'locked', width: s.doorW?.(level) ?? 1.2, steel: !open }], tint: s.tint, wcOpen: open && s.wc });
     if (wc >= 0) {
       f.row(wc, 'z-', 0.6, 0.5, 0.85, 'appliance', { kind: 'cabinet', table: 'toilet', max: 1, tint: 0.9 });
       f.ensure(wc, 'cabinet', 'toilet');
     }
-    if (open) {
-      s.plate(level, c, hole, h);
-      continue;
-    }
-    // Nobody gets onto a locked storey: no rooms there, only what is seen through the glass.
-    s.stamp?.(level, ringRects(outer, hole));
-    if (f.chance(0.3)) barricade(f, h, (c.hall[0] + c.hall[2]) / 2 + 1.4, c.hall[3] - 0.45, 'x');
-    if (f.chance(0.25)) f.stain(h);
+    s.plate(level, c, hole, h);
+  }
+  // The core's walls on each run of locked storeys: plain boxes the height of the run.
+  for (let a = 0; a < k.storeys; a++) {
+    if (s.open(a)) continue;
+    let b = a;
+    while (b + 1 < k.storeys && !s.open(b + 1)) b++;
+    coreShell(k, c, a, b, (c.hall[0] + c.hall[2]) / 2, s.tint);
+    a = b;
   }
   return c;
+}
+
+/**
+ * A locked storey of a core: the flight up, the hall (the stair's landing) and the locked steel
+ * door to the floor — its walls are coreShell's. Returns the hall's room id.
+ */
+export function coreLocked(k: Kit, level: number, c: Core, doorX: number, tint?: number): number {
+  k.stairs({ level, start: [c.sx0 + c.lane / 2, c.zs], dir: 'z-', width: c.lane, kind: 'switchback', turn: 'right', mat: 'concrete', tint });
+  const y = k.levelY(level);
+  const top = k.levelY(level + 1) - ARCH.slab;
+  // The door itself is a wall piece just its width (a locked opening, as on the open storeys).
+  k.wall(level, doorX - 0.6, c.z1 - P, doorX + 0.6, c.z1 + P, [steelDoor(k, 0.6, 'locked', 1.2)], { mat: 'concrete', tint, y0: y, y1: top });
+  return k.room(level, c.hall[0], c.hall[1], c.hall[2], c.hall[3], 'stairs');
+}
+
+/** The walls of a core over storeys a..b as boxes the height of the run (the lift fronts closed). */
+export function coreShell(k: Kit, c: Core, a: number, b: number, doorX: number, tint?: number): void {
+  const y0 = k.levelY(a);
+  const y1 = k.levelY(b + 1) - ARCH.slab;
+  const wall = (x0: number, z0: number, x1: number, z1: number): void => {
+    k.box(a, x0, y0, z0, x1, y1, z1, 'concrete', { tint });
+  };
+  wall(c.x0 - P, c.z0 - P, c.x1 + P, c.z0 + P);
+  wall(c.x0 - P, c.z0 + P, c.x0 + P, c.z1 - P);
+  wall(c.x1 - P, c.z0 + P, c.x1 + P, c.z1 - P);
+  wall(c.x0 - P, c.z1 - P, doorX - 0.6, c.z1 + P);
+  wall(doorX + 0.6, c.z1 - P, c.x1 + P, c.z1 + P);
+  let px = c.sx1 + P;
+  for (const sh of c.shafts) {
+    wall(px - P, c.z0 + P, px + P, c.zs - P);
+    px = sh[2] + P;
+  }
+  if (c.wc) wall(px - P, c.z0 + P, px + P, c.zs - P);
+  if (c.shafts.length || c.wc) wall(c.sx1, c.zs - P, c.x1 - P, c.zs + P);
 }
 
 /** The front and back strips of an open floor round a hole (what ringRooms would make of them). */
@@ -987,16 +1140,12 @@ export function ringRects(outer: Rect, hole: Rect): Rect[] {
   return out;
 }
 
-/** Desks seen through the glass of a locked storey: the same few boxes on each (drawn only). */
+/** Desks seen through the glass of a locked storey: one long row of desks per strip (drawn only). */
 export function stampDesks(k: Kit, level: number, rects: Rect[], tint: number): void {
   const y = k.levelY(level);
   for (const r of rects) {
-    const n = Math.max(1, Math.floor((r[2] - r[0] - 2) / 4.5));
-    for (let i = 0; i < n; i++) {
-      const x = r[0] + 1.5 + i * 4.5;
-      const z = (r[1] + r[3]) / 2 - 0.7;
-      k.box(level, x, y, z, x + 2.4, y + 0.75, z + 1.4, 'wood', { tint, solid: false });
-    }
+    const z = (r[1] + r[3]) / 2 - 0.7;
+    if (r[2] - r[0] > 4) k.box(level, r[0] + 1.5, y, z, r[2] - 1.5, y + 0.75, z + 1.4, 'wood', { tint, solid: false });
   }
 }
 

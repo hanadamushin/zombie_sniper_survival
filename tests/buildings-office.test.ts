@@ -140,6 +140,7 @@ describe('office buildings (07d-2c)', () => {
   it('locks most storeys of the tall ones at the stair and repeats their floors', () => {
     for (const id of ['office.mid', ...HIGH, ...SUPER, 'office.shogyo', 'office.medical_mall', 'office.chosha'].map((v) => (v.startsWith('office.') ? v : `office.${v}`))) {
       const b = bp(id);
+      const d = def(id);
       const levels = b.storeys.length - 1;
       const reach = reachable(b);
       const entered = new Set(b.rooms.filter((r) => reach.has(r.id) && r.use !== 'stairs').map((r) => r.level));
@@ -148,9 +149,10 @@ describe('office buildings (07d-2c)', () => {
       for (let l = 0; l <= levels; l++) expect(b.rooms.some((r) => r.level === l && r.use === 'stairs' && reach.has(r.id)), `${id}: stair hall on storey ${l}`).toBe(true);
       const locked = b.openings.filter((o) => o.kind === 'door' && o.state === 'locked' && !entered.has(o.level));
       expect(locked.length, `${id}: locked doors on the locked storeys`).toBeGreaterThan(0);
-      // Two locked storeys next to each other are laid out the same (the repeated floor).
+      // Two locked storeys next to each other are laid out the same (the repeated floor; the core's
+      // walls on a run of locked storeys are boxes the height of the run, on its first storey).
       const decor = new Set(['blood', 'debris', 'paper', 'plant']);
-      const plan = (l: number): string => b.parts.filter((p) => p.level === l && p.role !== 'furniture' && p.solid !== false && !decor.has(p.mat)).map((p) => `${p.mat}:${p.x0.toFixed(2)},${p.z0.toFixed(2)},${p.x1.toFixed(2)},${p.z1.toFixed(2)}`).sort().join(';');
+      const plan = (l: number): string => b.parts.filter((p) => p.level === l && p.role !== 'furniture' && p.solid !== false && !decor.has(p.mat) && p.y1 - p.y0 <= d.storeyHeight + 0.5).map((p) => `${p.mat}:${p.x0.toFixed(2)},${p.z0.toFixed(2)},${p.x1.toFixed(2)},${p.z1.toFixed(2)}`).sort().join(';');
       const pair = [...Array(levels - 1).keys()].find((l) => l > 0 && !entered.has(l) && !entered.has(l + 1) && l + 1 < levels);
       expect(pair, `${id}: two locked storeys in a row`).toBeDefined();
       expect(plan(pair! + 1)).toBe(plan(pair!));

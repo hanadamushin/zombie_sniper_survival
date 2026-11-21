@@ -3,8 +3,8 @@
 // the ground floor recessed behind a terrace. Inside: the core (stair, two dead lifts), a corridor
 // round it and the flats off the corridor — three along the front, three along the back, one on
 // each side. The entrance hall (concierge counter, sofas, mail boxes) and the management office on
-// the ground floor, the residents' lounge and party room on the first; the fifteenth and the
-// twenty-ninth storeys can be entered (half the flats locked), the top floor is one penthouse.
+// the ground floor, the residents' lounge and party room on the first; the fifteenth storey can be
+// entered (half the flats locked), the top floor is one penthouse.
 // The rest are locked at the stair. The roof: the emergency helipad, the guard rail, the mast.
 
 import { ARCH } from '../../../../data/architecture.ts';
@@ -72,19 +72,16 @@ function build(k: Kit, f: Fit): void {
   k.box(-1, w / 2 - 3, k.levelY(0) + 3.0, B, w / 2 + 5, k.levelY(0) + 3.2, d + 0.5, 'steel', { layer: 'shell', solid: false, tint: 0.3 });
 
   const outer: Rect = [t, t, w - t, d - t];
-  const balconies = (level: number): void => {
-    for (const r of [[E, d - t, w - E, d - E], [E, E, w - E, t], [E, t, t, d - t], [w - t, t, w - E, d - t]] as Rect[]) k.floor(level, 'concrete', r);
-  };
   const last = k.storeys - 1;
-  const flats = new Set([14, last - 1]);
+  const flats = new Set([14]);
   const c = towerFloors(k, f, {
     t, shafts: 2, wc: false, tint,
+    // One slab per storey out to the balconies' upstands.
+    floorRect: [E, E, w - E, d - E],
     floorMat: (l) => (l === 0 ? 'tileFloor' : 'flooring'),
     open: (l) => l <= 1 || flats.has(l) || l === last,
     doorW: (l) => (l === 0 ? 1.8 : 1.2),
-    stamp: (level) => balconies(level),
     plate: (level, _c, hole) => {
-      balconies(level);
       if (flats.has(level)) {
         corridorPlate(k, level, {
           outer, hole, cw: 1.5, front: 3, back: 3, sides: true,
