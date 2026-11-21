@@ -35,7 +35,7 @@ R1〜R8 は並行して進みます。**自分の地方の出力（`public/data/
 `CLAUDE.md` の「終わる前にやること」を実行。他の地方の担当に役立つ発見（手引きの不足、共通部分の不具合）は `docs/realmap_guide.md` の末尾「各地方からの追記」に 1 行ずつ足してください。
 
 ## R0 からの注意（R0 が追記）
-- 手引き `docs/realmap_guide.md` の 9 節のチェックリストがそのまま作業の順番。取得は `npm ci` の後に `npm run data:region -- <地方>`（四国 207 セルで取得 約 2,900 件・約 25 分。途中で止めても再開できる）、点検は `node tools/real/check.ts <地方>`
+- 手引き `docs/realmap_guide.md` の 9 節のチェックリストがそのまま作業の順番。取得は `npm ci` の後に `npm run data:region -- <地方>`（四国 207 セルで取得 約 3,000 件・約 10 分。途中で止めても再開できる）、点検は `node tools/real/check.ts <地方>`
 - 戦略地図（`public/data/grid.json`・`infection_*.bin`）は R0 が全国ぶん実データで作り直し済み。**R1〜R8 は `npm run data` を回さない**（全地方で同じファイルを書き換えて衝突する）。警察・消防・自衛隊の数は地方の `index.json` からゲームが起動時に読む
 - 共通部分（`tools/real/` の lib・region.ts、`src/gen/real/`、`src/data/realmap.ts`）を直したら PROGRESS.md に「共通部分を直した」と明記。区域ファイルの形（`src/gen/real/format.ts`）を変えると全地方の作り直しになるので、変えずに済む方法を先に考える
 - R0 の仮置き: 施設は箱（07d-3 が種類を当てはめる）、橋は土手、トンネルは描かない、陸自の駐屯地は小（`base.jgsdf_s`）だけ。名所を置くには `layoutReal` に 1 行足す（手引き 7 節）
