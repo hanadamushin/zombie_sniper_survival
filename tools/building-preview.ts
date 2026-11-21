@@ -1,7 +1,8 @@
 // Floor plans and a side elevation of every enterable building type (07d), for checking a new type by eye:
-//   node tools/building-preview.ts [outDir] [seed]      (npm run buildings:preview)
+//   node tools/building-preview.ts [outDir] [seed] [idPrefix]      (npm run buildings:preview)
 // writes <id>.png: one plan per storey (and the roof when it can be reached) side by side, then
-// the front elevation. 20 px = 1 m, front (the entrance side, z = d) at the bottom of each plan.
+// the front elevation. A storey laid out exactly like the one below it (the repeated floors of a
+// tall building, 07d-2c) is left out, so a 30-storey tower stays a readable image. 20 px = 1 m, front (the entrance side, z = d) at the bottom of each plan.
 // Plan legend: grey = walls / solid at body height, light blue = glass (stops people only),
 // brown = stairs, olive = furniture, pale fill = rooms (red tint = locked), green line = door way
 // (white dots its waypoints), orange line = stairs way, yellow dot = search point.
@@ -14,8 +15,20 @@ import { encodePng } from './lib/png.ts';
 type Rgb = [number, number, number];
 const PX = 20;
 
+/** Storeys to draw: the first, the last and every one laid out differently from the storey below. */
+function shown(bp: BuildingBlueprint): number[] {
+  const sig = (l: number): string => [
+    ...bp.rooms.filter((r) => r.level === l).map((r) => `${r.x0.toFixed(2)},${r.z0.toFixed(2)},${r.x1.toFixed(2)},${r.z1.toFixed(2)},${r.use},${r.locked ? 1 : 0}`),
+    ...bp.openings.filter((o) => o.level === l).map((o) => `${o.kind}${o.state}${o.x.toFixed(2)},${o.z.toFixed(2)}`),
+    bp.search.filter((s) => s.room >= 0 && bp.rooms[s.room]!.level === l).length,
+  ].join(';');
+  const n = bp.storeys.length;
+  return bp.storeys.map((_, l) => l).filter((l) => l === 0 || l === n - 1 || sig(l) !== sig(l - 1));
+}
+
 function render(bp: BuildingBlueprint): { png: Buffer; w: number; h: number } {
-  const levels = bp.storeys.length;
+  const draw = shown(bp);
+  const levels = draw.length;
   const pw = Math.ceil((bp.w + 2) * PX);
   const ph = Math.ceil((bp.d + 2) * PX);
   const eh = Math.ceil((bp.height + 4) * PX);
@@ -40,12 +53,13 @@ function render(bp: BuildingBlueprint): { png: Buffer; w: number; h: number } {
     }
   };
   const cols = localColliders(bp);
-  bp.storeys.forEach((st, l) => {
+  draw.forEach((l, slot) => {
+    const st = bp.storeys[l]!;
     // Plan l: x right, z down, with a 1 m margin.
-    const ox = l * pw + PX;
+    const ox = slot * pw + PX;
     const oz = PX;
     const P = (x: number, z: number): [number, number] => [ox + x * PX, oz + z * PX];
-    rect(l * pw + 2, 2, (l + 1) * pw - 2, ph - 2, [236, 236, 232]);
+    rect(slot * pw + 2, 2, (slot + 1) * pw - 2, ph - 2, [236, 236, 232]);
     for (const r of bp.rooms.filter((q) => q.level === l)) {
       const [a, b] = P(r.x0, r.z0);
       const [c, d] = P(r.x1, r.z1);
@@ -99,13 +113,14 @@ function render(bp: BuildingBlueprint): { png: Buffer; w: number; h: number } {
 
 const out = process.argv[2] ?? 'tmp/buildings';
 const seed = Number(process.argv[3] ?? 1);
+const only = process.argv[4] ?? '';
 mkdirSync(out, { recursive: true });
-for (const def of BUILDING_DEFS) {
+for (const def of BUILDING_DEFS.filter((d) => d.id.startsWith(only))) {
   const w = (def.size.w[0] + def.size.w[1]) / 2;
   const d = (def.size.d[0] + def.size.d[1]) / 2;
   const bp = generateBlueprint(def, w, d, seed);
   const { png } = render(bp);
   writeFileSync(join(out, `${def.id}.png`), png);
   const t = triangleCount(bp);
-  console.log(`${def.id}: ${w.toFixed(1)} × ${d.toFixed(1)} m, ${bp.storeys.length} levels, ${bp.rooms.length} rooms, ${bp.search.length} search points, triangles outside ${t.shell} / inside ${t.interior.join(' ')}`);
+  console.log(`${def.id}: ${w.toFixed(1)} × ${d.toFixed(1)} m, ${bp.storeys.length} levels (${shown(bp).length} drawn), ${bp.rooms.length} rooms, ${bp.search.length} search points, triangles outside ${t.shell} / inside ${t.interior.join(' ')}`);
 }

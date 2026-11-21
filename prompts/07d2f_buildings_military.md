@@ -54,3 +54,12 @@
 - `src/gen/buildings/defs/shop/common.ts` の補助は自由に使ってよい（kit.ts は変えていない）: `facade`（多層の長い壁を「柱＋階ごとの腰壁＋階ごとのガラス 1 枚」で作る。窓ごとに 4 箱の `kit.wall` より三角形がずっと少ない。10 階建てでも外観 1,500 前後）、`guestRoom`（廊下から入る客室・和室。施錠なら空の施錠の部屋）、`clearOfWays`（部屋の出入口どうしの直線から家具を離す判定。置く前に呼べば「something stands between two ways」を避けられる）、`table` / `booth` / `stools` / `vending` / `car` / `sign` / `awning` / `poleSign` / `graffiti` / `rust` / `toppled`
 - 試験用の地図（`sim/tactical/yard.ts`）は地図の東端 x = 990 を越えると次の通り（z = 600, 680, 440, 360, 760, 280）に折り返すようにした（全種類が 1 本の通りに入りきらなくなったため）。各種類の通りは `debug.enterables()` の `z1 + 9`（南向きの列）。e2e で通りの z を 520 と決め打ちしないこと
 - `shop.konbini_tenant` はビルの 1 階だけの設計図（階高 `ARCH.storey.concrete`、左の 1.8m はビルの入口ロビーと施錠の階段室）。ビルの上の階と組み合わせる仕組みは無い
+
+## 07d-2c（ビル）からの注意
+- `src/gen/buildings/defs/office/common.ts` の補助は自由に使ってよい（kit.ts は変えていない）。特に役に立つもの:
+  - `twoPass(def, rng, params, build)` と `Fit`: 同じ乱数で 2 回組み立て、1 回目で各部屋の出入口（扉・join・階段の端）を求め、2 回目で家具を「出入口どうしの直線・壁・他の家具・探索ポイントの立ち位置」を避けて置く。`f.put` / `f.row`（壁沿いに並べる）/ `f.grid`（格子に並べる。`max` で数を抑える）/ `f.ensure`（部屋に探索ポイントが無ければ空いた床に 1 つ）。**構造（部屋・扉・壁）は `k.rand()`、家具は `f.rand()` から引くこと**（2 回の組み立てで部屋の番号がずれると壊れる）。「something stands between two ways」がほぼ出なくなる
+  - `coreAt` / `coreLevel` / `coreRoof`（折り返し階段・使えないエレベーター・トイレ・前のホールの「コア」、屋上の塔屋と機械室）、`stripStair` / `stripRoof`（外壁沿いの階段の帯）、`ringRooms`（コアの周りの 4 部屋を角で join）、`corridorPlate`（コアの周りの廊下と、その外側の区画。客室・住戸・店・診療所を `fill` で詰める）、`towerFloors`（中央コアの高層: 入れる階だけ部屋を作り、他の階は階段室の扉を施錠して部屋を作らない）
+  - `curtain` / `curtainAll`（多層の外壁を「階ごとの帯 1 本＋全高の柱＋側面ごとのガラス 1 枚」で。三角形は階数×側面の帯ぶんしか増えない。30 階でも外観 2,300 前後）、`helipad` / `guardRail` / `mast`、`embedGround`（別の種類の 1 階だけの設計図を、完成した建物の 1 階の空き枠に入れる。テナントビルがコンビニを入れるのに使用）
+  - 家具の型: `officeDesks` `meeting` `classroom` `clinicRoom` `waiting` `salesFloor` `storeRoom` `canteen` `kitchen` `barRoom` `karaoke` `barricade` `toppled`。`defs/office/tower.ts` の `flatUnit`（住戸を区画に）・`shopUnit`・`clinicUnit`
+- 生成時間（4ms）に注意: 階の多い建物は `finish()` の「通過点 → 部屋」の検索が部屋×通過点で効く。**入れない階には部屋を作らない**（施錠の扉だけ）と速い。`twoPass` は 1 回目で箱と床を作らない
+- `npm run buildings:preview [出力先] [シード] [id の頭]` で種類を絞れる。同じ間取りが続く階は 1 枚にまとめて描く（07d-2c で追加）
