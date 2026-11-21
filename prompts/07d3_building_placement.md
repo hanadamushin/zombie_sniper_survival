@@ -95,3 +95,15 @@
 - 探索ポイント: 政令市の駅 約 110、大空港 約 120、県庁所在地の駅 約 60。区域の `lootSpots` の配分に注意
 - 射点: 政令市の駅のホテルの屋上（約 34m）、大空港・中空港の管制室（約 36m・23m）、各駅の屋上と跨線橋、空港の送迎デッキ
 - 大空港・政令市の駅は 1 区域にほぼ 1 つしか入らない。区域の生成時間（設計図は近づいたときに作られる。政令市の駅で 2〜3ms）
+
+## 07d-2f（自衛隊）からの注意
+- 野営基地の残骸 10 種類（`military.camp_*`。30〜120m 四方。都市の周辺のセルに確率で）: `camp_squad`（小隊）・`camp_checkpoint`（検問所。敷地の中を x 方向に道が通る。幹線道路沿いに置くと自然）・`camp_hospital`（野戦病院）・`camp_heliport`・`camp_supply`・`camp_signal`（アンテナ約 15m）・`camp_watch`（監視塔約 6m＝射点）・`camp_command`・`camp_motor`・`camp_battalion`（100〜120 × 70〜90m、監視塔）
+- 駐屯地・基地 5 種類（`base.*`。カテゴリ `base` は 06 の拠点の建物と同居している。拠点の構造物の id は `base.<構造物>`、自衛隊は `base.jgsdf_s/m/l`・`base.jmsdf`・`base.jasdf`）: 陸自 小 150〜180 × 90〜100m・中 270〜320 × 170〜210m・**大 700〜800 × 460〜540m（区域の大半）**、海自 260〜320 × 160〜200m、空自 520〜600 × 200〜240m（滑走路は敷地の両端で切れる。空港と同じく x 方向）
+- **海自の基地は敷地の奥 z < 42m が海**（岸壁が x 方向、艦艇 2 隻が停泊）。海沿いの区域で、奥（z = 0 側）を海に向け、正面（z = d）を陸側の道に向けること。海の部分は地面の上に塗った水面と見えない柵なので、実際の海岸線と重ねるなら地面の高さを海面に合わせる必要はない（重ねすぎると水面が二重に見える）
+- **鍵**: 駐屯地・基地・指揮所は、司令の部屋の金庫（収穫表 `safe`）を探索すると武器庫・弾薬庫の扉が開く（`docs/buildings_guide.md` 15 節）。区域の探索ポイントは施設ごとに金庫が先頭になるよう並べてある（`gen/index.ts` の `placeLootSpots`）。`lootSpots` の上限で施設の途中で切れると、武器庫の棚が探索ポイントに入らないことがある（金庫だけ入ってもよい）。基地は探索ポイントが 80〜130 あるので配分に注意
+- 遠景の外形の箱は 07d-2d・2e と同じ問題で、大の駐屯地は 750 × 500m に軒 3.5m の箱が 300m より先で見える。棟ごとの遠景の箱にする仕組みを作るなら、大の駐屯地が一番効く
+- 射点: 監視塔（約 6m）、本部・隊舎の屋上（約 10m）、護衛艦の艦橋（約 10m）、空自の管制室（約 20m）
+
+## 07d-2f（自衛隊）から: 取りまとめ役へ
+- 共有ファイルの追加: `types.ts` の `MaterialId` に `'olive'`（直前の `| 'asphalt'` の行のセミコロンだけ動いた）、`LootTableId` に `'field'` `'safe'`（同じく `| 'stock'` の行）、任意の項目 `Part.key` `Opening.key` `Room.key` `SearchPoint.key` `BuildingBlueprint.keyLinks` `BuildingPlacement.open`。`materials.ts`・`render.ts` に `olive` の 1 行、`colony.ts` の `ROOM_LOOT` に `field` `safe` の 2 行
+- 鍵の仕組みで触ったもの: `gen/buildings/index.ts`（`placementKey` に `open`、`openBlueprint`）、`gen/index.ts`（`placeLootSpots`）、`gen/types.ts`（`LootSpot.key/.enter`）、`core/types.ts`（`lootSpots` の要素に `key?` `enter?`）、`render/tactical/enterables.ts`（開いた扉板を描かない 1 行）、`sim/tactical/area.ts`（`applyKeys` と呼ぶ 4 か所）、`sim/colony/encounters.ts`（金庫を探索したら `applyKeys`・ログ）、`ui/i18n/ja.ts`（`log.keyFound`）。試験用の地図 3 つ目: `yard.ts`（`sdfYard`、`yardMap(3)`）、`area.ts`・`main.ts`（`?yard=3`・`openYard(3)`）

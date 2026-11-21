@@ -59,7 +59,7 @@ export const BASE_JGSDF_M = sdfDef('jgsdf_m', { size: { w: [270, 320], d: [170, 
   const gx = w / 2;
   perimeter(k, [mainGate(k, f, gx, d - 40, tint)]);
   parade(k, [gx - 30, d - 56, gx + 30, d - 40], [gx - 22, d - 48]);
-  const keys = hq(k, [gx - 26, d - 74, gx + 26, d - 58], 3, tint);
+  const keys = hq(k, [gx - 26, d - 74, gx + 26, d - 58], 2, tint);
   const bt = k.rand();
   keys.push(...barracks(k, [10, d - 36, 62, d - 21], 3, bt, { canteen: true, armory: true }));
   lockedBlock(k, [10, d - 72, 62, d - 57], 4, bt);
@@ -85,7 +85,7 @@ export const BASE_JGSDF_L = sdfDef('jgsdf_l', { size: { w: [700, 800], d: [460, 
   const keys = hq(k, [gx - 30, d - 100, gx + 30, d - 84], 3, tint);
   // The barracks district (front left).
   const bt = k.rand();
-  keys.push(...barracks(k, [20, d - 40, 80, d - 25], 3, bt, { canteen: true, armory: true }));
+  keys.push(...barracks(k, [20, d - 40, 80, d - 25], 2, bt, { canteen: true, armory: true }));
   lockedBlock(k, [100, d - 40, 160, d - 25], 4, bt);
   lockedBlock(k, [20, d - 80, 80, d - 64], 4, bt);
   lockedBlock(k, [100, d - 80, 160, d - 64], 4, bt);
@@ -93,8 +93,8 @@ export const BASE_JGSDF_L = sdfDef('jgsdf_l', { size: { w: [700, 800], d: [460, 
   gym(k, f, [180, d - 90, 232, d - 60], k.rand());
   // Motor pools and the vehicle parks (front right).
   for (let i = 0; i < 3; i++) motorPool(k, f, [w - 250 + i * 80, d - 70, w - 190 + i * 80, d - 46], k.rand(), { tanks: i === 2 });
-  vehicleRow(k, w - 245, d - 30, 18, 12, ['truck', 'truck', 'apc', 'jeep']);
-  vehicleRow(k, w - 245, d - 100, 14, 15, ['tank', 'apc', 'tank']);
+  vehicleRow(k, w - 245, d - 30, 14, 15, ['truck', 'truck', 'apc', 'jeep']);
+  vehicleRow(k, w - 245, d - 100, 10, 20, ['tank', 'apc', 'tank']);
   // The depot compound (back right) and the training area (back left).
   keys.push(...depots(k, f, w - 140, 6, 4, true));
   training(k, [30, 30, gx - 40, 120]);

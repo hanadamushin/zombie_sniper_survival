@@ -382,8 +382,14 @@ export function scorch(k: Kit, cx: number, cz: number, size: number, mat: Materi
 // Furniture (second pass)
 // ---------------------------------------------------------------------------------------------
 
+/** Keep the floor round each of the room's ways in and out clear (a low cot beside a door would be stepped on and push a walker out through the wall). */
+export function keepWays(f: Fit, room: number, half = 1.0): void {
+  for (const [x, z] of f.waysIn(room)) f.reserve(room, [x - half, z - half, x + half, z + half]);
+}
+
 /** Cots along the long walls, footlockers; a cot and a locker searched. */
 export function cots(f: Fit, room: number, o: { max?: number } = {}): void {
+  keepWays(f, room);
   const r = f.roomRect(room);
   const alongX = r[2] - r[0] >= r[3] - r[1];
   const [a, b]: [Dir, Dir] = alongX ? ['z-', 'z+'] : ['x-', 'x+'];
@@ -396,6 +402,7 @@ export function cots(f: Fit, room: number, o: { max?: number } = {}): void {
 
 /** Field hospital ward: beds, a medicine cabinet, a treatment table. */
 export function medical(f: Fit, room: number): void {
+  keepWays(f, room);
   const r = f.roomRect(room);
   const alongX = r[2] - r[0] >= r[3] - r[1];
   const [a, b]: [Dir, Dir] = alongX ? ['z-', 'z+'] : ['x-', 'x+'];
@@ -407,6 +414,7 @@ export function medical(f: Fit, room: number): void {
 
 /** Command post: the map table, radio desks, a cabinet. */
 export function command(f: Fit, room: number): void {
+  keepWays(f, room);
   const r = f.roomRect(room);
   const cx = (r[0] + r[2]) / 2;
   const cz = (r[1] + r[3]) / 2;
@@ -419,13 +427,16 @@ export function command(f: Fit, room: number): void {
 
 /** Supply tent / store: stacks of crates along the walls (tables in turn). */
 export function supplies(f: Fit, room: number, tables: ('field' | 'fuel' | 'pharmacy' | 'weapons' | 'armory' | 'storage' | 'grocery' | 'tools' | 'garage')[], max = 6): void {
+  keepWays(f, room, 0.8);
   const r = f.roomRect(room);
   const alongX = r[2] - r[0] >= r[3] - r[1];
-  const walls: Dir[] = alongX ? ['z-', 'z+', 'x-', 'x+'] : ['x-', 'x+', 'z-', 'z+'];
+  // A narrow room (a container): one row of shallow crates down one long side, the aisle beside it.
+  const narrow = Math.min(r[2] - r[0], r[3] - r[1]) < 3.2;
+  const walls: Dir[] = narrow ? [alongX ? 'z-' : 'x-'] : alongX ? ['z-', 'z+', 'x-', 'x+'] : ['x-', 'x+', 'z-', 'z+'];
   let i = 0;
   for (const side of walls) {
     if (i >= max) break;
-    i += f.row(room, side, 1.2, 0.9, 1.1, 'olive', { kind: 'crate', table: tables[i % tables.length]!, max: Math.max(1, Math.ceil(max / 3)), gap: 0.3, tint: i % 2 ? OD : DARK });
+    i += f.row(room, side, 1.2, narrow ? 0.6 : 0.9, 1.1, 'olive', { kind: 'crate', table: tables[i % tables.length]!, max: narrow ? max : Math.max(1, Math.ceil(max / 3)), gap: 0.3, tint: i % 2 ? OD : DARK });
   }
   f.ensure(room, 'crate', tables[0]);
 }
@@ -455,13 +466,13 @@ export function keyDoors(bp: BuildingBlueprint, rects: [number, Rect][]): Buildi
     }
     return best;
   };
+  const leaves = bp.parts.filter((p) => p.mat === 'doorSteel' || p.mat === 'door');
   bp.openings.forEach((op, i) => {
     if (op.kind !== 'door' || op.state !== 'locked') return;
     if (!rects.some(([l, r]) => l === op.level && op.x >= r[0] - 0.3 && op.x <= r[2] + 0.3 && op.z >= r[1] - 0.3 && op.z <= r[3] + 0.3)) return;
     op.key = true;
     const hw = op.width / 2;
-    for (const p of bp.parts) {
-      if (p.mat !== 'doorSteel' && p.mat !== 'door') continue;
+    for (const p of leaves) {
       if (p.y0 < op.y0 - 0.01 || p.y1 > op.y1 + 0.01) continue;
       const [u0, u1, c] = op.axis === 'x' ? [p.x0, p.x1, (p.z0 + p.z1) / 2] : [p.z0, p.z1, (p.x0 + p.x1) / 2];
       const [ou, oc] = op.axis === 'x' ? [op.x, op.z] : [op.z, op.x];

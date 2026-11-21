@@ -206,3 +206,25 @@ k.thick = 0.2;                           // 外壁の厚さ（outerWalls が使�
 - 大きすぎる種類は **別の試験用の地図**（`?yard=2`）に並ぶ: 中間の大きさが間口 300m か奥行き 100m を超えるもの（`bigForYard`）。ふつうの試験用の地図には出ない
 - 部屋の中の直線の検査（`tests/buildings.test.ts`）は、部屋の出入口の外接矩形（＋0.3m）にかかる当たり判定だけを見る（同じ検査で速い）。それでも出入口が 10 を超える部屋が長いと重いので、ホームは 60m ごとに区切る
 - 生成時間: 政令市の駅（3 棟＋8 線）は Node で 2.3〜3ms（この上限の 4ms に近い。重い既存の種類と同程度）。家具は `Fit` の格子を小さめに（`gondolas` の `max`）。屋内のゾンビの経路のため、長いデッキ・コンコースも長方形の部屋をつないで作る
+
+## 15. 自衛隊の施設と「鍵」（07d-2f）
+
+野営基地の残骸 10 種類（`military`）と駐屯地・基地 5 種類（`base`）は、敷地全体を 1 つの設計図にした（07d-2d・2e と同じ）。補助は `defs/military/parts.ts`（野営の部品）と `defs/base/sdf_parts.ts`（駐屯地の建物）。kit.ts は変えていない。他のカテゴリも自由に使ってよい:
+
+- `tent`（キャンバスのテント: 薄い壁＋切妻、出入口のめくれた幕）、`fallenTent`、`pit`（土嚢の陣地: 胸の高さの土嚢の輪に切れ目＝外への扉。部屋になる）、`bags`、`watchtower`（監視塔: 足元の小屋・折り返し階段・2 階分上の見張り台。階高から階段の奥行きを決める `towerSize(k)`）、`container`（コンテナ: 端の扉が開いていれば部屋）、車両 `jeep` `mtruck` `apc` `tank` `heli` `fighter`（どれも外観の箱、`burnt` で焼けた色）、`drums` `crates` `net`（偽装網）`mastAntenna` `helipadH` `flagPole` `barrier` `wire`（鉄条網: 人とゾンビは止め、弾と視線は通す）`scorch`、家具 `cots` `medical` `command` `supplies`（Fit で置く）
+- `sdf_parts.ts`: `hq`（本部。`wing` の 2〜3 階。2 階に司令の部屋＝金庫、1 階に武器庫（施錠））、`barracks`（隊舎。2 段ベッドの居室、食堂・武器庫を入れられる）、`lockedBlock`（入れない棟: 窓の帯と施錠の扉だけ。生成時間と三角形を節約）、`motorPool`（車両整備場）、`messHall`、`gym`、`depot`（覆土式の弾薬庫）、`guardHut` `mainGate` `perimeter` `training` `rifleRange` `vehicleRow` `parade`、種類の定義 `sdfDef`
+- **床のない部屋に注意**: 屋外に置く小さな部屋（舷梯の足元など）にも `k.floor(0, ...)` を張る。床がないと地面（y = 0）と `plinth` の差で階段の 2 段目が足に当たり、歩行の検査で止まる
+
+### 鍵（施錠の扉を後から開ける）
+
+武器・弾薬が取り放題にならないよう、弾薬庫・武器庫は施錠し、**同じ設計図の中の「金庫」（収穫表 `safe`）を探索すると開く**:
+
+1. 施錠の扉（`k.door(at, 'locked')`）と、その奥の施錠の部屋（`room(..., { locked: true })`）を普通に作る
+2. 金庫は収穫表 `'safe'` の探索ポイント（施錠でない部屋に置く）
+3. `generate` の最後に `keyDoors(bp, [[階, 矩形], ...])`（`defs/military/parts.ts`）: 矩形の中の施錠の扉が「鍵の扉」（`Opening.key`）になり、扉板（`Part.key`）・奥の部屋（`Room.key`、`locked` のまま）・扉を通る経路（`bp.keyLinks`）が記録され、`safe` の探索ポイントが `SearchPoint.key` になる。`sdfDef` と野営の `camp` はこれを自動で呼ぶ
+4. 実行時: 区域の探索ポイントでは金庫が建物の先頭に来て、鍵の部屋の棚も探索ポイントに入る（`LootSpot.key` / `.enter`）。金庫を探索すると `applyKeys`（`sim/tactical/area.ts`）がその建物の配置を `open: true` の写しに替え、`openBlueprint`（`gen/buildings/index.ts`）が扉板を消し・経路を足し・部屋の施錠を解く。当たり判定・屋内の経路・描画はすべて配置から作られるので自動で切り替わる。区域に入り直したとき・ロードしたときも探索の状態から決め直す
+- テストは鍵の扉を施錠の扉として扱う（到達性・歩行の検査から外れる）。開いた後の検査は `tests/buildings-military.test.ts`
+
+### 大きさ
+- 野営 30〜120m、小さな駐屯地 150〜180 × 90〜100m はふつうの試験用の地図（`?yard=1`）。中・大の駐屯地（大は 700〜800 × 460〜540m＝区域の大半）・海自・空自は **3 つ目の試験用の地図 `?yard=3`**（`sdfYard`、`debug.openYard(3)`）。`?yard=2` には入りきらないため
+- 海自の基地は **敷地の奥 z < 42 が海**（塗装と、岸壁の縁の見えない柵）。海沿いの区域で、奥を海に向けて置くこと

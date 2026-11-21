@@ -34,9 +34,10 @@ export const commander: RoomFit = (k, level, r, ctx) => {
   const a = (u: number, v: number): [number, number] => [Math.min(far + sg * u, far + sg * v), Math.max(far + sg * u, far + sg * v)];
   const [s0, s1] = a(0, 0.65);
   put(k, level, [x1 - 1.0, s0, x1 - 0.2, s1], 1.2, 'steel', 0.9, { kind: 'cabinet', face, table: 'safe' });
-  const cx = (x0 + x1) / 2 - 0.4;
+  // The desk on the far side from the safe, clear of the way from the corridor door (in the middle) to the safe.
   const [d0, d1] = a(1.5, 2.3);
-  put(k, level, [cx - 0.9, d0, cx + 0.9, d1], 0.75, 'woodDark', 0.5, { kind: 'desk', face, table: 'command' });
+  const dx1 = Math.min((x0 + x1) / 2 - 1.0, x0 + 2.2);
+  if (dx1 - (x0 + 0.3) >= 1.2) put(k, level, [x0 + 0.3, d0, dx1, d1], 0.75, 'woodDark', 0.5, { kind: 'desk', face, table: 'command' });
   put(k, level, [x0 + 0.2, s0, x0 + 1.6, s1], 1.9, 'wood', 0.3);
   k.box(level, x0 + 0.02, k.levelY(level) + 1.2, (z[1] + z[3]) / 2 - 0.6, x0 + 0.05, k.levelY(level) + 2.0, (z[1] + z[3]) / 2 + 0.6, 'sign', { tint: 0, solid: false }); // the flag
 };
