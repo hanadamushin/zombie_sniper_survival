@@ -322,6 +322,7 @@ export const ja = {
   'log.metNobody': '人のいた形跡だけが残っていた',
   'log.searched': '建物を探索した: {items}',
   'log.searchedNothing': '建物を探索したが、めぼしい物はなかった',
+  'log.keyFound': '金庫に鍵があった。施錠されていた武器庫と弾薬庫の扉が開いた',
   'log.deposited': '持ち帰った物を備蓄に納めた: 耳 {ears} {items}',
   'log.resupplyFull': '弾薬はこれ以上持てない（上限 150 発）',
   'log.resupplyEmpty': 'ここの備蓄に弾薬がない（工作担当が作るか、補給箱・駐屯地へ）',

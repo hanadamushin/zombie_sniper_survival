@@ -44,6 +44,7 @@ export const MATERIALS: Readonly<Record<MaterialId, MaterialInfo>> = {
   debris: { solid: 'none' },
   plant: { solid: 'none' },
   asphalt: { solid: 'full' },
+  olive: { solid: 'full' },
 };
 
 /** Does a part collide, and how? */

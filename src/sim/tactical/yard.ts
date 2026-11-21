@@ -27,6 +27,15 @@ export function bigForYard(def: BuildingDef): boolean {
   return (def.size.w[0] + def.size.w[1]) / 2 > YARD_BIG.w || (def.size.d[0] + def.size.d[1]) / 2 > YARD_BIG.d;
 }
 
+/** 07d-2f: the big Self-Defense Force sites (garrisons up to 800 × 540 m, the naval and the air base) have a third yard (`?yard=3`, flags.yard === 3). */
+export function sdfYard(def: BuildingDef): boolean {
+  return bigForYard(def) && (def.category === 'military' || def.category === 'base');
+}
+
+/** Which yard: 1 (or true / false) the streets, 2 the big types, 3 the big Self-Defense Force sites. */
+export type YardKind = boolean | 1 | 2 | 3;
+const yardNo = (k: YardKind): 1 | 2 | 3 => (k === 2 || k === true ? 2 : k === 3 ? 3 : 1);
+
 export interface YardEntry {
   def: string;
   /** TacticalMap.placements index. */
@@ -36,6 +45,7 @@ export interface YardEntry {
 
 let cached: { map: TacticalMap; entries: YardEntry[] } | null = null;
 let cachedBig: { map: TacticalMap; entries: YardEntry[] } | null = null;
+let cachedSdf: { map: TacticalMap; entries: YardEntry[] } | null = null;
 
 function build(): { map: TacticalMap; entries: YardEntry[] } {
   const b = createFlatBuilder(0, { mapSeed: 11, land: 'suburb', lootSpots: 100000 });
@@ -93,10 +103,10 @@ function build(): { map: TacticalMap; entries: YardEntry[] } {
  * fronts facing south onto a street in front of the row; a row ends where the next type would run
  * past END_X.
  */
-function buildBig(): { map: TacticalMap; entries: YardEntry[] } {
-  const b = createFlatBuilder(0, { mapSeed: 12, land: 'suburb', lootSpots: 100000 });
+function buildBig(sdf = false): { map: TacticalMap; entries: YardEntry[] } {
+  const b = createFlatBuilder(0, { mapSeed: sdf ? 13 : 12, land: 'suburb', lootSpots: 100000 });
   const entries: YardEntry[] = [];
-  const defs = BUILDING_DEFS.filter(bigForYard);
+  const defs = BUILDING_DEFS.filter((def) => bigForYard(def) && sdfYard(def) === sdf);
   const rows: BuildingDef[][] = [];
   let x = END_X;
   for (const def of defs) {
@@ -132,10 +142,15 @@ function buildBig(): { map: TacticalMap; entries: YardEntry[] } {
 const BIG_START_X = 30;
 const BIG_START_Z = 20;
 
-export function yardMap(big = false): TacticalMap {
-  return big ? (cachedBig ??= buildBig()).map : (cached ??= build()).map;
+function yardOf(kind: YardKind): { map: TacticalMap; entries: YardEntry[] } {
+  const n = yardNo(kind);
+  return n === 3 ? (cachedSdf ??= buildBig(true)) : n === 2 ? (cachedBig ??= buildBig()) : (cached ??= build());
 }
 
-export function yardEntries(big = false): YardEntry[] {
-  return big ? (cachedBig ??= buildBig()).entries : (cached ??= build()).entries;
+export function yardMap(big: YardKind = false): TacticalMap {
+  return yardOf(big).map;
+}
+
+export function yardEntries(big: YardKind = false): YardEntry[] {
+  return yardOf(big).entries;
 }

@@ -22,7 +22,8 @@ export type MaterialId =
   | 'concrete' | 'plaster' | 'mortar' | 'siding' | 'brick' | 'wood' | 'woodDark' | 'tile' | 'slate' | 'metalRoof'
   | 'steel' | 'rust' | 'glass' | 'shutter' | 'door' | 'doorSteel' | 'frame'
   | 'flooring' | 'tatami' | 'carpet' | 'tileFloor' | 'vinyl' | 'paper' | 'fabric'
-  | 'shelf' | 'counter' | 'appliance' | 'sign' | 'blood' | 'debris' | 'plant' | 'asphalt';
+  | 'shelf' | 'counter' | 'appliance' | 'sign' | 'blood' | 'debris' | 'plant' | 'asphalt'
+  | 'olive';
 
 export type PartShape = 'box' | 'gable' | 'hip' | 'wedge';
 /** Which half of the building a part belongs to: `shell` is the outside (mid range), `interior` only appears close by. */
@@ -59,6 +60,8 @@ export interface Part {
   role?: 'stair' | 'furniture';
   /** true: collision only, not drawn (the barrier left in a broken window). */
   hidden?: boolean;
+  /** 07d-2f: the leaf of a door that opens with the area's key (gone once the placement is `open`). */
+  key?: boolean;
 }
 
 /**
@@ -82,6 +85,8 @@ export interface Opening {
   axis: 'x' | 'z';
   /** True for the outer walls. */
   exterior: boolean;
+  /** 07d-2f: a locked door that opens once the area's key is found (the HQ safe). */
+  key?: boolean;
 }
 
 /** Room purposes: they pick what can be found there (data/colony.ts ROOM_LOOT) and what people do there (base). */
@@ -107,6 +112,8 @@ export interface Room {
   use: RoomUse;
   /** Not reachable on purpose (behind a locked door / shutter): the reachability test skips it. */
   locked?: boolean;
+  /** 07d-2f: locked only until the area's key is found (an armory, an ammunition depot). */
+  key?: boolean;
 }
 
 /** Furniture kinds a search point can be. */
@@ -115,7 +122,9 @@ export type FurnitureKind = 'shelf' | 'desk' | 'locker' | 'cabinet' | 'fridge' |
 /** Loot table ids (data/colony.ts ROOM_LOOT). Default: the room's use. */
 export type LootTableId = RoomUse | 'pharmacy' | 'grocery' | 'tools' | 'weapons'
   | 'fuel'
-  | 'stock';
+  | 'stock'
+  | 'field'
+  | 'safe';
 
 export interface SearchPoint {
   /** Where the searcher stands (local; y = floor). */
@@ -123,6 +132,8 @@ export interface SearchPoint {
   room: number;
   kind: FurnitureKind;
   table: LootTableId;
+  /** 07d-2f: searching it finds the area's key (opens every `key` door of the area). */
+  key?: boolean;
 }
 
 /**
@@ -175,6 +186,8 @@ export interface BuildingBlueprint {
   links: NavLink[];
   /** Climb zones (local), like TacticalMap.ladders: inside one the player moves between y0 and y1. */
   ladders: { x0: number; z0: number; x1: number; z1: number; y0: number; y1: number; nx: number; nz: number }[];
+  /** 07d-2f: the ways through the `key` doors, added to `links` once the placement is `open`. */
+  keyLinks?: NavLink[];
 }
 
 export type RoofKind = 'flat' | 'gable' | 'hip' | 'shed';
@@ -238,4 +251,6 @@ export interface BuildingPlacement {
   building: number;
   /** Home-base structure id when it is one (06). */
   structure?: number;
+  /** 07d-2f: the area's key has been found: the building's `key` doors are open. */
+  open?: boolean;
 }

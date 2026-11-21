@@ -199,7 +199,8 @@ export interface TacticalState {
   reserve: number; // rough number of zombies that can still be spawned this visit
   wind: [number, number];
   /** 07d: `y` floor height of a search point inside a building, `table` its loot table (data/colony.ts ROOM_LOOT). */
-  lootSpots: { id: number; pos: [number, number]; taken: boolean; y?: number; table?: string }[];
+  /** 07d-2f: `key` the spot holds the area's key (the HQ safe), `enter` the building's TacticalMap.placements index. */
+  lootSpots: { id: number; pos: [number, number]; taken: boolean; y?: number; table?: string; key?: boolean; enter?: number }[];
   /** The initial zombies of this visit have been placed (04; false again after a load). */
   populated?: boolean;
   /** Seconds until the next reinforcement from the map edge (04). */

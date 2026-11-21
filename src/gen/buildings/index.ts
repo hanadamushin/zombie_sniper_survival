@@ -47,7 +47,7 @@ export function makePlacement(defId: string, seed: number, rot: Rot, w: number, 
 }
 
 export function placementKey(p: BuildingPlacement): string {
-  return `${p.def}:${p.seed}:${p.rot}:${p.w}:${p.d}:${p.x0}:${p.z0}:${p.base}`;
+  return `${p.def}:${p.seed}:${p.rot}:${p.w}:${p.d}:${p.x0}:${p.z0}:${p.base}${p.open ? ':open' : ''}`;
 }
 
 function lru<V>(max: () => number): { get(key: string, make: () => V): V; clear(): void; readonly size: number } {
@@ -118,8 +118,23 @@ export interface BuildingDetail {
 
 const details = lru<BuildingDetail>(() => TACTICAL.interior.details);
 
+/**
+ * 07d-2f: the blueprint as it stands once the area's key has been found: the leaves of the key doors
+ * are gone, the ways through them are links, the rooms behind them are no longer locked.
+ */
+export function openBlueprint(bp: BuildingBlueprint, open: boolean): BuildingBlueprint {
+  if (!open || !bp.keyLinks) return bp;
+  return {
+    ...bp,
+    parts: bp.parts.filter((q) => !q.key),
+    openings: bp.openings.map((o) => (o.key ? { ...o, state: 'open' as const } : o)),
+    rooms: bp.rooms.map((r) => (r.key ? { ...r, locked: false } : r)),
+    links: [...bp.links, ...bp.keyLinks],
+  };
+}
+
 function buildDetail(p: BuildingPlacement): BuildingDetail {
-  const bp = blueprintOf(p);
+  const bp = openBlueprint(blueprintOf(p), p.open === true);
   const y = p.base;
   const ref = p.building;
   const solids: DetailSolid[] = localColliders(bp).map((c) => {

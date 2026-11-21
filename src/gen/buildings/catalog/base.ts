@@ -4,5 +4,8 @@
 
 import { BASE_BUILDINGS } from '../defs/base/hall.ts';
 import type { BuildingDef } from '../types.ts';
+import { BASE_JGSDF } from '../defs/base/jgsdf.ts';
+import { BASE_JMSDF } from '../defs/base/jmsdf.ts';
+import { BASE_JASDF } from '../defs/base/jasdf.ts';
 
-export const BASE: readonly BuildingDef[] = [...BASE_BUILDINGS];
+export const BASE: readonly BuildingDef[] = [...BASE_BUILDINGS, ...BASE_JGSDF, BASE_JMSDF, BASE_JASDF];

@@ -11,7 +11,7 @@ import type { SimContext } from '../system.ts';
 import { playerAtHome } from './morale.ts';
 import { ctxNow, itemsParam, logEntry, moveEars, moveStock, type ColonyCtx } from './stock.ts';
 import { addCandidates, hideoutGroup } from './survivors.ts';
-import { mapOf } from '../tactical/area.ts';
+import { applyKeys, mapOf } from '../tactical/area.ts';
 import { heightAt, isWalkable } from '../tactical/collision.ts';
 import { GROUND, type TacticalMap } from '../../gen/index.ts';
 
@@ -175,6 +175,12 @@ function interact(c: ColonyCtx, grid: StaticGrid | null): void {
   const text = itemsParam(items);
   logEntry(c, 'search', text ? 'log.searched' : 'log.searchedNothing', { items: text });
   c.emit({ type: 'spotSearched', spot: spot.id, items: text });
+  if (spot.key) {
+    // 07d-2f: the commander's safe held the key: the armories and depots of this base open.
+    const map = mapOf(state);
+    if (map) applyKeys(state, map);
+    logEntry(c, 'search', 'log.keyFound', {});
+  }
 }
 
 /** Every step: set up hideouts for a new area and react to E. */

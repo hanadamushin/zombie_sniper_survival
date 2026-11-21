@@ -3,5 +3,6 @@
 // See docs/buildings_guide.md.
 
 import type { BuildingDef } from '../types.ts';
+import { MILITARY_CAMPS } from '../defs/military/camps.ts';
 
-export const MILITARY: readonly BuildingDef[] = [];
+export const MILITARY: readonly BuildingDef[] = [...MILITARY_CAMPS];

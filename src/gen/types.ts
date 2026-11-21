@@ -155,6 +155,9 @@ export interface LootSpot {
   y?: number;
   /** 07d: loot table of the search point (data/colony.ts ROOM_LOOT); absent: the land's table. */
   table?: string;
+  /** 07d-2f: searching it finds the key that opens the building's locked armories (TacticalMap.placements index `enter`). */
+  key?: boolean;
+  enter?: number;
 }
 
 export interface Vantage {

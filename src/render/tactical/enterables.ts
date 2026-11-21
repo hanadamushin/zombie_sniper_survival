@@ -339,7 +339,7 @@ export function buildEnterables(map: TacticalMap): EnterablePart {
     const bp = blueprintOf(p);
     const counts = new Map<PoolId, number>();
     const which = (part: Part): PoolId => (MATERIALS[part.mat].glass ? 'glass' : part.shape);
-    const mine = bp.parts.filter((part) => part.layer === layer && !part.hidden);
+    const mine = bp.parts.filter((part) => part.layer === layer && !part.hidden && !(part.key && p.open)); // 07d-2f: an opened key door has no leaf
     for (const part of mine) counts.set(which(part), (counts.get(which(part)) ?? 0) + 1);
     const held: Held[] = [];
     const cursor = new Map<PoolId, number>();

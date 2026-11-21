@@ -116,6 +116,7 @@ export const RENDER = {
     debris: [0x6a6258, 0x58524a],
     plant: [0x4a6634],
     asphalt: [0x47484b],
+    olive: [0x4f5a3a, 0x5d6644, 0x7d7458, 0x3e4632],
   },
   buildings: {
     /** Wall colours by kind (picked by Building.tint). */

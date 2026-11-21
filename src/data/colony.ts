@@ -305,6 +305,8 @@ const ROOM_LOOT_BASE: Record<string, LootTable> = {
   train: { food: 0.04, medicine: 0.03, parts: 0.01 },
   baggage: { food: 0.05, medicine: 0.04, parts: 0.02, wood: 0.01 },
   tower: { parts: 0.07, metal: 0.02, ammo: 0.01 },
+  field: { ammo: 0.06, medicine: 0.05, fuel: 0.05, food: 0.05 },
+  safe: { ammo: 0.04, parts: 0.04, medicine: 0.02 },
 };
 export const ROOM_LOOT: Readonly<Record<string, LootTable>> = Object.fromEntries(
   Object.entries(ROOM_LOOT_BASE).map(([id, t]) => [id, Object.fromEntries(Object.entries(t).map(([r, v]) => [r, v * LOOT_SCALE]))]),

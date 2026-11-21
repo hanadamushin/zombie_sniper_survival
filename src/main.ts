@@ -125,14 +125,14 @@ let suspended: GameState | null = null;
  * Firing range (04; reachable from the title and the pause menu since 07b): no world, no saves.
  * `?range=1` opens it at boot. A running game is put aside (and autosaved), not ended.
  */
-function openRange(yard: boolean | 2 = false): void {
+function openRange(yard: boolean | 2 | 3 = false): void {
   if (state && !state.flags.range) {
     void saveSlot(AUTO_SLOT);
     suspended = state;
   }
   const next = createInitialState(1, 1);
   next.flags.range = true;
-  if (yard) next.flags.yard = yard; // 07d-2e: 2 = the big yard (stations of the big cities, airports)
+  if (yard) next.flags.yard = yard; // 07d-2e: 2 = the big yard (stations of the big cities, airports); 07d-2f: 3 = the big Self-Defense Force sites
   if (suspended) next.flags.rangeReturn = true;
   pending = null;
   ui.setIntro(null);
@@ -323,6 +323,7 @@ requestAnimationFrame(frame);
   if (params.get('range') === '1') openRange();
   if (params.get('yard') === '1') openRange(true);
   if (params.get('yard') === '2') openRange(2);
+  if (params.get('yard') === '3') openRange(3);
 }
 
 // Debug / e2e handle (read-only use; mutate through dispatch). `debug` bypasses the rules on
@@ -339,8 +340,8 @@ interface DebugApi {
   setInput(input: Partial<InputFrame> | null): void;
   /** Open the firing range (flat map, targets at 100..600 m). `noSway` holds the rifle perfectly still. */
   openRange(noSway?: boolean): void;
-  /** 07d: open the building yard (every enterable building type on flat ground; flags.range + flags.yard). 07d-2e: `big` opens the yard of the types too big for it (flags.yard = 2). */
-  openYard(big?: boolean): void;
+  /** 07d: open the building yard (every enterable building type on flat ground; flags.range + flags.yard). 07d-2e: `big` opens the yard of the types too big for it (flags.yard = 2); 07d-2f: 3 the yard of the big Self-Defense Force sites. */
+  openYard(big?: boolean | 3): void;
   /** 07d: the enterable buildings of the current map: placement, world rooms and nav links (generated on demand). */
   enterables(): { i: number; def: string; x0: number; z0: number; x1: number; z1: number; base: number; rot: number }[];
   enterable(i: number): ReturnType<typeof detailOf> | null;
@@ -433,7 +434,7 @@ window.__game = {
       if (state && noSway) state.flags.noSway = true;
     },
     openYard(big = false) {
-      openRange(big ? 2 : true);
+      openRange(big === 3 ? 3 : big ? 2 : true);
     },
     enterables() {
       const map = state ? mapOf(state) : null;

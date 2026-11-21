@@ -33,7 +33,30 @@ function spotState(s: LootSpot, taken: boolean): TacticalState['lootSpots'][numb
   const out: TacticalState['lootSpots'][number] = { id: s.id, pos: [s.pos[0], s.pos[1]], taken };
   if (s.y !== undefined) out.y = s.y;
   if (s.table !== undefined) out.table = s.table;
+  if (s.key) out.key = true;
+  if (s.enter !== undefined) out.enter = s.enter;
   return out;
+}
+
+/**
+ * 07d-2f: open the key doors of every building whose key (the HQ safe) has been found in this area,
+ * and close those whose key has not (the maps are cached and shared). Swaps the placement for an
+ * `open` copy: collision, rooms and links (detailOf) and the drawing follow the placement.
+ */
+export function applyKeys(state: GameState, map: TacticalMap): void {
+  const spots = state.tactical?.lootSpots ?? [];
+  const keyed = new Set<number>();
+  for (const s of spots) if (s.enter !== undefined) keyed.add(s.enter);
+  for (const i of keyed) {
+    const p = map.placements[i];
+    if (!p) continue;
+    const open = spots.some((s) => s.key && s.taken && s.enter === i);
+    if ((p.open === true) === open) continue;
+    const q = { ...p };
+    if (open) q.open = true;
+    else delete q.open;
+    map.placements[i] = q;
+  }
 }
 /** Last generated maps by parameters, so that re-entering a cell or reloading is instant. */
 const cache = new Map<string, TacticalMap>();
@@ -100,11 +123,12 @@ export function areaPending(state: GameState, grid: StaticGrid | null): boolean 
 function ensureRange(state: GameState): TacticalArea {
   const known = state.tactical ? areas.get(state.tactical) : undefined;
   if (known) return known;
-  const map = state.flags.yard ? yardMap(state.flags.yard === 2) : rangeMap();
+  const map = state.flags.yard ? yardMap(state.flags.yard === 2 || state.flags.yard === 3 ? state.flags.yard : 1) : rangeMap();
   const fresh = !state.tactical;
   state.tactical ??= { cell: state.player.cell, mapSeed: map.params.mapSeed, zombies: [], corpses: [], bullets: [], reserve: 0, wind: [0, 0], lootSpots: state.flags.yard ? map.lootSpots.map((s) => spotState(s, false)) : [] };
   const area: TacticalArea = { map, dynamic: createSpatialHash() };
   areas.set(state.tactical, area);
+  applyKeys(state, map);
   if (fresh) {
     placePlayer(state.player, map, map.spawn.edge[0], map.spawn.edge[1], map.spawn.edgeYaw);
     state.player.inv.ammo = BALANCE.range.ammo;
@@ -132,6 +156,7 @@ export function ensureArea(state: GameState, grid: StaticGrid | null): TacticalA
     tactical.lootSpots = map.lootSpots.map((s) => spotState(s, taken.has(s.id)));
     const area: TacticalArea = { map, dynamic: createSpatialHash() };
     areas.set(tactical, area);
+    applyKeys(state, map);
     return area;
   }
 
@@ -151,6 +176,7 @@ export function ensureArea(state: GameState, grid: StaticGrid | null): TacticalA
   state.tactical = tactical;
   const area: TacticalArea = { map, dynamic: createSpatialHash() };
   areas.set(tactical, area);
+  applyKeys(state, map);
   // Home: the middle of the base. Elsewhere: on the road at the edge of the area, facing in.
   if (params.isHome) placePlayer(state.player, map, map.spawn.home[0], map.spawn.home[1], 0);
   else placePlayer(state.player, map, map.spawn.edge[0], map.spawn.edge[1], map.spawn.edgeYaw);
@@ -264,6 +290,7 @@ export function walkAcross(state: GameState, grid: StaticGrid | null, emit: (e: 
     state.tactical = tactical;
     areas.set(tactical, next.area);
   }
+  applyKeys(state, next.area.map);
   // Followers step over too, just inside the new edge where they were along it.
   const nt = state.tactical!;
   const inside = (v: number): number => Math.min(S - 3, Math.max(3, v));
