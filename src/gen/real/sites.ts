@@ -880,8 +880,11 @@ export function cutLine(pts: [number, number][], kind: number, width: number, si
         } else if (!inQ && run.length === 0) run.push([qx, qz]);
       }
     }
-    if (inside(x, z)) flush();
-    else run.push([x, z]);
+    if (inside(x, z)) {
+      // The road reaches into the cut zone at this vertex: it ends there (a step past the fence's margin).
+      if (run.length > 0) run.push([x, z]);
+      flush();
+    } else run.push([x, z]);
   }
   flush();
   return out;

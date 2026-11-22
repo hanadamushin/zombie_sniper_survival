@@ -1,4 +1,5 @@
-// R0: an operation area made from the real data of its cell (docs/02_systems_spec.md §3.11).
+// R0: an operation area made from the real data of its cell (docs/02_systems_spec.md §2.5; the
+// buildings: §3.11, 07d-3).
 //
 // The area is the cell's real 10 km square shrunk 1/10 horizontally. Positions and extents shrink;
 // people, buildings, road widths and trees keep their true size. So nothing is copied one by one:
@@ -9,9 +10,11 @@
 //   land use     paddies, fields, forest, open ground, beaches at their shrunk place (128² of 8 m)
 //   roads, rails the main roads (motorway, national, prefectural, 13 m+) and the railways at their
 //                shrunk place and true width; the narrow streets come from the town generator
-//   towns        a street lattice over the built-up land, filled with 07d buildings whose density and
-//                height follow the population and the share of durable buildings
-//   facilities   stations, town halls, hospitals, schools, police, fire, SDF at their shrunk place
+//   towns        a street lattice over the built-up land, filled with the 07d-2 types of the district
+//                (data/placement.ts MIX by the town grade — population and durable buildings — and the
+//                municipality's grade), their fronts to the street
+//   facilities   stations on their railway, airports, SDF bases, town halls, hospitals, schools,
+//                police, fire at their shrunk place (sites.ts plans them before the roads are laid)
 // Neighbouring real cells share their edge samples, so terrain, water and roads meet; next to a cell
 // without real data the terrain fades into the 07c world function over REAL_AREA.seamBand.
 
@@ -313,6 +316,9 @@ function forecourt(b: Builder, rng: RngState, bd: Building, rot: Rot): void {
 function buildSites(b: Builder, sites: readonly Site[], pois: MapPoi[], ctx: TownCtx): void {
   const rng = rngOf(b, 'real.sites.build');
   for (const s of sites) {
+    forTiles(s.x0, s.z0, s.x1, s.z1, (t) => {
+      ctx.sites[t] = 1;
+    });
     const bd = addEnterable(b, s.def, s.x0, s.z0, s.w, s.d, s.rot);
     tallyAdd(ctx.tally, s.def);
     if (s.poi >= 0) pois[s.poi]!.building = bd.id;
@@ -416,6 +422,8 @@ interface TownCtx {
   hills: boolean;
   /** Lattice points (LU_N²) within COAST.reach of the sea. */
   coast: Uint8Array | null;
+  /** Tiles of the facility sites (the town streets keep out of them). */
+  sites: Uint8Array;
   /** Chance that a mid-rise lot is drawn from the high-rise core's mix (big cities). */
   core: number;
 }
@@ -436,7 +444,7 @@ function townCtx(b: Builder, real: RealArea): TownCtx {
   const share = built > 0 ? tall / built : 0;
   const C = LOTS.core;
   const core = land === 'urban' ? Math.min(C.max, Math.max(0, (share - C.from) * C.slope) + (muni >= 5 ? C.metro : muni === 4 ? C.capital : 0)) : 0;
-  return { real, muni, land, tally: (b.tally ??= newTally(muni >= 5 || share > C.metroShare)), hills: land === 'forest' || land === 'mountain', coast: coastMask(real), core };
+  return { real, muni, land, tally: (b.tally ??= newTally(muni >= 5 || share > C.metroShare)), hills: land === 'forest' || land === 'mountain', coast: coastMask(real), sites: new Uint8Array(TILES * TILES), core };
 }
 
 /** Lattice points within COAST.reach of the sea (two passes of a running maximum), or null without sea. */
@@ -529,8 +537,8 @@ function realTowns(b: Builder, real: RealArea, ctx: TownCtx): void {
         const z = alongX ? pos : s;
         const c = luAt(real, x, z);
         const t = tileIndex(x, z);
-        // Not through a facility built at its real place (occupied, but not a road).
-        const taken = b.occupied[t] === 1 && b.ground[t] !== GROUND.road && b.ground[t] !== GROUND.track;
+        // Not through a facility built at its real place (occupied, but not a road; 07d-3: nor a site, whose ground may be the railway's).
+        const taken = ctx.sites[t] === 1 || (b.occupied[t] === 1 && b.ground[t] !== GROUND.road && b.ground[t] !== GROUND.track);
         const ok = townShare(x, z) >= 0.4 && !isWater(c) && !taken && !(b.params.isHome && homeDist(x, z) < T.homeFlatRadius + 10);
         if (ok) {
           run.push([x, z]);

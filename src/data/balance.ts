@@ -147,7 +147,7 @@ export const BALANCE = {
      * points are found in several buildings of the area; a building with a key (07d-2f: the HQ safe and
      * the armouries it opens) up to `lootPerKeyBuilding`.
      */
-    lootPerBuilding: 6,
+    lootPerBuilding: 4,
     lootPerKeyBuilding: 14,
     start: {
       lands: ['rural', 'forest'],
