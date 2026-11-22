@@ -14,6 +14,12 @@ export const REAL_GRID = {
   mountain: { mean: 850, meanRugged: 600, std: 260, p90: 1450 },
   /** Daily passengers at or above which a station is a town / city / prefectural capital / designated-city station. */
   stationPax: [300, 3000, 15000, 100000] as const,
+  /**
+   * R9: temporary stations (臨時駅: open a few days or one season a year). S12 gives their passengers
+   * per operating day, so they outranked the real station of the cell (津島ノ宮 over 詫間). Never the
+   * representative station of a cell.
+   */
+  temporaryStations: ['津島ノ宮', '田井ノ浜', '偕楽園', '鹿島サッカースタジアム', 'ガーラ湯沢', '原生花園'] as readonly string[],
   /** Runway length (m) for a medium / large airport. */
   airportRunway: [1800, 2800] as const,
   /** Residents per police station / fire station (estimate until a region build counts them). */

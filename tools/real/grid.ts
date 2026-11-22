@@ -419,7 +419,10 @@ export async function buildRealGrid(): Promise<RealGridBuild> {
         if (m === undefined) {
           m = muniAt(lat, lon);
           if (m < 0) return;
-          if (c >= 0) cityHall.set(`${muniPref[m]}:${muniNames[m]}`, c);
+          // R9: the codes of renamed wards (浜松市 2024) land here too: only the city hall itself, or
+          // the first office until it is found (the last ward office used to win).
+          const key = `${muniPref[m]}:${muniNames[m]}`;
+          if (c >= 0 && (a.P05_003 === `${muniNames[m]}役所` || !cityHall.has(key))) cityHall.set(key, c);
           return;
         }
         // R3: P05 (2022) codes the city hall of an ordinance-designated city with the code of the ward
@@ -431,7 +434,7 @@ export async function buildRealGrid(): Promise<RealGridBuild> {
     }
   }
   // Places: one label per municipality (designated cities once), at its town hall or most populated cell.
-  const placeByName = new Map<string, { cell: number; pop: number; grade: number }>();
+  const placeByName = new Map<string, { cell: number; pop: number; grade: number; pref: number }>();
   for (let m = 0; m < muniCodes.length; m++) {
     const cell = seatCell[m]! >= 0 ? seatCell[m]! : muniBestCell[m]!;
     if (cell < 0) continue;
@@ -442,8 +445,37 @@ export async function buildRealGrid(): Promise<RealGridBuild> {
       prev.pop += p;
       continue;
     }
-    placeByName.set(key, { cell: cityHall.get(key) ?? cell, pop: p, grade: muniGrade[m]! });
+    placeByName.set(key, { cell: cityHall.get(key) ?? cell, pop: p, grade: muniGrade[m]!, pref: muniPref[m]! });
   }
+  // R9: a cell belongs to the prefecture with most of its people, so a town hall near a prefecture
+  // border can stand in a cell of the other prefecture (尼崎市役所 in the 大阪府 cell 20111). The label
+  // then moves to the municipality's most populated cell of its own prefecture, or is dropped.
+  const keyCellPop = new Map<string, Map<number, number>>();
+  for (const [c, mp] of cellMuniPop) {
+    for (const [m, p] of mp) {
+      const key = `${muniPref[m]}:${muniNames[m]}`;
+      let cp = keyCellPop.get(key);
+      if (!cp) keyCellPop.set(key, (cp = new Map()));
+      cp.set(c, (cp.get(c) ?? 0) + p);
+    }
+  }
+  let movedPlaces = 0;
+  for (const [key, pl] of placeByName) {
+    if (prefOf[pl.cell] === pl.pref) continue;
+    let best = -1;
+    let bestP = 0;
+    for (const [c, p] of keyCellPop.get(key) ?? []) if (isLand[c] && prefOf[c] === pl.pref && p > bestP) {
+      bestP = p;
+      best = c;
+    }
+    say(`place ${key.split(':')[1]} (${PREF_NAMES[pl.pref]}): hall in a ${PREF_NAMES[prefOf[pl.cell]!]} cell ${pl.cell} -> ${best >= 0 ? best : 'dropped'}`);
+    movedPlaces++;
+    if (best >= 0) pl.cell = best;
+    else placeByName.delete(key);
+  }
+  say(`places whose hall stands in another prefecture's cell: ${movedPlaces}`);
+  const misplaced = [...placeByName].filter(([, pl]) => prefOf[pl.cell] !== pl.pref).length;
+  if (misplaced) throw new Error(`${misplaced} places still in a cell of another prefecture`);
   // One place per cell: the most important.
   const placeOfCell = new Map<number, { name: string; pop: number; grade: number }>();
   for (const [key, p] of placeByName) {
@@ -457,6 +489,7 @@ export async function buildRealGrid(): Promise<RealGridBuild> {
   const stationOfCell = new Map<number, { name: string; pax: number }>();
   if (s12) {
     const layer = shpLayer(s12, 'NumberOfPassengers');
+    let temporary = 0;
     const byKey = new Map<string, { cell: number; name: string; pax: number }>();
     layer?.shapes.forEach((shape, s) => {
       const a = layer.attrs[s]!;
@@ -473,16 +506,21 @@ export async function buildRealGrid(): Promise<RealGridBuild> {
       const cell = cellAt(lat, lon);
       if (cell < 0 || !isLand[cell]) return;
       const name = a.S12_001 ?? '';
+      if (REAL_GRID.temporaryStations.includes(name)) {
+        temporary++;
+        return; // R9: 臨時駅
+      }
       const key = `${cell}:${name}`;
       const prev = byKey.get(key);
       if (prev) prev.pax += pax;
       else byKey.set(key, { cell, name, pax });
     });
+    // R9: a station without passenger figures only when the cell has no other.
     for (const st of byKey.values()) {
       const prev = stationOfCell.get(st.cell);
       if (!prev || st.pax > prev.pax) stationOfCell.set(st.cell, { name: st.name, pax: st.pax });
     }
-    say(`stations: ${byKey.size} (cells with a station ${stationOfCell.size})`);
+    say(`stations: ${byKey.size} (cells with a station ${stationOfCell.size}; temporary stations left out ${temporary}; cells whose station has no passenger figures ${[...stationOfCell.values()].filter((s) => !s.pax).length})`);
   }
   const stationGrade = (pax: number): number => {
     const G = REAL_GRID.stationPax;
@@ -490,7 +528,7 @@ export async function buildRealGrid(): Promise<RealGridBuild> {
   };
 
   // ---- airports (C28) ----
-  const airports: { cell: number; name: string; size: number; lat: number; lon: number }[] = [];
+  const airports: { cell: number; name: string; size: number; lat: number; lon: number; part: boolean }[] = [];
   const c28 = await ksjZip('C28/C28-21/C28-21_GML.zip');
   if (c28) {
     const ap = shpLayer(c28, /C28-21_Airport\./);
@@ -508,13 +546,19 @@ export async function buildRealGrid(): Promise<RealGridBuild> {
       const runway = Math.max(0, ...(a.C28_012 ?? '').split(',').map((v) => Number(v) || 0));
       const A = REAL_GRID.airportRunway;
       const size = runway >= A[1] ? 3 : runway >= A[0] ? 2 : 1;
-      const name = a.C28_005 ?? '';
+      // R9: C28 lists separate areas of one airport under the airport's name with the area in
+      // brackets (福岡空港（奈多地区）): one airport, at the main record's reference point.
+      const fullName = a.C28_005 ?? '';
+      const name = fullName.replace(/[（(].*[）)]$/, '');
+      const part = name !== fullName;
+      if (part) say(`airport ${fullName}: part of ${name}`);
       const prev = airports.find((o) => o.name === name);
       if (prev) {
         prev.size = Math.max(prev.size, size); // one record per runway / area: the longest runway counts
+        if (prev.part && !part) Object.assign(prev, { cell, lat, lon, part });
         return;
       }
-      airports.push({ cell, name, size, lat, lon });
+      airports.push({ cell, name, size, lat, lon, part });
     });
     say(`airports ${airports.length}`);
   }
@@ -610,7 +654,18 @@ export async function buildRealGrid(): Promise<RealGridBuild> {
     linkKeys.add(key);
     links.push(ia < ib ? [ia, ib] : [ib, ia]);
   }
-  const sea: GridFile['sea'] = SEA_LINKS.map((l) => [l.name, nearestLand(l.a[0], l.a[1]), nearestLand(l.b[0], l.b[1]), l.minutes]);
+  // R9: a crossing whose two ends fall in one cell (関門橋: 下関 and 門司 both in 21574) joins nothing —
+  // that cell already reaches both shores over land — so it is left out.
+  const sea: GridFile['sea'] = [];
+  for (const l of SEA_LINKS) {
+    const a = nearestLand(l.a[0], l.a[1]);
+    const b = nearestLand(l.b[0], l.b[1]);
+    if (a === b) {
+      say(`sea link ${l.name}: both ends in cell ${a}, left out (the cell joins the shores over land)`);
+      continue;
+    }
+    sea.push([l.name, a, b, l.minutes]);
+  }
 
   // ---- assemble ----
   const popInt = landIds.map((i) => Math.round(pop[i]!));
