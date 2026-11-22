@@ -78,7 +78,12 @@ export async function fetchCached(url: string, key: string): Promise<Buffer | nu
     const tmp = `${path}.part`;
     let status = 0;
     for (let attempt = 0; attempt < 4; attempt++) {
-      status = await curl(url, tmp);
+      // R9: a dropped connection (curl exit 35 / 56 through the build proxy) is retried like a 5xx
+      // instead of ending the whole region run.
+      status = await curl(url, tmp).catch((e: unknown) => {
+        if (attempt === 3) throw e;
+        return 599;
+      });
       if (status !== 0 && status < 500 && status !== 429) break;
       await sleep(2000 * (attempt + 1));
     }

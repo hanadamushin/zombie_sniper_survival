@@ -32,7 +32,9 @@ describe.skipIf(!have)('Kanto areas from the real data (R3)', () => {
     expect(Object.keys(index.cells).length).toBe(land.length);
   });
 
-  it('reads the land use of every cell (no mesh left as "none")', () => {
+  // R9: an unread mesh is written as beach on land (R4), so beach counts too (61 cells of northern
+  // Tochigi / Gunma before the rebuild).
+  it('reads the land use of every cell (no mesh left as "none" or beach)', () => {
     const index = JSON.parse(readFileSync(INDEX, 'utf8')) as { cells: Record<string, unknown> };
     for (const id of Object.keys(index.cells).map(Number)) {
       const a = readRealArea(id)!;
@@ -41,9 +43,9 @@ describe.skipIf(!have)('Kanto areas from the real data (R3)', () => {
       for (let i = 0; i < a.landuse.length; i++) {
         if (Number.isNaN(a.elev[i])) continue;
         land++;
-        if (a.landuse[i] === LU.none) none++;
+        if (a.landuse[i] === LU.none || a.landuse[i] === LU.beach) none++;
       }
-      if (land > 100) expect(none / land, String(id)).toBeLessThan(0.5);
+      if (land > 100) expect(none / land, String(id)).toBeLessThan(0.3);
     }
   });
 
