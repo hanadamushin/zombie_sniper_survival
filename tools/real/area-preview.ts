@@ -20,7 +20,7 @@ const LU_COLORS: Record<number, [number, number, number]> = {
   [LU.beach]: [230, 220, 170], [LU.sea]: [30, 60, 120], [LU.golf]: [120, 220, 120],
 };
 for (const cell of rest.map(Number)) {
-  const a = decodeRealArea(gunzipSync(readFileSync(`public/data/areas/${region}/${cell}.bin`)));
+  const a = decodeRealArea(gunzipSync(readFileSync(`${process.env.REAL_AREAS_DIR ?? 'public/data/areas'}/${region}/${cell}.bin`)));
   const rgb = new Uint8Array(S * S * 3);
   const e = (i: number, j: number): number => {
     const v = a.elev[Math.min(ELEV_N - 1, j) * ELEV_N + Math.min(ELEV_N - 1, i)]!;

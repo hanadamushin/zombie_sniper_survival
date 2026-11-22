@@ -9,6 +9,8 @@ import { addRealRegion, provideRealArea, realRegionOf, type RegionIndexFile } fr
 import { decodeScenario, initWorld } from '../../../src/sim/world/scenario.ts';
 
 const DATA = new URL('../../../public/data/', import.meta.url);
+/** R9: REAL_AREAS_DIR=<dir> reads the area files from another folder (e.g. a copy from before a rebuild). */
+const AREAS = process.env.REAL_AREAS_DIR ? new URL(`file://${process.env.REAL_AREAS_DIR.replace(/\/?$/, '/')}`) : new URL('areas/', DATA);
 
 export function loadGrid(): StaticGrid {
   return parseGrid(JSON.parse(readFileSync(new URL('grid.json', DATA), 'utf8')) as GridFile);
@@ -16,7 +18,7 @@ export function loadGrid(): StaticGrid {
 
 /** Register every built region (public/data/areas/<region>/index.json). Returns the regions found. */
 export function loadRealIndexes(grid: StaticGrid): string[] {
-  const dir = new URL('areas/', DATA);
+  const dir = AREAS;
   if (!existsSync(dir)) return [];
   const found: string[] = [];
   for (const region of readdirSync(dir)) {
@@ -32,7 +34,7 @@ export function loadRealIndexes(grid: StaticGrid): string[] {
 export function readRealArea(cell: number): RealArea | null {
   const region = realRegionOf(cell);
   if (!region) return null;
-  return decodeRealArea(gunzipSync(readFileSync(new URL(`areas/${region}/${cell}.bin`, DATA))));
+  return decodeRealArea(gunzipSync(readFileSync(new URL(`${region}/${cell}.bin`, AREAS))));
 }
 
 /** Load (into the registry) the areas of a cell and its 8 neighbours. */
