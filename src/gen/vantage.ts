@@ -69,7 +69,7 @@ function clear(b: Builder, idx: Index, ax: number, ay: number, az: number, bx: n
     const x = ax + dx * t;
     const z = az + dz * t;
     const y = ay + (by - ay) * t;
-    if (hAt(b, x, z) > y) return false;
+    if (hAt(b, x, z) > y - 0.3) return false; // a little margin: the sim follows the ground exactly
     const cell = Math.min(N - 1, Math.floor(z / CELL)) * N + Math.min(N - 1, Math.floor(x / CELL));
     if (cell === last) continue;
     last = cell;
@@ -93,19 +93,52 @@ function clear(b: Builder, idx: Index, ax: number, ay: number, az: number, bx: n
     }
     for (const bi of idx.brush[cell]!) {
       const br = b.brush[bi]!;
-      // Closest approach of the sight line to the brush's axis (sampled: brush is short).
-      for (let k = 0; k <= 4; k++) {
-        const px = br.ax + ((br.bx - br.ax) * k) / 4;
-        const pz = br.az + ((br.bz - br.az) * k) / 4;
-        const u = Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / (len * len)));
-        if (Math.hypot(ax + dx * u - px, az + dz * u - pz) > br.r) continue;
-        const ground = hAt(b, px, pz);
-        const yy = ay + (by - ay) * u;
-        if (yy < ground + br.h && yy > ground - 2) return false;
-      }
+      // Closest approach of the sight line to the brush's axis (as the sim's brushBetween).
+      const u = closest(ax, az, bx, bz, br.ax, br.az, br.bx, br.bz, br.r);
+      if (u < 0) continue;
+      const px = ax + dx * u;
+      const pz = az + dz * u;
+      const ground = hAt(b, px, pz);
+      const yy = ay + (by - ay) * u;
+      if (yy < ground + br.h && yy > ground - 2) return false;
     }
   }
   return true;
+}
+
+/** Parameter (0..1) on p of the closest approach of the 2D segments p1–p2 and q1–q2 when they come within r, else -1. */
+function closest(p1x: number, p1z: number, p2x: number, p2z: number, q1x: number, q1z: number, q2x: number, q2z: number, r: number): number {
+  const d1x = p2x - p1x;
+  const d1z = p2z - p1z;
+  const d2x = q2x - q1x;
+  const d2z = q2z - q1z;
+  const rx = p1x - q1x;
+  const rz = p1z - q1z;
+  const a = d1x * d1x + d1z * d1z;
+  const e = d2x * d2x + d2z * d2z;
+  const f = d2x * rx + d2z * rz;
+  let s = 0;
+  let t = 0;
+  if (a > 1e-12) {
+    const c = d1x * rx + d1z * rz;
+    if (e <= 1e-12) s = Math.min(1, Math.max(0, -c / a));
+    else {
+      const bb = d1x * d2x + d1z * d2z;
+      const den = a * e - bb * bb;
+      s = den > 1e-12 ? Math.min(1, Math.max(0, (bb * f - c * e) / den)) : 0;
+      t = (bb * s + f) / e;
+      if (t < 0) {
+        t = 0;
+        s = Math.min(1, Math.max(0, -c / a));
+      } else if (t > 1) {
+        t = 1;
+        s = Math.min(1, Math.max(0, (bb - c) / a));
+      }
+    }
+  } else if (e > 1e-12) t = Math.min(1, Math.max(0, f / e));
+  const cx = p1x + d1x * s - (q1x + d2x * t);
+  const cz = p1z + d1z * s - (q1z + d2z * t);
+  return cx * cx + cz * cz < r * r ? s : -1;
 }
 
 /** Does the segment cross the box (slab test)? */
