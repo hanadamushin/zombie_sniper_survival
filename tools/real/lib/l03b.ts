@@ -34,9 +34,11 @@ export async function l03b(mesh1: number): Promise<Uint8Array | null> {
     const zip = await ksjZip(`L03-b/L03-b-21/L03-b-21_${mesh1}-jgd2011_GML.zip`);
     if (zip) {
       // R3: not the metadata file KS-META-L03-b-21_<mesh>.xml (it comes first in some zips: the whole
-      // mesh then read as "none").
-      const entry = readZip(zip).find((e) => /(^|\/)L03-b-21_\d+\.xml$/.test(e.name));
-      if (entry) {
+      // mesh then read as "none"). R4: some zips name their entries with a backslash folder
+      // (`L03-b-21_5538-jgd2011_GML\L03-b-21_5538.xml`, 6 of Chubu's 27): either separator.
+      const entry = readZip(zip).find((e) => /(^|[\\/])L03-b-21_\d+\.xml$/.test(e.name));
+      if (!entry) throw new Error(`L03-b ${mesh1}: no land-use grid among ${readZip(zip).map((e) => e.name).join(', ')}`);
+      {
         const text = entry.read().toString('utf8');
         const a = text.indexOf('<gml:tupleList>');
         const b = text.indexOf('</gml:tupleList>', a);
