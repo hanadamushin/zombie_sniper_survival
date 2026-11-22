@@ -24,7 +24,8 @@ import { bodyDistance, damageStructure, defOf, GATE_THICK, moatFilled, overlayOf
 import { cellTactical } from '../world/derive.ts';
 import type { TacticalArea } from './area.ts';
 import { heightAt, isWalkable, pushOut, segmentHitsStatic, sightBlocked, supportAt, type Vec3 } from './collision.ts';
-import { indoorStep } from './indoor.ts';
+import { indoorStep, whereIs } from './indoor.ts';
+import { detailOf } from '../../gen/buildings/index.ts';
 import { TACTICAL } from '../../data/tactical.ts';
 import { GROUND } from '../../gen/index.ts';
 import { hurtPlayer, isDead } from './health.ts';
@@ -621,6 +622,21 @@ export function perchOf(state: GameState, map: TacticalMap): number {
 // ---------------------------------------------------------------------------------------------
 
 function pickWanderGoal(map: TacticalMap, z: Zombie, rng: RngState, radius: number): void {
+  // 07d-3: inside an enterable building it shuffles about its room.
+  if (map.placements.length > 0) {
+    const w = whereIs(map, z.pos[0], z.pos[1], z.pos[2]);
+    if (w) {
+      const rm = w.room >= 0 ? w.det.rooms[w.room] : undefined;
+      if (rm && rm.wx1 - rm.wx0 > 1.4 && rm.wz1 - rm.wz0 > 1.4) {
+        z.goal[0] = randRange(rng, rm.wx0 + 0.6, rm.wx1 - 0.6);
+        z.goal[1] = randRange(rng, rm.wz0 + 0.6, rm.wz1 - 0.6);
+      } else {
+        z.goal[0] = z.pos[0];
+        z.goal[1] = z.pos[2];
+      }
+      return;
+    }
+  }
   for (let i = 0; i < 6; i++) {
     const a = rand(rng) * Math.PI * 2;
     const r = radius * (0.3 + 0.7 * rand(rng));
@@ -934,10 +950,14 @@ function spawn(state: GameState, area: TacticalArea, grid: StaticGrid, dt: numbe
       const s = rand(rng) * BALANCE.combat.windMax;
       t.wind = [Math.cos(a) * s, Math.sin(a) * s];
     }
-    for (let guard = 0; alive < target && guard < 400; guard++) {
+    // 07d-3: a share of the first lot waits in the rooms of the enterable buildings (placed a few buildings a step).
+    const indoor = map.placements.length > 0 ? Math.round(target * (Z.indoor.share[map.params.land] ?? 0)) : 0;
+    t.indoorLeft = indoor;
+    const outdoor = target - indoor;
+    for (let guard = 0; alive < outdoor && guard < 400; guard++) {
       const anchor = pickAnchor(state, map, rng);
       if (!anchor) break;
-      const size = Math.min(target - alive, randInt(rng, Z.cluster[0], Z.cluster[1]));
+      const size = Math.min(outdoor - alive, randInt(rng, Z.cluster[0], Z.cluster[1]));
       for (let k = 0; k < size; k++) {
         let x = anchor[0];
         let z = anchor[1];
@@ -956,6 +976,10 @@ function spawn(state: GameState, area: TacticalArea, grid: StaticGrid, dt: numbe
     }
     return;
   }
+  if ((t.indoorLeft ?? 0) > 0) {
+    spawnIndoor(state, area, rng, info.kinds);
+    return;
+  }
   if (alive >= target) {
     t.spawnT = info.respawnSeconds;
     return;
@@ -972,6 +996,78 @@ function spawn(state: GameState, area: TacticalArea, grid: StaticGrid, dt: numbe
   const f = randRange(rng, 0.25, 0.7);
   zb.goal = [edge[0] + (mid - edge[0]) * f + randRange(rng, -60, 60), edge[1] + (mid - edge[1]) * f + randRange(rng, -60, 60)];
   zb.yaw = Math.atan2(-(zb.goal[0] - edge[0]), -(zb.goal[1] - edge[1]));
+}
+
+/** Weight of an enterable building for the zombies inside (BALANCE.zombie.indoor.weights). */
+function indoorWeight(def: string): number {
+  for (const [prefix, w] of Z.indoor.weights) if (def.startsWith(prefix)) return w;
+  return 1;
+}
+
+/**
+ * 07d-3: place some of the first lot in the rooms of a few enterable buildings (their blueprints
+ * are made here, so a few a step). Buildings by weight (hospitals, stations, bases more), rooms by
+ * floor area and use; never next to the player or in the home base.
+ */
+function spawnIndoor(state: GameState, area: TacticalArea, rng: RngState, kinds: Record<ZombieKind, number>): void {
+  const t = state.tactical!;
+  const map = area.map;
+  const p = state.player;
+  const I = Z.indoor;
+  let total = 0;
+  for (const pl of map.placements) total += indoorWeight(pl.def);
+  for (let k = 0; k < I.buildingsPerStep && (t.indoorLeft ?? 0) > 0; k++) {
+    if (total <= 0) {
+      t.indoorLeft = 0;
+      return;
+    }
+    let r = rand(rng) * total;
+    let pick = map.placements[0]!;
+    for (const pl of map.placements) {
+      r -= indoorWeight(pl.def);
+      if (r < 0) {
+        pick = pl;
+        break;
+      }
+    }
+    const cx = (pick.x0 + pick.x1) / 2;
+    const cz = (pick.z0 + pick.z1) / 2;
+    if (Math.hypot(cx - p.pos[0], cz - p.pos[2]) < I.playerClear + Math.max(pick.x1 - pick.x0, pick.z1 - pick.z0) / 2) continue;
+    if (map.params.isHome && Math.hypot(cx - map.size / 2, cz - map.size / 2) < Z.homeKeepOut) continue;
+    const det = detailOf(pick);
+    const rooms = det.rooms.filter((rm) => !rm.locked && (rm.wx1 - rm.wx0) > 1.6 && (rm.wz1 - rm.wz0) > 1.6);
+    const weightOf = (rm: (typeof rooms)[number]): number => (rm.wx1 - rm.wx0) * (rm.wz1 - rm.wz0) * (I.rooms[rm.use] ?? 1);
+    let sum = 0;
+    for (const rm of rooms) sum += weightOf(rm);
+    if (sum <= 0) {
+      t.indoorLeft = Math.max(0, (t.indoorLeft ?? 0) - 1);
+      continue;
+    }
+    const n = Math.min(t.indoorLeft ?? 0, randInt(rng, I.perBuilding[0], I.perBuilding[1]));
+    for (let i = 0; i < n; i++) {
+      let q = rand(rng) * sum;
+      let room = rooms[0]!;
+      for (const rm of rooms) {
+        q -= weightOf(rm);
+        if (q < 0) {
+          room = rm;
+          break;
+        }
+      }
+      t.indoorLeft = Math.max(0, (t.indoorLeft ?? 0) - 1);
+      if (t.zombies.length >= Z.max) continue;
+      const x = randRange(rng, room.wx0 + 0.6, room.wx1 - 0.6);
+      const z = randRange(rng, room.wz0 + 0.6, room.wz1 - 0.6);
+      const zb = makeZombie(state, pickKind(rng, kinds), x, room.wy, z, rand(rng) * Math.PI * 2);
+      zb.pace = 0.85 + 0.3 * rand(stream(state, 'tactical.zombie'));
+      zb.inside = map.placements.indexOf(pick);
+      zb.room = room.id;
+      zb.t = rand(rng) * Z.wanderPause[1];
+      t.zombies.push(zb);
+      runtimeOf(t).byId.set(zb.id, zb);
+      area.dynamic.set(zb.id, x, z);
+    }
+  }
 }
 
 /** Firing range: every lane gets its target back a few seconds after it went down. */

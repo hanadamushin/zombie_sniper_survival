@@ -5,7 +5,7 @@
 // north is -z. Height sample (ix, iz) sits at (ix * tile, iz * tile); nav tile (tx, ty) covers
 // [tx * tile, (tx + 1) * tile) x [ty * tile, (ty + 1) * tile).
 
-import type { Land } from '../core/types.ts';
+import type { CellFacts, Land } from '../core/types.ts';
 import type { BuildingPlacement } from './buildings/types.ts';
 import type { RealArea } from './real/format.ts';
 
@@ -207,6 +207,8 @@ export interface GenParams {
   world?: WorldContext;
   /** R0: the cell's real-map data (public/data/areas/<region>/<cell>.bin); absent: the random layout of 03. */
   real?: RealArea;
+  /** 07d-3: the cell's facts of the strategic map (municipality grade, stations, airports...): the building mix. */
+  facts?: CellFacts;
 }
 
 /** R0: a facility of the real map at its shrunk place (src/gen/real/format.ts POI kinds). */

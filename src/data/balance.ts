@@ -137,8 +137,18 @@ export const BALANCE = {
     urbanBoost: 1.5,
     /** danger = clamp(log10(1 + Z/km²) / dangerLogDiv, 0, 1). */
     dangerLogDiv: 3,
-    /** Lootable buildings in a tactical map at loot = 1. */
-    lootSpots: { urban: 40, suburb: 24, rural: 10, forest: 3, mountain: 1 },
+    /**
+     * Search points in a tactical map at loot = 1 (07d-3: × 1.5 — every building can be entered now and
+     * the owner wants more to find; a search lowers the cell's loot by 1 / this, as before).
+     */
+    lootSpots: { urban: 60, suburb: 36, rural: 15, forest: 5, mountain: 2 },
+    /**
+     * 07d-3: search points one enterable building gives at most (spread over its floors), so that the
+     * points are found in several buildings of the area; a building with a key (07d-2f: the HQ safe and
+     * the armouries it opens) up to `lootPerKeyBuilding`.
+     */
+    lootPerBuilding: 6,
+    lootPerKeyBuilding: 14,
     start: {
       lands: ['rural', 'forest'],
       maxZPerKm2: 2,
@@ -298,6 +308,21 @@ export const BALANCE = {
     hollowDepth: 1.1,
     /** Brush hides the player only from zombies further away than this (m). */
     brushNear: 6,
+    /**
+     * 07d-3 — zombies inside the enterable buildings: `share` of an area's first lot by land class,
+     * placed `perBuilding` at a time in the rooms (a few buildings per step: `buildingsPerStep`). The
+     * building's weight: hospitals, stations, airports and SDF bases hold more (`weights` by type id
+     * prefix, the first that matches), the rooms by floor area and use (`rooms`). Not within
+     * `playerClear` m of the player.
+     */
+    indoor: {
+      share: { urban: 0.3, suburb: 0.25, rural: 0.15, forest: 0.1, mountain: 0.1 } as Record<string, number>,
+      perBuilding: [1, 4] as [number, number],
+      buildingsPerStep: 3,
+      playerClear: 40,
+      weights: [['public.hospital', 4], ['transport.', 4], ['base.j', 4], ['military.', 2.5], ['public.', 1.6], ['shop.', 1.2], ['office.', 1]] as [string, number][],
+      rooms: { ward: 2.5, train: 2, platform: 1.5, lobby: 1.5, barracks: 1.5, hall: 0.8, stairs: 0, roof: 0.3, toilet: 0.4, closet: 0.2, bath: 0.4 } as Record<string, number>,
+    },
     /** LOD: beyond these distances a zombie is updated every 2nd / 4th step (with a longer dt). */
     lodMid: 80,
     lodFar: 200,

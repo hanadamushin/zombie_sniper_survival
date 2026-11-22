@@ -81,9 +81,10 @@ export const RENDER = {
    * outline snipers need), within `mid` the outside (walls, windows, doors, roof), within `near` (or
    * with the camera inside it) the inside too. A building drops a stage only `hysteresis` metres past
    * the line. At most `perFrame` buildings go up a stage per frame (nearest first). Instances are
-   * pooled per shape; a pool starts with `capacity` slots and doubles when full.
+   * pooled per shape; a pool starts with `capacity` slots and doubles when full. 07d-3: the outsides and
+   * insides of all the maps drawn take at most `triBudget` triangles, nearest first (the far outline beyond).
    */
-  enterables: { near: 40, mid: 300, hysteresis: 15, perFrame: 1, capacity: 4096, glassOpacity: 0.32, interiorShade: 0.82 },
+  enterables: { near: 40, mid: 300, hysteresis: 15, perFrame: 1, capacity: 4096, glassOpacity: 0.32, interiorShade: 0.82, triBudget: 180_000 },
   /** 07d: colours of the building materials (gen/buildings/types.ts MaterialId); Part.tint picks one. */
   materials: {
     concrete: [0x9a9790, 0x8c8a85, 0xa8a49a, 0x7f817f],

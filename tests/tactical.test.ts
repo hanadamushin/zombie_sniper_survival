@@ -458,7 +458,7 @@ describe('player movement', () => {
         expect(Math.max(x, z)).toBeLessThanOrEqual(map.size - P.edgeMargin);
         // Inside a building's footprint only when standing on its roof.
         for (const b of map.buildings) {
-          if (b.kind !== 'tower' && x > b.x0 + 0.01 && x < b.x1 - 0.01 && z > b.z0 + 0.01 && z < b.z1 - 0.01) expect(y).toBeGreaterThanOrEqual(b.base + b.height - 1e-6);
+          if (b.kind !== 'tower' && b.enter === undefined && x > b.x0 + 0.01 && x < b.x1 - 0.01 && z > b.z0 + 0.01 && z < b.z1 - 0.01) expect(y).toBeGreaterThanOrEqual(b.base + b.height - 1e-6);
         }
       }
       expect(travelled, land).toBeGreaterThan(150);

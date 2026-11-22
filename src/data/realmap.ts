@@ -106,6 +106,10 @@ export const REAL_AREA = {
     openShare: 0.1,
     apartmentShare: 0.12,
     climbable: 6,
+    /** 07d-3: a roof is a firing position (up to `climbable` of them) from this eaves height (m). */
+    roofMinEaves: 15,
+    /** ... and it must see this far (m) over the building boxes on one side (the sight-line rule of R1). */
+    roofSight: 300,
   },
   /**
    * Trees per hectare of land-use forest (a fully wooded real area then has about as many trees as

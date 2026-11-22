@@ -83,6 +83,8 @@ export const TACTICAL = {
    * places every building as a type): the share of suburban / rural houses, suburban shops, car-park
    * shops and urban offices that become the enterable sample of their kind (when the lot fits).
    */
+  /** 07d-3: an enterable building wider or deeper than this (m) is a site of open ground and wings: its footprint stays walkable on the nav grid. */
+  openSite: 60,
   enterable: {
     house: 0.35,
     shop: 0.6,

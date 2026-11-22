@@ -179,7 +179,18 @@ interface Building {
   stage: Stage;
   shell: Held[];
   inside: Held[];
+  /** 07d-3: triangles of its outside / inside (estimated until first drawn). */
+  shellTris: number;
+  insideTris: number;
 }
+
+/** 07d-3: a first guess of the triangles of a building's outside and inside, before its blueprint is made. */
+function guessTris(p: BuildingPlacement): [number, number] {
+  const area = (p.x1 - p.x0) * (p.z1 - p.z0);
+  const storeys = Math.max(1, Math.round(p.eaves / 3.2));
+  return [Math.min(4000, 300 + Math.sqrt(area) * storeys * 14), Math.min(8000, 200 + area * 0.9)];
+}
+const trisOf = (held: Held[]): number => held.reduce((n, h) => n + h.count * (h.pool === 'box' || h.pool === 'glass' ? 12 : 8), 0);
 
 const m4 = new THREE.Matrix4();
 const pos = new THREE.Vector3();
@@ -225,9 +236,17 @@ function partMatrix(p: BuildingPlacement, part: Part): void {
   else m4.compose(pos.set(cx, y0, cz), quat.setFromAxisAngle(yAxis, Math.PI / 2), scl.set(wz, h, wx));
 }
 
+/** 07d-3: triangles the outside / inside stages may still take this frame, shared by all the maps drawn (nearest map first). */
+export interface TriBudget {
+  tris: number;
+}
+
 export interface EnterablePart extends Built {
-  /** Camera position in the map's frame; `budget` = stage upgrades still allowed this frame (returns what is left). */
-  update(cx: number, cy: number, cz: number, budget: number): number;
+  /**
+   * Camera position in the map's frame; `budget` = stage upgrades still allowed this frame (returns
+   * what is left); `tris` = triangles the mid / near stages may still take (taken from it).
+   */
+  update(cx: number, cy: number, cz: number, budget: number, tris?: TriBudget): number;
   /** Buildings waiting to go up a stage. */
   pending(): number;
   /** How many buildings are at each stage (far, mid, near). */
@@ -373,8 +392,14 @@ export function buildEnterables(map: TacticalMap): EnterablePart {
   };
   const setStage = (b: Building, stage: Stage): void => {
     const t0 = performance.now();
-    if (stage >= 1 && b.shell.length === 0 && b.stage < 1) b.shell = add(b, 'shell');
-    if (stage >= 2 && b.inside.length === 0) b.inside = add(b, 'interior');
+    if (stage >= 1 && b.shell.length === 0 && b.stage < 1) {
+      b.shell = add(b, 'shell');
+      b.shellTris = trisOf(b.shell);
+    }
+    if (stage >= 2 && b.inside.length === 0) {
+      b.inside = add(b, 'interior');
+      b.insideTris = trisOf(b.inside);
+    }
     if (stage < 2) drop(b.inside);
     if (stage < 1) drop(b.shell);
     if ((stage >= 1) !== (b.stage >= 1)) writeFar(b.place, stage === 0);
@@ -398,7 +423,10 @@ export function buildEnterables(map: TacticalMap): EnterablePart {
       const key = placementKey(p);
       let b = seenKeys.get(key);
       if (b) b.place = p;
-      else seenKeys.set(key, (b = { place: p, stage: 0, shell: [], inside: [] }));
+      else {
+        const [st, it] = guessTris(p);
+        seenKeys.set(key, (b = { place: p, stage: 0, shell: [], inside: [], shellTris: st, insideTris: it }));
+      }
       list.push(b);
     }
     rebuildFar();
@@ -409,19 +437,37 @@ export function buildEnterables(map: TacticalMap): EnterablePart {
   byMap.set(map, (i) => (map.placements[i] ? (seenKeys.get(placementKey(map.placements[i]!))?.stage ?? 0) : 0));
   let waiting = 0;
   const wanted: { b: Building; stage: Stage; dist: number }[] = [];
+  const close: { b: Building; stage: Stage; dist: number }[] = [];
   return {
     object: group,
-    update(cx, cy, cz, budget) {
+    update(cx, cy, cz, budget, tris) {
       sync();
       wanted.length = 0;
+      close.length = 0;
       for (const b of list) {
         const p = b.place;
         const dist = Math.hypot(Math.max(p.x0 - cx, 0, cx - p.x1), Math.max(p.z0 - cz, 0, cz - p.z1));
         const inside = dist === 0 && cy > p.base - 1 && cy < p.base + p.height + 1;
         const hy = (s: Stage): number => (b.stage >= s ? E.hysteresis : 0);
         const stage: Stage = inside || dist < E.near + hy(2) ? 2 : dist < E.mid + hy(1) ? 1 : 0;
-        if (stage < b.stage) setStage(b, stage); // going down is cheap: do it now
-        else if (stage > b.stage) wanted.push({ b, stage, dist });
+        if (stage === 0) {
+          if (b.stage > 0) setStage(b, 0);
+        } else close.push({ b, stage, dist: inside ? -1 : dist - (b.stage > 0 ? E.hysteresis : 0) });
+      }
+      // 07d-3: the closer stages within the triangle budget, nearest first (a dense town keeps its
+      // far outlines a little closer in).
+      close.sort((a, c) => a.dist - c.dist);
+      for (const c of close) {
+        let stage = c.stage;
+        if (tris) {
+          const cost = (stage >= 2 ? c.b.insideTris : 0) + c.b.shellTris;
+          if (cost > tris.tris && c.dist >= 0) {
+            stage = stage === 2 && c.b.shellTris <= tris.tris ? 1 : 0;
+          }
+          tris.tris -= stage >= 2 ? c.b.shellTris + c.b.insideTris : stage === 1 ? c.b.shellTris : 0;
+        }
+        if (stage < c.b.stage) setStage(c.b, stage);
+        else if (stage > c.b.stage) wanted.push({ b: c.b, stage, dist: c.dist });
       }
       wanted.sort((a, c) => a.dist - c.dist);
       let left = budget;

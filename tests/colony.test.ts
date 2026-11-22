@@ -506,7 +506,9 @@ describe('the player and the colony', () => {
     expect(t.hideouts!.length).toBeGreaterThan(0);
     const cell = state.player.cell;
     const h0 = state.world.cells.H[cell]!;
-    const hide = t.hideouts![0]!;
+    // 07d-3: a hideout at a search point (the first one may camp in the open, spot -1).
+    const hide = t.hideouts!.find((h) => h.spot >= 0)!;
+    expect(hide).toBeDefined();
     state.mode = 'tactical';
     // At the search point's floor (07d: inside a building it is not the ground the player stood on).
     const spotY = t.lootSpots.find((s) => s.id === hide.spot)?.y;
@@ -524,7 +526,7 @@ describe('the player and the colony', () => {
     expect(state.world.cells.loot[cell]!).toBeLessThan(loot0);
     // That spot is done (07d: the next shelf of the same room may be within reach).
     const after = interactionAt(state);
-    expect(after === null || (after.kind === 'search' && 'spot' in after && after.spot !== hide.spot)).toBe(true);
+    expect(after === null || after.spot !== hide.spot).toBe(true);
 
     // Hiring: not without ears; with them the fee leaves and the newcomer walks in.
     const cand = state.colony.candidates[0]!;

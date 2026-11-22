@@ -9,6 +9,7 @@ import { smoothstep } from './noise.ts';
 import { editFade } from './world.ts';
 import { ARCH } from '../data/architecture.ts';
 import { buildingDef, makePlacement, worldSize, type BuildingPlacement, type Rot } from './buildings/index.ts';
+import type { TypeTally } from './placement.ts';
 import { GROUND, type Area, type Brush, type Building, type BuildingKind, type GenParams, type Ladder, type Prop, type Road, type RoadKind, type Rock, type Solid, type Vantage } from './types.ts';
 
 const T = TACTICAL;
@@ -43,6 +44,8 @@ export interface Builder {
   grass: number[];
   /** R0: share 0..1 of woodland at a point (real land use); the flora follows it instead of noise. */
   forestAt?: (x: number, z: number) => number;
+  /** 07d-3: the building types placed so far (per-area caps of data/placement.ts). */
+  tally?: TypeTally;
 }
 
 export function createBuilder(params: GenParams): Builder {

@@ -111,11 +111,21 @@ function placeLootSpots(b: Builder): LootSpot[] {
       // 07d: an enterable building is searched at its shelves, desks and lockers (each one a spot).
       const det = detailOf(b.placements[bd.enter]!);
       // 07d-2f: the key first (the armories it opens are searched too, once it is found).
-      const order = det.search.some((s) => s.key) ? [...det.search].sort((p, q) => (q.key ? 1 : 0) - (p.key ? 1 : 0)) : det.search;
-      for (const sp of order) {
+      const keyed = det.search.some((s) => s.key);
+      const open = det.search.filter((sp) => {
+        const room = det.bp.rooms[sp.room];
+        return !(room?.locked && !room.key);
+      });
+      const order = keyed ? [...open].sort((p, q) => (q.key ? 1 : 0) - (p.key ? 1 : 0) || (det.bp.rooms[q.room]?.key ? 1 : 0) - (det.bp.rooms[p.room]?.key ? 1 : 0)) : open;
+      // 07d-3: a few points a building, spread over its floors (every n-th shelf), so that several buildings are searched.
+      const cap = keyed ? BALANCE.world.lootPerKeyBuilding : BALANCE.world.lootPerBuilding;
+      const stride = keyed ? 1 : Math.max(1, Math.floor(order.length / cap));
+      let taken = 0;
+      for (let k = 0; k < order.length && taken < cap; k += stride) {
+        const sp = order[k]!;
         if (spots.length >= b.params.lootSpots) break;
         const room = det.bp.rooms[sp.room];
-        if (room?.locked && !room.key) continue;
+        taken++;
         const spot: LootSpot = { id: spots.length, pos: [sp.wpos[0], sp.wpos[2]], building: bd.id, y: sp.wpos[1], table: sp.table };
         if (sp.key) spot.key = true;
         if (sp.key || room?.key) spot.enter = bd.enter;
@@ -232,7 +242,9 @@ function buildWalkGrid(b: Builder): Uint8Array {
   // R0: rivers, lakes and the sea are not walked through.
   for (let t = 0; t < TILES * TILES; t++) if (b.ground[t] === GROUND.water) walk[t] = 0;
   for (const s of b.solids) {
-    if (s.kind === 'building') block(s.x0, s.z0, s.x1, s.z1, 0.6);
+    // 07d-3: a big enterable site (a station, a school, a garrison, an airport) is mostly open ground:
+    // its buildings stop whatever walks there by their own walls, not the whole footprint.
+    if (s.kind === 'building' && !(s.enter !== undefined && Math.max(s.x1 - s.x0, s.z1 - s.z0) > T.openSite)) block(s.x0, s.z0, s.x1, s.z1, 0.6);
     else if (s.kind === 'stair') block(s.x0, s.z0, s.x1, s.z1, 0.2);
     else if (s.kind === 'rock' && s.x1 - s.x0 > 2.4) block(s.x0, s.z0, s.x1, s.z1, 0.3);
   }

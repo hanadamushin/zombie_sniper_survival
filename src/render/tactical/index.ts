@@ -119,6 +119,7 @@ export function createTacticalRenderer(): SubRenderer {
       for (const e of [...entries.values()]) if (!wanted.has(e.map)) drop(e);
       let budget = 1; // neighbour parts built this frame
       let stages: number = RENDER.enterables.perFrame; // 07d: enterable buildings going up a stage this frame
+      const tris = { tris: RENDER.enterables.triBudget }; // 07d-3: their outsides and insides, all maps together
       pendingWork = missing;
       const sc = { far: 0, mid: 0, near: 0, pending: 0 };
       for (const [map, off] of wanted) {
@@ -145,7 +146,7 @@ export function createTacticalRenderer(): SubRenderer {
         e.vegetation?.update(local, RENDER.fog.far, away < RENDER.flora.grassRange);
         e.brush?.update(local.x, local.z);
         if (e.enterables) {
-          stages = e.enterables.update(local.x, local.y, local.z, stages);
+          stages = e.enterables.update(local.x, local.y, local.z, stages, tris);
           pendingWork += e.enterables.pending();
           const [f, m, n] = e.enterables.stages();
           sc.far += f;

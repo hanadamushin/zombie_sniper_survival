@@ -230,6 +230,8 @@ export interface TacticalState {
   lootSpots: { id: number; pos: [number, number]; taken: boolean; y?: number; table?: string; key?: boolean; enter?: number }[];
   /** The initial zombies of this visit have been placed (04; false again after a load). */
   populated?: boolean;
+  /** 07d-3: zombies of the first lot still to be placed inside the enterable buildings (a few buildings a step). */
+  indoorLeft?: number;
   /** Seconds until the next reinforcement from the map edge (04). */
   spawnT?: number;
   /** Fixed steps simulated in this area (staggers LOD and sight checks deterministically; 04). */

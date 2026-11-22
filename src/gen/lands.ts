@@ -8,6 +8,8 @@ import { chance, pick, rand, randInt, randRange, type RngState } from '../core/r
 import type { Land } from '../core/types.ts';
 import { TACTICAL } from '../data/tactical.ts';
 import { buildingDef, fitSize, type Rot } from './buildings/index.ts';
+import { newTally, pickType, tallyAdd, type Pick } from './placement.ts';
+import { RANDOM_FACILITIES } from '../data/placement.ts';
 import {
   addBuilding, addEnterable, addLadder, addRoad, addStairs, addTower, forTiles, hAt, heightRange, homeDist, inHomeZone, occupy, rectFree, resample, rngOf,
   SIZE, STAIR_DEPTH, STAIR_LENGTH, TILE, type Builder, type Side,
@@ -290,10 +292,27 @@ function layoutTown(b: Builder, land: 'urban' | 'suburb'): void {
     addBuilding(b, kind, x0, z0, x1, z1, h, { tint: rand(rng) });
   };
 
+  // 07d-3: the facilities of a town (no real points here): whole blocks given to a school, a hospital,
+  // the police and fire stations, their gates to the street.
+  const tally = (b.tally ??= newTally(land === 'urban'));
+  const used = new Set<(typeof blocks)[number]>();
+  for (const id of RANDOM_FACILITIES[land]) {
+    const def = buildingDef(id);
+    for (const blk of blocks) {
+      if (used.has(blk) || inHomeZone(b, blk.x0, blk.z0, blk.x1, blk.z1, 20)) continue;
+      const bw = blk.x1 - blk.x0 - 4;
+      const bd = blk.z1 - blk.z0 - 4;
+      const rot: Rot = bw >= def.size.w[0] && bd >= def.size.d[0] ? 0 : bd >= def.size.w[0] && bw >= def.size.d[0] ? 1 : -1 as Rot;
+      if (rot < 0 || !enterableIn(b, id, blk.x0 + 2, blk.z0 + 2, blk.x1 - 2, blk.z1 - 2, rot)) continue;
+      tallyAdd(tally, id);
+      used.add(blk);
+      break;
+    }
+  }
   for (const blk of blocks) {
     const w = blk.x1 - blk.x0;
     const d = blk.z1 - blk.z0;
-    if (inHomeZone(b, blk.x0, blk.z0, blk.x1, blk.z1, -40)) continue;
+    if (used.has(blk) || inHomeZone(b, blk.x0, blk.z0, blk.x1, blk.z1, -40)) continue;
     const roll = rand(rng);
     if (roll < cfg.openShare && w > 30 && d > 30) {
       const kind = roll < cfg.openShare * 0.5 ? 'park' : land === 'urban' && roll > cfg.openShare * 0.8 ? 'plaza' : 'parking';
@@ -308,8 +327,9 @@ function layoutTown(b: Builder, land: 'urban' | 'suburb'): void {
           const sx1 = blk.x0 + 2 + Math.min(26, w * 0.4);
           const sz1 = blk.z0 + Math.min(d - 4, 34);
           const h = randRange(rng, 4.5, 6);
-          // 07d: the shop at the end of the car park is a convenience store facing it.
-          if (!(chance(enterRng, T.enterable.shop) && !inHomeZone(b, blk.x0 + 2, blk.z0 + 2, sx1, sz1) && enterableIn(b, 'shop.konbini', blk.x0 + 2, blk.z0 + 2, sx1, sz1, 1))) {
+          // 07d-3: the shop at the end of the car park is a roadside store, a filling station or a restaurant facing it.
+          const pick = inHomeZone(b, blk.x0 + 2, blk.z0 + 2, sx1, sz1) ? null : pickType(enterRng, 'suburb', sz1 - blk.z0 - 2, sx1 - blk.x0 - 2, tally, { except: (id) => !id.startsWith('shop.') });
+          if (!(pick && enterableIn(b, pick.id, blk.x0 + 2, blk.z0 + 2, sx1, sz1, 1) && (tallyAdd(tally, pick.id), true))) {
             flatBuilding('shop', blk.x0 + 2, blk.z0 + 2, sx1, sz1, h, true);
           }
         }
@@ -344,10 +364,16 @@ function layoutTown(b: Builder, land: 'urban' | 'suburb'): void {
           kind = 'warehouse';
           h = randRange(rng, 7, 11);
         }
-        // 07d: some offices are the enterable 5-storey sample (separate stream: the layout stays as it was).
-        if (kind === 'office' && chance(enterRng, T.enterable.office) && !inHomeZone(b, x0 + inset, z0 + inset, x1 - inset, z1 - inset)) {
-          if (enterableIn(b, 'office.zakkyo5', x0 + inset, z0 + inset, x1 - inset, z1 - inset, streetSide(x0, z0, x1, z1, blk))) continue;
+        // 07d-3: the lot is a type of the city's mix (the core towards the middle and along the avenues), its front to the street.
+        if (!inHomeZone(b, x0 + inset, z0 + inset, x1 - inset, z1 - inset)) {
+          const rot = streetSide(x0, z0, x1, z1, blk);
+          const pick = pickType(enterRng, central > 0.45 || blk.avenue ? 'core' : 'mid', rot % 2 === 0 ? lw : ld, rot % 2 === 0 ? ld : lw, tally);
+          if (pick && enterableIn(b, pick.id, x0 + inset, z0 + inset, x1 - inset, z1 - inset, rot)) {
+            tallyAdd(tally, pick.id);
+            continue;
+          }
         }
+        void kind;
         flatBuilding(kind, x0 + inset, z0 + inset, x1 - inset, z1 - inset, h, h >= 9 && h <= 34);
       }
       continue;
@@ -397,9 +423,16 @@ function layoutTown(b: Builder, land: 'urban' | 'suburb'): void {
         } else {
           const h = chance(rng, 0.25) ? 3.2 : randRange(rng, 5.6, 6.6);
           const tint = rand(rng);
-          // 07d: some houses are the enterable two-storey sample, its front towards the street.
+          // 07d-3: a house of the suburb's mix in the whole lot, its front towards the street.
           const rot: Rot = alongX ? (row === 0 ? 2 : 0) : row === 0 ? 3 : 1;
-          if (!(chance(enterRng, T.enterable.house) && enterableIn(b, 'house.wood2', x0, z0, x1, z1, rot))) addBuilding(b, 'house', x0, z0, x1, z1, h, { roof: 'gable', tint });
+          const la = (alongX ? blk.x0 : blk.z0) + u0 + 0.75;
+          const lb = la + lot - 1.5;
+          const edge = alongX ? (row === 0 ? blk.z0 : blk.z1) : row === 0 ? blk.x0 : blk.x1;
+          const [ca, cb] = row === 0 ? [edge + setback, edge + depth - 1] : [edge - depth + 1, edge - setback];
+          const [rx0, rz0, rx1, rz1] = alongX ? [la, ca, lb, cb] : [ca, la, cb, lb];
+          const pick = pickType(enterRng, 'suburb', lb - la, cb - ca, tally, { small: true });
+          if (pick && !inHomeZone(b, rx0, rz0, rx1, rz1) && enterableIn(b, pick.id, rx0, rz0, rx1, rz1, rot)) tallyAdd(tally, pick.id)
+          else addBuilding(b, 'house', x0, z0, x1, z1, h, { roof: 'gable', tint });
         }
       }
     }
@@ -411,31 +444,36 @@ function layoutTown(b: Builder, land: 'urban' | 'suburb'): void {
 // Countryside
 // ---------------------------------------------------------------------------------------------
 
-export function farmstead(b: Builder, rng: RngState, x: number, z: number, enterRng: RngState): void {
-  const hw = randRange(rng, 8, 11);
-  const hd = randRange(rng, 6.5, 8.5);
-  const hh = chance(rng, 0.4) ? 3.4 : 5.8;
-  const tint = rand(rng);
-  // 07d: some farmhouses are the enterable two-storey sample (front to the south).
-  let house: Building | null = null;
-  if (chance(enterRng, T.enterable.house)) {
-    const x0 = x - hw / 2;
-    const z0 = z - hd / 2;
-    const [lo, hi] = rectFree(b, x0 - 2, z0 - 2, x0 + hw + 2, z0 + hd + 2, 12) && !inHomeZone(b, x0, z0, x0 + hw, z0 + hd) ? heightRange(b, x0, z0, x0 + hw, z0 + hd) : [0, 99];
-    if (hi - lo <= 2.5) house = enterableIn(b, 'house.wood2', x0, z0, x0 + hw, z0 + Math.max(hd, 7.2), 0);
-  }
-  house ??= tryBuilding(b, 'house', x, z, hw, hd, hh, 'gable', tint);
-  if (!house) return;
+/**
+ * A farmstead: a house of the countryside (07d-3: a 07d-2a type — the farmhouse brings its own barn;
+ * the others get a barn and a shed beside them now and then). `pick` chooses the type for a lot of
+ * lw × ld metres (the real-map layout passes its district mix); by default the rural mix.
+ */
+export function farmstead(b: Builder, rng: RngState, x: number, z: number, enterRng: RngState, pick?: (lw: number, ld: number) => Pick | null): void {
+  const tally = (b.tally ??= newTally());
+  const choice = pick ? pick(22, 16) : pickType(enterRng, 'rural', 22, 16, tally, { small: true });
+  if (!choice) return;
+  const rot = randInt(rng, 0, 3) as Rot;
+  const [ww, wd] = rot % 2 === 0 ? [choice.w, choice.d] : [choice.d, choice.w];
+  const x0 = x - ww / 2;
+  const z0 = z - wd / 2;
+  if (!rectFree(b, x0 - 2, z0 - 2, x0 + ww + 2, z0 + wd + 2, 12) || inHomeZone(b, x0, z0, x0 + ww, z0 + wd)) return;
+  const [lo, hi] = heightRange(b, x0, z0, x0 + ww, z0 + wd);
+  if (hi - lo > 2.5) return;
+  addEnterable(b, choice.id, x0, z0, choice.w, choice.d, rot);
+  tallyAdd(tally, choice.id);
+  if (choice.id === 'house.noka' || !choice.id.startsWith('house.')) return;
   const a = rand(rng) * Math.PI * 2;
-  if (chance(rng, 0.75)) {
+  const reach = Math.max(ww, wd) / 2 + 9;
+  if (chance(rng, 0.6)) {
     const flat = chance(rng, 0.35);
-    const barn = tryBuilding(b, 'barn', x + Math.cos(a) * 17, z + Math.sin(a) * 17, randRange(rng, 9, 13), randRange(rng, 7, 9), randRange(rng, 4.6, 6.2), flat ? 'flat' : 'gable', rand(rng));
+    const barn = tryBuilding(b, 'barn', x + Math.cos(a) * reach, z + Math.sin(a) * reach, randRange(rng, 9, 13), randRange(rng, 7, 9), randRange(rng, 4.6, 6.2), flat ? 'flat' : 'gable', rand(rng));
     if (barn && flat) {
       const side = freeSide(b, barn, rng, 2, 1);
       if (side !== null) addLadder(b, barn, side, randRange(rng, 0.25, 0.75));
     }
   }
-  if (chance(rng, 0.6)) tryBuilding(b, 'shed', x + Math.cos(a + 2.2) * 12, z + Math.sin(a + 2.2) * 12, randRange(rng, 3, 4.5), randRange(rng, 2.6, 3.6), 2.5, 'flat', rand(rng));
+  if (chance(rng, 0.5)) tryBuilding(b, 'shed', x + Math.cos(a + 2.2) * (reach - 3), z + Math.sin(a + 2.2) * (reach - 3), randRange(rng, 3, 4.5), randRange(rng, 2.6, 3.6), 2.5, 'flat', rand(rng));
 }
 
 function layoutRural(b: Builder): void {

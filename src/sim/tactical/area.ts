@@ -102,6 +102,9 @@ export function areaParams(state: GameState, grid: StaticGrid, cell: CellId, loo
   // R0: the real map of the cell when its data are loaded (callers check realPending first).
   const real = realAreaOf(cell);
   if (real) params.real = real;
+  // 07d-3: the municipality grade, stations and airports of the cell choose the buildings.
+  const facts = grid.cells[cell]?.real;
+  if (facts) params.facts = facts;
   return params;
 }
 

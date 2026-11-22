@@ -16,18 +16,22 @@
 // without real data the terrain fades into the 07c world function over REAL_AREA.seamBand.
 
 import { chance, rand, randInt, randRange, type RngState } from '../../core/rng.ts';
+import type { Land } from '../../core/types.ts';
+import { COAST, FORECOURT, LOTS } from '../../data/placement.ts';
 import { REAL_AREA, REAL_LANDMARKS } from '../../data/realmap.ts';
 import { TACTICAL } from '../../data/tactical.ts';
 import { buildingDef } from '../buildings/catalog/index.ts';
-import { envelopeOf, type Rot } from '../buildings/index.ts';
+import { envelopeOf, generateBlueprint, type Rot } from '../buildings/index.ts';
 import {
-  addBuilding, addRoad, addStairs, addTower, forTiles, heightRange, homeDist, inHomeZone, N, occupy, rectFree, rngOf, SIZE, STAIR_DEPTH, STAIR_LENGTH,
+  addEnterable, addRoad, addTower, forTiles, hAt, heightRange, homeDist, inHomeZone, N, occupy, rectFree, rngOf, SIZE,
   TILE, TILES, tileIndex, type Builder,
 } from '../builder.ts';
 import { enterableIn, farmstead } from '../lands.ts';
 import { noise2, smoothstep } from '../noise.ts';
+import { districtOf, newTally, pickType, tallyAdd, type TypeTally } from '../placement.ts';
 import { GROUND, type Building, type GenParams, type MapPoi } from '../types.ts';
 import { DUR_N, ELEV_N, LINE, LINE_TUNNEL, LU, LU_N, POI, POP_N, type RealArea } from './format.ts';
+import { createPlanner, cutLine, levelSites, planSites, reserve, type Site } from './sites.ts';
 
 const R = REAL_AREA;
 const T = TACTICAL;
@@ -193,7 +197,7 @@ function waterAndGround(b: Builder, real: RealArea, terrain: (x: number, z: numb
 // Roads and railways
 // ---------------------------------------------------------------------------------------------
 
-function realRoads(b: Builder, real: RealArea, water: Float32Array): void {
+function realRoads(b: Builder, real: RealArea, water: Float32Array, sites: readonly Site[]): void {
   const order = [...real.lines].sort((a, c) => c.width - a.width);
   for (const line of order) {
     if (line.flags & LINE_TUNNEL) continue; // inside the mountain
@@ -203,9 +207,12 @@ function realRoads(b: Builder, real: RealArea, water: Float32Array): void {
     if (pts.length < 2) continue;
     const rail = line.kind === LINE.rail || line.kind === LINE.shinkansen;
     const kind = rail ? 'track' : line.kind === LINE.motorway || line.width >= 14 ? 'avenue' : line.kind === LINE.local ? 'lane' : 'street';
-    // Over water a road is carried on an embankment (R0: no bridge decks yet).
-    causeway(b, pts, line.width, water);
-    addRoad(b, kind, line.width, pts, true);
+    // 07d-3: the minor roads (and a station's own railway) stop at the fence of a site that took them.
+    for (const piece of cutLine(pts, line.kind, line.width, sites)) {
+      // Over water a road is carried on an embankment (R0: no bridge decks yet).
+      causeway(b, piece, line.width, water);
+      addRoad(b, kind, line.width, piece, true);
+    }
   }
 }
 
@@ -284,86 +291,210 @@ function lotFree(x0: number, z0: number, x1: number, z1: number): boolean {
 const lotLand = (c: number): boolean => c === LU.building || c === LU.other || c === LU.road || c === LU.rail || c === LU.waste;
 
 // ---------------------------------------------------------------------------------------------
-// Facilities at their real place
+// Facilities at their real place (07d-3: gen/real/sites.ts plans them, here they are built)
 // ---------------------------------------------------------------------------------------------
 
-/** Rough footprint (m) and height of the facilities R0 builds as boxes. */
-function facility(b: Builder, rng: RngState, kind: number, grade: number, x: number, z: number, enterRng: RngState): Building | null {
-  const F = R.facilities;
-  const spec = kind === POI.station ? (grade >= 3 ? F.stationBig : F.station)
-    : kind === POI.prefOffice ? F.prefOffice
-      : kind === POI.cityHall ? F.cityHall
-        : kind === POI.townHall ? F.townHall
-          : kind === POI.hospital ? (grade >= 2 ? F.hospitalBig : F.hospital)
-            : kind === POI.university ? F.university
-              : kind === POI.school ? F.school
-                : kind === POI.police || kind === POI.fire ? F.small
-                  : null;
-  if (kind === POI.gsdf) {
-    // 07d-2f: a small garrison where it really is (07d-3 chooses the size; R0 puts the small one).
-    // R2: the compound (180 × 100 m: 1.8 × 1 km of the real ground, more than most real garrisons) seldom
-    // fits right at the annotation in a town, between the data roads: the nearest free and level enough
-    // spot within 160 m, either way round, the full size or the def's smallest (150 × 90 m).
-    for (let r = 0; r <= 160; r += 16) {
-      const steps = r === 0 ? 1 : Math.ceil((2 * Math.PI * r) / 16);
-      for (let s = 0; s < steps; s++) {
-        const a = (s / steps) * Math.PI * 2;
-        const cx = x + Math.cos(a) * r;
-        const cz = z + Math.sin(a) * r;
-        for (const [hw, hd] of [[90, 50], [75, 45]] as const) {
-          for (const rot of [0, 1] as const) {
-            const [ex, ez] = rot === 0 ? [hw, hd] : [hd, hw];
-            const [x0, z0, x1, z1] = [cx - ex, cz - ez, cx + ex, cz + ez];
-            if (inHomeZone(b, x0, z0, x1, z1) || !rectFree(b, x0, z0, x1, z1, 14)) continue;
-            const [lo, hi] = heightRange(b, x0, z0, x1, z1);
-            if (hi - lo > R.facilityMaxSlope * 3) continue;
-            const bd = enterableIn(b, 'base.jgsdf_s', x0, z0, x1, z1, rot);
-            if (bd) return bd;
-          }
-        }
+/** Car park or square in front of a facility, when the ground there is free. */
+function forecourt(b: Builder, rng: RngState, bd: Building, rot: Rot): void {
+  const D = FORECOURT.depth;
+  const r: [number, number, number, number] = rot === 0 ? [bd.x0, bd.z1 + 1.5, bd.x1, bd.z1 + 1.5 + D]
+    : rot === 2 ? [bd.x0, bd.z0 - 1.5 - D, bd.x1, bd.z0 - 1.5]
+      : rot === 1 ? [bd.x1 + 1.5, bd.z0, bd.x1 + 1.5 + D, bd.z1]
+        : [bd.x0 - 1.5 - D, bd.z0, bd.x0 - 1.5, bd.z1];
+  if (!rectFree(b, r[0], r[1], r[2], r[3], 10) || inHomeZone(b, r[0], r[1], r[2], r[3])) return;
+  b.areas.push({ kind: FORECOURT.kinds[chance(rng, 0.6) ? 0 : 1], x0: r[0], z0: r[1], x1: r[2], z1: r[3], variant: rand(rng) });
+  forTiles(r[0], r[1], r[2], r[3], (i) => {
+    if (b.ground[i] !== GROUND.water) b.ground[i] = GROUND.paved;
+  });
+  occupy(b, r[0], r[1], r[2], r[3]);
+}
+
+/** Build the planned sites: one enterable building each, its forecourt, the point it stands for. */
+function buildSites(b: Builder, sites: readonly Site[], pois: MapPoi[], ctx: TownCtx): void {
+  const rng = rngOf(b, 'real.sites.build');
+  for (const s of sites) {
+    const bd = addEnterable(b, s.def, s.x0, s.z0, s.w, s.d, s.rot);
+    tallyAdd(ctx.tally, s.def);
+    if (s.poi >= 0) pois[s.poi]!.building = bd.id;
+    if (s.forecourt) forecourt(b, rng, bd, s.rot);
+  }
+}
+
+/**
+ * Firing positions on the roofs of the town (as R0's outside stairs were): the highest roofs of the
+ * enterable offices and hotels with a way up (07d-2c: all but the warehouse), one block each (not a
+ * site of several wings, whose front strip may be a forecourt), at most `climbable` and 150 m apart.
+ * The shooter stands by the parapet of the side that looks out furthest (rays over the building
+ * boxes and the ground); a roof that sees nothing 300 m off is left out.
+ */
+function roofVantages(b: Builder): void {
+  const cands = b.placements.filter((p) => p.roof === 'flat' && p.eaves >= R.town.roofMinEaves && Math.max(p.w, p.d) <= 42 && /^(office|shop)\./.test(p.def));
+  if (cands.length === 0) return;
+  cands.sort((p, q) => q.base + q.eaves - (p.base + p.eaves));
+  // Building boxes on a 32 m grid for the rays.
+  const C = 32;
+  const n = SIZE / C;
+  const grid: number[][] = Array.from({ length: n * n }, () => []);
+  for (const bd of b.buildings) {
+    for (let cz = Math.max(0, Math.floor(bd.z0 / C)); cz <= Math.min(n - 1, Math.floor(bd.z1 / C)); cz++) {
+      for (let cx = Math.max(0, Math.floor(bd.x0 / C)); cx <= Math.min(n - 1, Math.floor(bd.x1 / C)); cx++) grid[cz * n + cx]!.push(bd.id);
+    }
+  }
+  const D = R.town.roofSight;
+  const eye = T.player.eyeHeight.stand;
+  const clear = (x: number, y: number, z: number, dx: number, dz: number, self: number): boolean => {
+    const ex = x + dx * D;
+    const ez = z + dz * D;
+    if (ex < 8 || ez < 8 || ex > SIZE - 8 || ez > SIZE - 8) return false;
+    const y0 = y + eye;
+    const y1 = hAt(b, ex, ez) + 1;
+    for (let t = 6; t < D; t += 6) {
+      const px = x + dx * t;
+      const pz = z + dz * t;
+      const h = y0 + ((y1 - y0) * t) / D;
+      if (hAt(b, px, pz) > h) return false;
+      for (const id of grid[Math.min(n - 1, Math.floor(pz / C)) * n + Math.min(n - 1, Math.floor(px / C))]!) {
+        const o = b.buildings[id]!;
+        if (id !== self && px > o.x0 && px < o.x1 && pz > o.z0 && pz < o.z1 && o.base + o.height > h) return false;
       }
     }
-    return null;
-  }
-  if (!spec) return null;
-  for (let tries = 0; tries < 12; tries++) {
-    const a = rand(rng) * Math.PI * 2;
-    const d = tries === 0 ? 0 : 6 + tries * 4;
-    const cx = x + Math.cos(a) * d;
-    const cz = z + Math.sin(a) * d;
-    const w = spec.w;
-    const dd = spec.d;
-    const alongX = chance(rng, 0.5);
-    const ww = alongX ? w : dd;
-    const wd = alongX ? dd : w;
-    const x0 = cx - ww / 2;
-    const z0 = cz - wd / 2;
-    if (!rectFree(b, x0 - 2, z0 - 2, x0 + ww + 2, z0 + wd + 2, 12) || inHomeZone(b, x0, z0, x0 + ww, z0 + wd)) continue;
-    const [lo, hi] = heightRange(b, x0, z0, x0 + ww, z0 + wd);
-    if (hi - lo > R.facilityMaxSlope) continue;
-    // Some town halls and stations are the enterable office (07d-3 will pick the real types).
-    if ((kind === POI.cityHall || kind === POI.townHall) && chance(enterRng, 0.5)) {
-      const bd = enterableIn(b, 'office.zakkyo5', x0, z0, x0 + ww, z0 + wd, 0);
-      if (bd) return bd;
+    return true;
+  };
+  let count = 0;
+  for (const p of cands) {
+    if (count >= R.town.climbable) break;
+    const cx = (p.x0 + p.x1) / 2;
+    const cz = (p.z0 + p.z1) / 2;
+    if (b.vantages.some((v) => v.kind === 'roof' && Math.hypot(v.pos[0] - cx, v.pos[2] - cz) < 150) || !roofAccess(p.def)) continue;
+    const y = p.base + p.eaves;
+    let best: [number, number, number] | null = null;
+    let score = 0;
+    // Each side: 0.6 m in from its parapet, three rays out (straight and ±30°).
+    for (const [nx, nz] of [[0, 1], [1, 0], [0, -1], [-1, 0]] as const) {
+      const x = nx > 0 ? p.x1 - 0.6 : nx < 0 ? p.x0 + 0.6 : cx;
+      const z = nz > 0 ? p.z1 - 0.6 : nz < 0 ? p.z0 + 0.6 : cz;
+      let k = 0;
+      for (const a of [-0.52, 0, 0.52]) {
+        const dx = nx * Math.cos(a) - nz * Math.sin(a);
+        const dz = nx * Math.sin(a) + nz * Math.cos(a);
+        if (clear(x, y, z, dx, dz, p.building)) k++;
+      }
+      if (k > score) {
+        score = k;
+        best = [x, y, z];
+      }
     }
-    const bd = addBuilding(b, spec.kind, x0, z0, x0 + ww, z0 + wd, randRange(rng, spec.h[0], spec.h[1]), { tint: rand(rng) });
-    if (spec.yard) b.areas.push({ kind: 'yard', x0: x0 - 4, z0: z0 + wd + 2, x1: x0 + ww + 4, z1: z0 + wd + 2 + spec.yard, variant: rand(rng) });
-    if (spec.h[0] >= 9 && chance(rng, 0.4)) {
-      if (rectFree(b, x0 - STAIR_DEPTH - 2, z0, x0 - 1, z0 + wd, 8) && wd >= STAIR_LENGTH) addStairs(b, bd, 0);
-    }
-    return bd;
+    if (!best) continue;
+    b.vantages.push({ pos: best, kind: 'roof' });
+    count++;
   }
-  return null;
+}
+
+/** Does a type have a way up to its roof (a room at the eaves: the stair house's landing)? Per type, once. */
+const roofs = new Map<string, boolean>();
+function roofAccess(id: string): boolean {
+  let v = roofs.get(id);
+  if (v === undefined) {
+    const def = buildingDef(id);
+    const eaves = envelopeOf(def).eaves;
+    v = generateBlueprint(def, def.size.w[0], def.size.d[0], 7).rooms.some((r) => !r.locked && r.y >= eaves - 0.6);
+    roofs.set(id, v);
+  }
+  return v;
 }
 
 // ---------------------------------------------------------------------------------------------
-// Towns: a street lattice over the built-up land, filled by grade
+// Towns: a street lattice over the built-up land, filled by grade with the 07d-2 types
 // ---------------------------------------------------------------------------------------------
 
-function realTowns(b: Builder, real: RealArea): void {
+interface TownCtx {
+  real: RealArea;
+  /** Municipality grade of the cell (CellFacts.town; 3 without facts). */
+  muni: number;
+  land: Land;
+  tally: TypeTally;
+  hills: boolean;
+  /** Lattice points (LU_N²) within COAST.reach of the sea. */
+  coast: Uint8Array | null;
+  /** Chance that a mid-rise lot is drawn from the high-rise core's mix (big cities). */
+  core: number;
+}
+
+function townCtx(b: Builder, real: RealArea): TownCtx {
+  const muni = b.params.facts?.town ?? 3;
+  const land = b.params.land;
+  // How metropolitan the cell is: the share of its built-up land that is mid- or high-rise (the census
+  // counts residents, so the business districts seldom reach grade 4): mid-rise lots of the big cities
+  // are high-rise core lots now and then.
+  let built = 0;
+  let tall = 0;
+  for (let j = 0; j < LU_N; j += 2) for (let i = 0; i < LU_N; i += 2) {
+    if (real.landuse[j * LU_N + i] !== LU.building) continue;
+    built++;
+    if (townGrade(real, i * STEP, j * STEP) >= 3) tall++;
+  }
+  const share = built > 0 ? tall / built : 0;
+  const C = LOTS.core;
+  const core = land === 'urban' ? Math.min(C.max, Math.max(0, (share - C.from) * C.slope) + (muni >= 5 ? C.metro : muni === 4 ? C.capital : 0)) : 0;
+  return { real, muni, land, tally: (b.tally ??= newTally(muni >= 5 || share > C.metroShare)), hills: land === 'forest' || land === 'mountain', coast: coastMask(real), core };
+}
+
+/** Lattice points within COAST.reach of the sea (two passes of a running maximum), or null without sea. */
+function coastMask(real: RealArea): Uint8Array | null {
+  const n = LU_N;
+  const sea = new Uint8Array(n * n);
+  let any = false;
+  for (let i = 0; i < n * n; i++) if (real.landuse[i] === LU.sea) {
+    sea[i] = 1;
+    any = true;
+  }
+  if (!any) return null;
+  const r = Math.ceil(COAST.reach / STEP);
+  const tmp = new Uint8Array(n * n);
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+    let v = 0;
+    for (let k = Math.max(0, i - r); k <= Math.min(n - 1, i + r) && !v; k++) v = sea[j * n + k]!;
+    tmp[j * n + i] = v;
+  }
+  const out = new Uint8Array(n * n);
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+    let v = 0;
+    for (let k = Math.max(0, j - r); k <= Math.min(n - 1, j + r) && !v; k++) v = tmp[k * n + i]!;
+    out[j * n + i] = v;
+  }
+  return out;
+}
+
+function coastAt(ctx: TownCtx, x: number, z: number): boolean {
+  if (!ctx.coast) return false;
+  const i = Math.min(LU_N - 1, Math.max(0, Math.round(x / STEP)));
+  const j = Math.min(LU_N - 1, Math.max(0, Math.round(z / STEP)));
+  return ctx.coast[j * LU_N + i] === 1;
+}
+
+/** A type for a lot of the district at (x, z). */
+function pickAt(ctx: TownCtx, rng: RngState, x: number, z: number, lw: number, ld: number, small: boolean, grade = townGrade(ctx.real, x, z)): ReturnType<typeof pickType> {
+  const g = grade === 3 && ctx.core > 0 && chance(rng, ctx.core) ? 4 : grade;
+  return pickType(rng, districtOf(g, ctx.muni, ctx.land), lw, ld, ctx.tally, { small, coast: coastAt(ctx, x, z), hills: ctx.hills });
+}
+
+/** Place a picked type with its front on the front edge of the world rectangle (centred along it). */
+function placeIn(b: Builder, ctx: TownCtx, id: string, w: number, d: number, x0: number, z0: number, x1: number, z1: number, rot: Rot): Building {
+  const [ww, wd] = rot % 2 === 0 ? [w, d] : [d, w];
+  let ax: number;
+  let az: number;
+  if (rot === 0) [ax, az] = [(x0 + x1 - ww) / 2, z1 - wd];
+  else if (rot === 2) [ax, az] = [(x0 + x1 - ww) / 2, z0];
+  else if (rot === 1) [ax, az] = [x1 - ww, (z0 + z1 - wd) / 2];
+  else [ax, az] = [x0, (z0 + z1 - wd) / 2];
+  const bd = addEnterable(b, id, ax, az, w, d, rot);
+  tallyAdd(ctx.tally, id);
+  return bd;
+}
+
+function realTowns(b: Builder, real: RealArea, ctx: TownCtx): void {
   const G = R.town;
   const rng = rngOf(b, 'real.town');
-  const enterRng = rngOf(b, 'real.town.enterable');
   const world = b.params.world;
   const ox = world ? world.gx * SIZE : 0;
   const oz = world ? world.gy * SIZE : 0;
@@ -424,7 +555,6 @@ function realTowns(b: Builder, real: RealArea): void {
     if (SIZE - 4 - prev >= 16) out.push([prev, SIZE - 4]);
     return out;
   };
-  const climbables: Building[] = [];
   before = b.occupied.slice();
   for (const [x0, x1] of spans(xs)) {
     for (const [z0, z1] of spans(zs)) {
@@ -447,25 +577,51 @@ function realTowns(b: Builder, real: RealArea): void {
         // Scattered houses in the fields: farmsteads on the town points.
         if (share > 0 && chance(rng, share * 4)) {
           for (let z = z0 + 4; z < z1; z += STEP * 2) for (let x = x0 + 4; x < x1; x += STEP * 2) {
-            if (townLand(luAt(real, x, z)) && chance(rng, 0.5)) farmstead(b, rng, x, z, enterRng);
+            if (townLand(luAt(real, x, z)) && chance(rng, 0.5)) farmstead(b, rng, x, z, rng, (lw, ld) => pickAt(ctx, rng, x, z, lw, ld, true, 1));
           }
         }
         continue;
       }
       if (inHomeZone(b, x0, z0, x1, z1, -40)) continue;
-      if (grade >= 3) urbanBlock(b, rng, enterRng, real, x0, z0, x1, z1, grade, climbables);
-      else houseBlock(b, rng, enterRng, real, x0, z0, x1, z1, grade);
+      if (grade >= 3) urbanBlock(b, rng, ctx, x0, z0, x1, z1, grade);
+      else houseBlock(b, rng, ctx, x0, z0, x1, z1, grade);
     }
   }
-  gapFill(b, rng, enterRng, real);
+  gapFill(b, rng, ctx);
 }
+
+/** The side (rotation) of a point whose nearest road (in the snapshot before the town) is closest, within `reach`. */
+function roadSide(x: number, z: number, hw: number, hd: number, reach: number): Rot | null {
+  let best: Rot | null = null;
+  let dist = reach;
+  const dirs: [Rot, number, number, number][] = [[0, 0, 1, hd], [1, 1, 0, hw], [2, 0, -1, hd], [3, -1, 0, hw]];
+  for (const [rot, dx, dz, half] of dirs) {
+    for (let s = half + 1; s < half + dist; s += 2) {
+      const px = x + dx * s;
+      const pz = z + dz * s;
+      if (px < 0 || pz < 0 || px >= SIZE || pz >= SIZE) break;
+      const t = tileIndex(px, pz);
+      if (before![t] && (groundOf![t] === GROUND.road || groundOf![t] === GROUND.track)) {
+        if (s - half < dist) {
+          dist = s - half;
+          best = rot;
+        }
+        break;
+      }
+    }
+  }
+  return best;
+}
+let groundOf: Uint8Array | null = null;
 
 /**
  * Fill what the blocks left between the real roads: a scan of candidate lots over the built-up land,
- * each kept when nothing stands there yet.
+ * each kept when nothing stands there yet; the building's front to the nearest road.
  */
-function gapFill(b: Builder, rng: RngState, enterRng: RngState, real: RealArea): void {
+function gapFill(b: Builder, rng: RngState, ctx: TownCtx): void {
   const G = R.town;
+  const real = ctx.real;
+  groundOf = b.ground;
   // Exact spacing between buildings (the 4 m occupancy tiles would keep every other house out);
   // roads, water and facilities from the snapshot taken before the town.
   const cell = 16;
@@ -489,6 +645,31 @@ function gapFill(b: Builder, rng: RngState, enterRng: RngState, real: RealArea):
     }
     return true;
   };
+  const place = (pick: NonNullable<ReturnType<typeof pickType>>, cx: number, cz: number, gap: number, slope: number): boolean => {
+    const rot = roadSide(cx, cz, pick.w / 2, pick.d / 2, 18) ?? (randInt(rng, 0, 3) as Rot);
+    const [ww, wd] = rot % 2 === 0 ? [pick.w, pick.d] : [pick.d, pick.w];
+    const x0 = cx - ww / 2;
+    const z0 = cz - wd / 2;
+    if (!clear(x0, z0, x0 + ww, z0 + wd, gap) || inHomeZone(b, x0, z0, x0 + ww, z0 + wd)) return false;
+    const [lo, hi] = heightRange(b, x0, z0, x0 + ww, z0 + wd);
+    if (hi - lo > slope) return false;
+    const bd = addEnterable(b, pick.id, x0, z0, pick.w, pick.d, rot);
+    tallyAdd(ctx.tally, pick.id);
+    index(bd);
+    return true;
+  };
+  // Works and depots on the "other" land (industrial estates, yards), before the houses.
+  for (let z = 30; z < SIZE - 40; z += LOTS.industryStep) {
+    for (let x = 30; x < SIZE - 40; x += LOTS.industryStep) {
+      const cx = x + randRange(rng, -4, 4);
+      const cz = z + randRange(rng, -4, 4);
+      if (luAt(real, cx, cz) !== LU.other || shareAt(real, (c) => c === LU.other, cx, cz) < 0.75 || chance(rng, 0.3)) continue;
+      for (const [lw, ld] of [LOTS.industryLot, [30, 24]] as const) {
+        const pick = pickType(rng, 'industry', lw, ld, ctx.tally);
+        if (pick && place(pick, cx, cz, 4, 3.5)) break;
+      }
+    }
+  }
   for (let z = 10; z < SIZE - 20; z += G.gapStep) {
     for (let x = 10; x < SIZE - 20; x += G.gapStep) {
       const cx = x + randRange(rng, -2, 2);
@@ -497,29 +678,20 @@ function gapFill(b: Builder, rng: RngState, enterRng: RngState, real: RealArea):
       const g = townGrade(real, cx, cz);
       if (!(townLand(c) || (g >= 2 && lotLand(c))) || chance(rng, G.gapSkip)) continue;
       const big = g >= 3;
-      const w = big ? randRange(rng, 14, 24) : randRange(rng, 7, 10);
-      const d = big ? randRange(rng, 12, 20) : randRange(rng, 6.5, 9);
-      const x0 = cx - w / 2;
-      const z0 = cz - d / 2;
-      if (!clear(x0, z0, x0 + w, z0 + d, big ? 4 : G.gapHouse) || inHomeZone(b, x0, z0, x0 + w, z0 + d)) continue;
-      const [lo, hi] = heightRange(b, x0, z0, x0 + w, z0 + d);
-      if (hi - lo > 2.5) continue;
-      let bd: Building | null = null;
-      if (big) {
-        const h = g >= 4 && chance(rng, 0.5) ? Math.round(randRange(rng, G.highFloors[0], G.highFloors[1])) * 3.4 : randInt(rng, G.midFloors[0], G.midFloors[1]) * 3;
-        bd = addBuilding(b, chance(rng, 0.5) ? 'apartment' : 'office', x0, z0, x0 + w, z0 + d, h, { tint: rand(rng) });
-      } else {
-        if (chance(enterRng, T.enterable.house)) bd = enterableIn(b, 'house.wood2', x0, z0, x0 + w, z0 + d, randInt(rng, 0, 3) as Rot);
-        bd ??= addBuilding(b, 'house', x0, z0, x0 + w, z0 + d, chance(rng, 0.25) ? 3.2 : randRange(rng, 5.6, 6.6), { roof: 'gable', tint: rand(rng) });
+      // The type first (the district's mix as it is), then the room for it, turned to face the nearest
+      // road; where it does not fit, a smaller lot once.
+      for (const [lw, ld] of big ? [[ctx.core > 0.15 ? 40 : 34, 30], [16, 14]] : [[24, 18], [11, 11]]) {
+        const pick = pickAt(ctx, rng, cx, cz, lw!, ld!, !big, g);
+        if (pick && place(pick, cx, cz, big ? 4 : G.gapHouse, 2.5)) break;
       }
-      index(bd);
     }
   }
 }
 
-function urbanBlock(b: Builder, rng: RngState, enterRng: RngState, real: RealArea, bx0: number, bz0: number, bx1: number, bz1: number, grade: number, climbables: Building[]): void {
-  const G = R.town;
-  if (chance(rng, G.openShare) && bx1 - bx0 > 30 && bz1 - bz0 > 30) {
+/** Mid- and high-rise block: lots (larger in the core), each a type facing the nearest street; an open car park or square now and then. */
+function urbanBlock(b: Builder, rng: RngState, ctx: TownCtx, bx0: number, bz0: number, bx1: number, bz1: number, grade: number): void {
+  const real = ctx.real;
+  if (chance(rng, LOTS.open) && bx1 - bx0 > 30 && bz1 - bz0 > 30) {
     b.areas.push({ kind: chance(rng, 0.5) ? 'parking' : 'plaza', x0: bx0, z0: bz0, x1: bx1, z1: bz1, variant: rand(rng) });
     forTiles(bx0, bz0, bx1, bz1, (i) => {
       if (b.ground[i] !== GROUND.water) b.ground[i] = GROUND.paved;
@@ -527,9 +699,10 @@ function urbanBlock(b: Builder, rng: RngState, enterRng: RngState, real: RealAre
     occupy(b, bx0, bz0, bx1, bz1);
     return;
   }
+  const lotMax = grade === 3 && ctx.core > 0.15 ? LOTS.urbanMaxMetro : LOTS.urbanMax[grade] ?? LOTS.urbanMax[3]!;
   const lots: [number, number, number, number][] = [];
   const split = (x0: number, z0: number, x1: number, z1: number): void => {
-    if (x1 - x0 <= G.lotMax && z1 - z0 <= G.lotMax) {
+    if (x1 - x0 <= lotMax && z1 - z0 <= lotMax) {
       lots.push([x0, z0, x1, z1]);
       return;
     }
@@ -545,6 +718,7 @@ function urbanBlock(b: Builder, rng: RngState, enterRng: RngState, real: RealAre
     }
   };
   split(bx0, bz0, bx1, bz1);
+  const blk = { x0: bx0, z0: bz0, x1: bx1, z1: bz1 };
   for (const [x0, z0, x1, z1] of lots) {
     const cx = (x0 + x1) / 2;
     const cz = (z0 + z1) / 2;
@@ -554,99 +728,68 @@ function urbanBlock(b: Builder, rng: RngState, enterRng: RngState, real: RealAre
     const lz0 = z0 + inset;
     const lx1 = x1 - inset;
     const lz1 = z1 - inset;
-    if (lx1 - lx0 < 8 || lz1 - lz0 < 8) continue;
+    if (lx1 - lx0 < 5 || lz1 - lz0 < 5) continue;
     if (!lotFree(lx0, lz0, lx1, lz1) || inHomeZone(b, lx0, lz0, lx1, lz1)) continue;
     const [lo, hi] = heightRange(b, lx0, lz0, lx1, lz1);
     if (hi - lo > 3) continue;
-    const g = townGrade(real, cx, cz);
-    const r = rand(rng);
-    let kind: Building['kind'];
-    let h: number;
-    if (g >= 4 && r < 0.55) {
-      kind = 'office';
-      h = Math.round(randRange(rng, G.highFloors[0], G.highFloors[1])) * 3.4;
-    } else if (r < 0.3 + (g >= 4 ? 0.2 : 0)) {
-      kind = 'office';
-      h = Math.round(randRange(rng, 4, 8)) * 3.4;
-    } else if (r < 0.75) {
-      kind = 'apartment';
-      h = randInt(rng, G.midFloors[0], G.midFloors[1]) * 3;
-    } else if (r < 0.92) {
-      kind = 'shop';
-      h = randRange(rng, 4.5, 8);
-    } else {
-      kind = 'warehouse';
-      h = randRange(rng, 7, 11);
-    }
-    void grade;
-    if (kind === 'office' && h <= 18 && chance(enterRng, T.enterable.office)) {
-      if (enterableIn(b, 'office.zakkyo5', lx0, lz0, lx1, lz1, 0)) continue;
-    }
-    if (kind === 'shop' && chance(enterRng, T.enterable.shop)) {
-      if (enterableIn(b, 'shop.konbini', lx0, lz0, lx1, lz1, 0)) continue;
-    }
-    const wantStairs = h >= 9 && h <= 34 && climbables.length < R.town.climbable && climbables.every((c) => Math.hypot((c.x0 + c.x1) / 2 - cx, (c.z0 + c.z1) / 2 - cz) > 150);
-    const room = STAIR_DEPTH + 0.8;
-    if (wantStairs && lx1 - lx0 >= STAIR_LENGTH + room + 4 && lz1 - lz0 >= STAIR_LENGTH + 2) {
-      const bd = addBuilding(b, kind, lx0 + room, lz0, lx1, lz1, h, { tint: rand(rng) });
-      if (addStairs(b, bd, 0)) climbables.push(bd);
-      continue;
-    }
-    addBuilding(b, kind, lx0, lz0, lx1, lz1, h, { tint: rand(rng) });
+    const rot = streetSide(x0, z0, x1, z1, blk);
+    const [lw, ld] = rot % 2 === 0 ? [lx1 - lx0, lz1 - lz0] : [lz1 - lz0, lx1 - lx0];
+    const pick = pickAt(ctx, rng, cx, cz, lw, ld, false);
+    if (!pick) continue;
+    placeIn(b, ctx, pick.id, pick.w, pick.d, lx0, lz0, lx1, lz1, rot);
   }
 }
 
-function houseBlock(b: Builder, rng: RngState, enterRng: RngState, real: RealArea, bx0: number, bz0: number, bx1: number, bz1: number, grade: number): void {
-  const G = R.town;
+/** The side of a lot that faces the nearest edge of its block (the street): as a rotation. */
+function streetSide(x0: number, z0: number, x1: number, z1: number, blk: { x0: number; z0: number; x1: number; z1: number }): Rot {
+  const d = [blk.z1 - z1, blk.x1 - x1, z0 - blk.z0, x0 - blk.x0];
+  const m = Math.min(...d);
+  return d.indexOf(m) as Rot;
+}
+
+/** Low-rise block: two rows of lots back to back along the longer side, each a type facing its street; a row of flats now and then. */
+function houseBlock(b: Builder, rng: RngState, ctx: TownCtx, bx0: number, bz0: number, bx1: number, bz1: number, grade: number): void {
+  const real = ctx.real;
   const w = bx1 - bx0;
   const d = bz1 - bz0;
-  // A low apartment block now and then in the denser parts.
-  if (grade >= 2 && chance(rng, G.apartmentShare) && w > 36 && d > 30) {
-    const floors = randInt(rng, 3, 5);
-    const x0 = bx0 + 4;
-    const z0 = bz0 + d / 2 - 6;
-    if (lotFree(x0, z0, bx1 - 4, z0 + 12) && !inHomeZone(b, x0, z0, bx1 - 4, z0 + 12)) {
-      const [lo, hi] = heightRange(b, x0, z0, bx1 - 4, z0 + 12);
-      if (hi - lo < 3) {
-        addBuilding(b, 'apartment', x0, z0, bx1 - 4, z0 + 12, floors * 3, { tint: rand(rng) });
-        b.areas.push({ kind: 'parking', x0: bx0, z0: bz0, x1: bx1, z1: bz1, variant: rand(rng) });
-        return;
-      }
-    }
-  }
   const alongX = w >= d;
   const length = alongX ? w : d;
   const depth = (alongX ? d : w) / 2;
-  const lotMin = grade >= 2 ? G.lotMinDense : G.lotMin;
-  const lotMax = grade >= 2 ? G.lotMaxDense : G.lotMax;
+  // A row of flats (danchi, company housing, dormitory) facing the first street, now and then in the denser parts.
+  const flats = grade >= 2 && chance(rng, LOTS.flats) && length > 40 && depth > 16;
   for (let row = 0; row < 2; row++) {
-    let u = 0;
-    while (u < length - lotMin) {
-      const lot = Math.min(length - u, randRange(rng, lotMin, lotMax));
-      const u0 = u;
-      u += lot;
-      if (chance(rng, grade >= 2 ? 0.05 : 0.15)) continue;
-      const hw = Math.min(lot - 3, randRange(rng, 7, 10.5));
-      const hd = Math.min(depth - 4, randRange(rng, 6.5, 9));
-      if (hw < 6 || hd < 5) continue;
-      const setback = randRange(rng, 2, 3.5);
-      const a0 = (alongX ? bx0 : bz0) + u0 + (lot - hw) / 2;
-      const c0 = row === 0 ? (alongX ? bz0 : bx0) + setback : (alongX ? bz1 : bx1) - setback - hd;
+    const rot: Rot = alongX ? (row === 0 ? 2 : 0) : row === 0 ? 3 : 1;
+    let u = randRange(rng, 0, 3);
+    let guard = 0;
+    while (u < length - 5 && guard++ < 40) {
+      const setback = randRange(rng, LOTS.setback[0], LOTS.setback[1]);
+      const gap = randRange(rng, LOTS.gap[0], LOTS.gap[1]);
+      const a0 = (alongX ? bx0 : bz0) + u;
+      const mid = a0 + 6;
+      const [px, pz] = alongX ? [mid, row === 0 ? bz0 + depth / 2 : bz1 - depth / 2] : [row === 0 ? bx0 + depth / 2 : bx1 - depth / 2, mid];
+      const g = townGrade(real, px, pz);
+      let pick = null;
+      if (flats && row === 0) pick = pickType(rng, 'dense', Math.min(26, length - u), depth - setback - 1, ctx.tally, { except: (id) => !id.startsWith('apartment.') || id === 'apartment.mokuzo2' });
+      if (!pick && chance(rng, grade >= 2 ? 0.04 : 0.1)) {
+        u += randRange(rng, 6, 12); // a vacant lot, a garden
+        continue;
+      }
+      pick ??= pickAt(ctx, rng, px, pz, length - u, depth - setback - 1, true, Math.min(g, 2));
+      if (!pick) break;
+      const fw = pick.w;
+      const fd = pick.d;
+      u += fw + gap;
+      const c0 = row === 0 ? (alongX ? bz0 : bx0) + setback : (alongX ? bz1 : bx1) - setback - fd;
       const x0 = alongX ? a0 : c0;
       const z0 = alongX ? c0 : a0;
-      const x1 = x0 + (alongX ? hw : hd);
-      const z1 = z0 + (alongX ? hd : hw);
+      const x1 = x0 + (alongX ? fw : fd);
+      const z1 = z0 + (alongX ? fd : fw);
       if (!lotLand(luAt(real, (x0 + x1) / 2, (z0 + z1) / 2))) continue;
       if (!lotFree(x0, z0, x1, z1) || inHomeZone(b, x0, z0, x1, z1)) continue;
       const [lo, hi] = heightRange(b, x0, z0, x1, z1);
       if (hi - lo > 2.5) continue;
-      if (chance(rng, grade >= 2 ? 0.1 : 0.05)) {
-        if (!(chance(enterRng, T.enterable.shop) && enterableIn(b, 'shop.konbini', x0 - 4, z0 - 4, x1 + 4, z1 + 4, 0))) addBuilding(b, 'shop', x0, z0, x1, z1, randRange(rng, 3.6, 5), { tint: rand(rng) });
-        continue;
-      }
-      const rot: Rot = alongX ? (row === 0 ? 2 : 0) : row === 0 ? 3 : 1;
-      if (chance(enterRng, T.enterable.house) && enterableIn(b, 'house.wood2', x0, z0, x1, z1, rot)) continue;
-      addBuilding(b, 'house', x0, z0, x1, z1, chance(rng, 0.25) ? 3.2 : randRange(rng, 5.6, 6.6), { roof: 'gable', tint: rand(rng) });
+      addEnterable(b, pick.id, x0, z0, fw, fd, rot);
+      tallyAdd(ctx.tally, pick.id);
     }
   }
   b.areas.push({ kind: 'yard', x0: bx0, z0: bz0, x1: bx1, z1: bz1, variant: rand(rng) });
@@ -737,33 +880,37 @@ function landmark(b: Builder, id: string, x: number, z: number): Building | null
   return null;
 }
 
-export function layoutReal(b: Builder, real: RealArea, terrain: (x: number, z: number) => number): { water: Float32Array; pois: MapPoi[] } {
+export function layoutReal(b: Builder, real: RealArea, terrain: (x: number, z: number) => number): { water: Float32Array; pois: MapPoi[]; sites: Site[] } {
   const water = waterAndGround(b, real, terrain);
-  realRoads(b, real, water);
-  // Facilities first (the town fills around them), the larger kinds first.
-  const rng = rngOf(b, 'real.facilities');
-  const enterRng = rngOf(b, 'real.facilities.enterable');
   const pois: MapPoi[] = real.pois.map((p) => ({ kind: p.kind, grade: p.grade, x: p.x, z: p.z, name: p.name }));
-  // R1: landmarks (REAL_LANDMARKS) first, at their real point; the deck / roof is a firing position.
+  // 07d-3: the facility sites first (stations on their railway, airports and bases on open land, the
+  // one-per-area facilities at their point), then the ground under them is levelled and the roads
+  // are laid — the minor ones stop at a site's fence.
+  const P = createPlanner(b, real, rngOf(b, 'real.sites'));
+  for (const p of pois) {
+    // The landmarks and lookout towers keep their spot (R1, R9: the towers were placed for the sight lines).
+    const id = REAL_LANDMARKS[p.name];
+    if (id) reserve(P, p.x, p.z, Math.max(buildingDef(id).size.w[1], buildingDef(id).size.d[1]) / 2 + 2);
+    else if (p.kind === POI.tower) reserve(P, p.x, p.z, 5);
+  }
+  const ctx = townCtx(b, real);
+  const around = b.params.world?.around ?? [];
+  const nearCity = b.params.land !== 'urban' && around.some((c, k) => k !== 4 && c?.land === 'urban');
+  planSites(P, { pois, facts: b.params.facts, townGradeAt: (x, z) => townGrade(real, x, z), nearCity });
+  levelSites(b, P.sites, water);
+  realRoads(b, real, water, P.sites);
+  buildSites(b, P.sites, pois, ctx);
+  // R1: landmarks (REAL_LANDMARKS) at their real point; the deck / roof is a firing position.
   for (const p of pois) {
     const id = REAL_LANDMARKS[p.name];
     if (id) p.building = landmark(b, id, p.x, p.z)?.id;
     // R1: other towers (an override's `addPois` of POI.tower): a lookout tower, a firing position.
     else if (p.kind === POI.tower) p.building = addTower(b, p.x, p.z, p.grade > 0 ? p.grade : T.vantage.towerHeight)?.id;
   }
-  const order = [POI.gsdf, POI.prefOffice, POI.cityHall, POI.station, POI.hospital, POI.university, POI.school, POI.townHall, POI.police, POI.fire] as number[];
-  for (const kind of order) {
-    for (const p of pois) {
-      if (p.kind !== kind) continue;
-      if (p.x < 14 || p.z < 14 || p.x > SIZE - 14 || p.z > SIZE - 14) continue;
-      if (isWater(luAt(real, p.x, p.z))) continue;
-      const bd = facility(b, rng, p.kind, p.grade, p.x, p.z, enterRng);
-      if (bd) p.building = bd.id;
-    }
-  }
-  realTowns(b, real);
+  realTowns(b, real, ctx);
+  roofVantages(b);
   realFields(b, real);
   // Water tiles are never walked on (nav) — the sim keeps the player out of deep water.
   for (let i = 0; i < b.ground.length; i++) if (b.ground[i] === GROUND.water) b.occupied[i] = 1;
-  return { water, pois };
+  return { water, pois, sites: P.sites };
 }

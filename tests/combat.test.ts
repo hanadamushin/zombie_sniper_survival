@@ -828,9 +828,10 @@ describe('zombies in the world', () => {
   it('a kill lowers the cell Z exactly once, and reinforcements come from the edge while Z lasts', () => {
     const g = worldGame();
     const { state } = g;
-    g.run(DT);
+    g.run(1); // 07d-3: the zombies inside the buildings come in over the first steps
     const cell = state.player.cell;
     const t = state.tactical!;
+    expect(t.indoorLeft ?? 0).toBe(0);
     const before = state.world.cells.Z[cell]!;
     const count = t.zombies.length;
     const area = areaOf(state)!;
@@ -887,6 +888,7 @@ describe('zombies in the world', () => {
     expect(loaded.tactical!.populated).toBe(false);
     const sim = createSim({ grid });
     sim.tick(loaded, DT, input());
+    for (let i = 0; i < 120 && (loaded.tactical!.indoorLeft ?? 0) > 0; i++) sim.tick(loaded, DT, input());
     expect(loaded.tactical!.zombies.length).toBe(n);
     expect(loaded.player.aim.scopeT).toBe(0);
   });
@@ -913,11 +915,14 @@ describe('zombies in the world', () => {
     state.time.minute = 21 * 60; // night: faster, sharper-eyed
     g.run(DT);
     const t = state.tactical!;
+    for (let i = 0; i < 240 && (t.indoorLeft ?? 0) > 0; i++) g.run(DT); // 07d-3: those inside come in over the first steps
     expect(t.zombies.length).toBe(Math.min(BALANCE.world.activeMax, activeCap(state.world.cells.Z[urban]! * BALANCE.world.tacticalZScale) * BALANCE.world.activeMul));
     expect(t.zombies.length).toBeGreaterThan(70);
-    // Walk into the nearest group and stand there.
+    // Walk into the biggest group and stand there (07d-3: in the denser town the group nearest the
+    // edge can be a lone straggler facing away down a side street).
     const p = state.player;
-    const nearest = t.zombies.reduce((a, b) => (Math.hypot(a.pos[0] - p.pos[0], a.pos[2] - p.pos[2]) < Math.hypot(b.pos[0] - p.pos[0], b.pos[2] - p.pos[2]) ? a : b));
+    const crowd = (z: Zombie): number => t.zombies.filter((o) => Math.hypot(o.pos[0] - z.pos[0], o.pos[2] - z.pos[2]) < 30).length;
+    const nearest = t.zombies.reduce((a, b) => (crowd(b) > crowd(a) ? b : a));
     p.pos = [nearest.pos[0] + 6, nearest.pos[1], nearest.pos[2] + 6];
     let died = false;
     for (let i = 0; i < 240 && !died; i++) {
