@@ -170,7 +170,8 @@ async function bvmap(z: number, x: number, y: number): Promise<MvtLayer[] | null
   if (bvmapMemo.has(key)) return bvmapMemo.get(key)!;
   const buf = await fetchCached(`https://cyberjapandata.gsi.go.jp/xyz/experimental_bvmap/${key}.pbf`, `gsi/bvmap/${key}.pbf`);
   const layers = buf ? decodeMvt(buf) : null;
-  if (bvmapMemo.size > 4000) bvmapMemo.clear();
+  // R9: decoded city tiles are large; 4000 of them outgrew the heap in Kyushu (runs died mid-region).
+  if (bvmapMemo.size > 1200) bvmapMemo.clear();
   bvmapMemo.set(key, layers);
   return layers;
 }
