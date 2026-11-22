@@ -45,8 +45,11 @@ const CELLS: Record<number, CellOverride> = {
   18973: { dropPois: ['演習場'] },
   19139: { dropPois: ['演習場'] },
   19962: { dropPois: ['演習場'] },
-  // Higashi-Fuji training area (dropped) and the Takigahara garrison 18 m from the north edge: moved in.
+  // Higashi-Fuji training area (dropped); the Takigahara garrison 18 m from the north edge: moved in.
   19140: { ...moveGsdf('滝ヶ原駐屯地', 461, 70), dropPois: ['演習場', '陸上自衛隊滝ヶ原駐屯地'] },
+  // Matsumoto: the annotation 80 m south-east (the compound then fits ~150 m from the real point, between the
+  // roads of the town; within 160 m of the annotation itself it fits nowhere).
+  17462: moveGsdf('松本駐屯地', 197, 289),
   // Toyama garrison (Tonami) 6 m from the east edge: moved in.
   16617: moveGsdf('富山駐屯地', 930, 380.7),
   // Sado radar site (航空自衛隊佐渡分屯基地) on the mountain, outside the town tiles the converter reads.

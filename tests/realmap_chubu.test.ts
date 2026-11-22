@@ -1,7 +1,7 @@
 // R4: the real map of Chubu — every land cell of the region has an area, the land use is read for every
 // first-level mesh (also the zips whose entries sit in a backslash folder: the converter writes missing
 // land use on land as beach, so "none" alone does not show it), the SDF sites are the real ones (training
-// areas left out, one large garrison for the 10th Division), Moriyama's compound is built, and the
+// areas left out, one large garrison for the 10th Division), the Fuji and Matsumoto compounds are built, and the
 // automatic inspection and the sight-line rules of the real areas hold in sample cells.
 import { existsSync, readFileSync } from 'node:fs';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -26,6 +26,8 @@ const SHIBATA = at(37.9556, 139.3243);
 const FUJI = at(35.3606, 138.7274);
 const YARI = at(36.342, 137.6476);
 const RYOTSU = at(38.082, 138.437);
+const FUJI_GARRISON = at(35.3567, 138.8598);
+const MATSUMOTO = at(36.2079, 137.953);
 
 describe.skipIf(!have)('Chubu areas from the real data (R4)', () => {
   it('has every land cell of the region', () => {
@@ -72,12 +74,15 @@ describe.skipIf(!have)('Chubu areas from the real data (R4)', () => {
     expect(cells.reduce((s, c) => s + c.police, 0)).toBeGreaterThan(150);
   });
 
-  it('builds the Moriyama garrison within 160 m of its annotation', { timeout: 60_000 }, () => {
-    const map = mapFor(grid, MORIYAMA);
-    const poi = map.pois!.find((p) => p.name.includes('守山駐屯地'))!;
-    expect(poi.building).toBeDefined();
-    const pl = map.placements.find((p) => p.def === 'base.jgsdf_s' && Math.hypot((p.x0 + p.x1) / 2 - poi.x, (p.z0 + p.z1) / 2 - poi.z) < 170);
-    expect(pl).toBeDefined();
+  it('builds the Fuji and Matsumoto garrisons near their annotations (Moriyama, in Nagoya, does not fit)', { timeout: 60_000 }, () => {
+    for (const [cell, name] of [[FUJI_GARRISON, '富士駐屯地'], [MATSUMOTO, '松本駐屯地']] as const) {
+      const map = mapFor(grid, cell);
+      const poi = map.pois!.find((p) => p.kind === POI.gsdf && p.name.includes(name))!;
+      expect(poi.building, name).toBeDefined();
+      const b = map.buildings[poi.building!]!;
+      expect(Math.hypot((b.x0 + b.x1) / 2 - poi.x, (b.z0 + b.z1) / 2 - poi.z), name).toBeLessThan(170);
+    }
+    expect(mapFor(grid, MORIYAMA).pois!.some((p) => p.kind === POI.gsdf && p.name.includes('守山駐屯地'))).toBe(true);
   });
 
   it('passes the automatic inspection and the sight-line rules in sample cells', { timeout: 240_000 }, () => {
