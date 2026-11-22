@@ -92,17 +92,20 @@ const PLACES: { name: string; lat: number; lon: number; x: number | null; z: num
   { name: 'kokura', lat: 33.8829, lon: 130.8752, x: null, z: null, yaw: 0 }, // Kitakyushu city hall, Kokura castle (north edge), GSDF Kokura
   { name: 'yahata', lat: 33.868, lon: 130.811, x: null, z: null, yaw: 0 },
   { name: 'kanmon_moji', lat: 33.9468, lon: 130.9622, x: null, z: null, yaw: 0 }, // the Kyushu end of the Kanmon strait: Mojiko, Mekari
-  { name: 'kanmon_bridge', lat: 33.9468, lon: 130.9622, x: 165, z: 161, yaw: 0, toward: true }, // the Kanmon bridge (an embankment over the strait)
+  { name: 'kanmon_bridge', lat: 33.9468, lon: 130.9622, x: 245, z: 190, yaw: 1.01 }, // over the Mekari tunnel mouth, looking north-west along the Kanmon bridge (an embankment from (200, 160) to (96, 94))
   { name: 'kanmon_shimonoseki', lat: 33.95, lon: 130.9214, x: null, z: null, yaw: 0 }, // the Honshu side in a Fukuoka cell: Shimonoseki station, Hikoshima, Kokura (south edge)
   { name: 'kumamoto', lat: 32.8063, lon: 130.7058, x: null, z: null, yaw: 0 }, // Kumamoto castle and the city hall
   { name: 'kumamoto_station', lat: 32.7898, lon: 130.6886, x: null, z: null, yaw: 0 },
+  { name: 'kita_kumamoto', lat: 32.853, lon: 130.727, x: null, z: null, yaw: 0 }, // GSDF Kita-Kumamoto (8th Division); the most buildings of the region (821)
   { name: 'kengun', lat: 32.791, lon: 130.768, x: null, z: null, yaw: 0 }, // GSDF Kengun (Western Army HQ), the prefectural office
   { name: 'aso', lat: 32.8844, lon: 131.104, x: null, z: null, yaw: 0 }, // Nakadake crater
   { name: 'aso_caldera', lat: 32.952, lon: 131.12, x: null, z: null, yaw: 0 }, // the caldera floor, Aso station
   { name: 'sakurajima', lat: 31.5806, lon: 130.6589, x: null, z: null, yaw: 0 },
   { name: 'kagoshima', lat: 31.5838, lon: 130.5414, x: null, z: null, yaw: 0 }, // Kagoshima-Chuo, the prefectural office, the port
-  { name: 'sasebo', lat: 33.1658, lon: 129.7239, x: null, z: null, yaw: 0 }, // Sasebo station and the harbour
-  { name: 'sasebo_hq', lat: 33.16, lon: 129.718, x: null, z: null, yaw: 0 }, // MSDF Sasebo District HQ
+  // Sasebo's centre is on the corner of four cells: the station in 22899's south-west corner, the MSDF District HQ in
+  // 22898's south-east corner, the bay (Hiu, Hario island, Haiki) in 23066.
+  { name: 'sasebo_hq', lat: 33.1706, lon: 129.7128, x: 951, z: 926, yaw: 0, toward: true }, // MSDF Sasebo District HQ, GSDF Ainoura
+  { name: 'sasebo_bay', lat: 33.13, lon: 129.75, x: null, z: null, yaw: 0 },
   { name: 'tsuiki', lat: 33.685, lon: 131.04, x: null, z: null, yaw: 0 }, // ASDF Tsuiki
   { name: 'naha', lat: 26.2061, lon: 127.6466, x: null, z: null, yaw: 0 }, // Naha airport, ASDF Naha, GSDF Naha, the prefectural office (Okinawa, over the sea route)
   { name: 'naha_airport', lat: 26.2061, lon: 127.6466, x: 328, z: 180, yaw: 0, toward: true },
