@@ -68,10 +68,12 @@ describe.skipIf(!haveShikoku)('Shikoku areas from the real data (R0)', () => {
   it('knows which cells have data; cells elsewhere stay random', () => {
     expect(hasRealData(MATSUYAMA)).toBe(true);
     expect(grid.cells[MATSUYAMA]!.real?.area).toBe('shikoku');
-    const tokyo = at(35.6812, 139.7671);
-    expect(hasRealData(tokyo)).toBe(false);
+    // R3: Tokyo has data now (Kanto); any land cell of a region not built yet stays random.
+    const other = grid.landIds.find((id) => !grid.cells[id]!.real?.area);
+    if (other === undefined) return; // every region built
+    expect(hasRealData(other)).toBe(false);
     const state = gameState(grid);
-    expect(areaParams(state, grid, tokyo)!.real).toBeUndefined();
+    expect(areaParams(state, grid, other)!.real).toBeUndefined();
   });
 
   it('waits for the data before making the area of a real cell', () => {

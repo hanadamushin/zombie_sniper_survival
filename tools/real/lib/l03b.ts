@@ -33,11 +33,14 @@ export async function l03b(mesh1: number): Promise<Uint8Array | null> {
   else {
     const zip = await ksjZip(`L03-b/L03-b-21/L03-b-21_${mesh1}-jgd2011_GML.zip`);
     if (zip) {
-      const entry = readZip(zip).find((e) => /L03-b-21_\d+\.xml$/.test(e.name));
+      // R3: not the metadata file KS-META-L03-b-21_<mesh>.xml (it comes first in some zips: the whole
+      // mesh then read as "none").
+      const entry = readZip(zip).find((e) => /(^|\/)L03-b-21_\d+\.xml$/.test(e.name));
       if (entry) {
         const text = entry.read().toString('utf8');
         const a = text.indexOf('<gml:tupleList>');
         const b = text.indexOf('</gml:tupleList>', a);
+        if (a < 0 || b < 0) throw new Error(`L03-b ${mesh1}: no tupleList in ${entry.name}`);
         const vals = text.slice(a + 15, b).trim().split(/\s+/);
         out = new Uint8Array(800 * 800);
         for (let i = 0; i < out.length && i < vals.length; i++) out[i] = CODES[vals[i]!] ?? LU.none;
