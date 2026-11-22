@@ -30,7 +30,13 @@ export function indexOf(b: Builder): Index {
   b.solids.forEach((s, i) => {
     for (let z = c(s.z0); z <= c(s.z1); z++) for (let x = c(s.x0); x <= c(s.x1); x++) idx.solids[z * N + x]!.push(i);
   });
-  for (let i = 0; i < b.trees.length / 5; i++) idx.trees[c(b.trees[i * 5 + 1]!) * N + c(b.trees[i * 5]!)]!.push(i);
+  for (let i = 0; i < b.trees.length / 5; i++) {
+    // Listed in every cell its trunk reaches into (a line along the next cell still meets it).
+    const x = b.trees[i * 5]!;
+    const z = b.trees[i * 5 + 1]!;
+    const r = trunkRadius(b.trees[i * 5 + 2]!) + 0.5;
+    for (let cz = c(z - r); cz <= c(z + r); cz++) for (let cx = c(x - r); cx <= c(x + r); cx++) idx.trees[cz * N + cx]!.push(i);
+  }
   b.brush.forEach((br, i) => {
     for (let z = c(Math.min(br.az, br.bz) - br.r); z <= c(Math.max(br.az, br.bz) + br.r); z++) {
       for (let x = c(Math.min(br.ax, br.bx) - br.r); x <= c(Math.max(br.ax, br.bx) + br.r); x++) idx.brush[z * N + x]!.push(i);
@@ -63,6 +69,7 @@ function clear(b: Builder, idx: Index, ax: number, ay: number, az: number, bx: n
   }
   const steps = Math.max(1, Math.ceil(len / 3));
   const seen = new Set<number>();
+  const seenTree = new Set<number>();
   let last = -1;
   for (let i = 1; i < steps; i++) {
     const t = i / steps;
@@ -81,6 +88,8 @@ function clear(b: Builder, idx: Index, ax: number, ay: number, az: number, bx: n
       if (segBox(ax, ay, az, bx, by, bz, s.x0, s.y0, s.z0, s.x1, s.y1, s.z1)) return false;
     }
     for (const ti of idx.trees[cell]!) {
+      if (seenTree.has(ti)) continue;
+      seenTree.add(ti);
       const tx = b.trees[ti * 5]!;
       const tz = b.trees[ti * 5 + 1]!;
       const th = b.trees[ti * 5 + 2]!;
