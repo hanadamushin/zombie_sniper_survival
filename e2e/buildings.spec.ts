@@ -202,8 +202,10 @@ test('city: far buildings are boxes, closer ones show their outside, the nearest
   await page.getByTestId('start-0').click();
   await page.waitForFunction(() => window.__game?.map != null, null, { timeout: 60_000 });
   // R0: central Sendai (an urban cell ringed by suburbs; the 40th urban cell of the real grid is in
-  // the middle of Tokyo, where all eight neighbours are dense city too).
-  await page.evaluate(() => window.__game!.debug.gotoLatLon(38.2601, 140.8822));
+  // the middle of Tokyo, where all eight neighbours are dense city too). R9: Sendai was still a random
+  // area then; its real area (R2) has one office.zakkyo5. Central Sapporo (Ōdōri, cell 4800) has the most
+  // of them among the urban cells with few urban neighbours (4, two urban neighbours).
+  await page.evaluate(() => window.__game!.debug.gotoLatLon(43.0606, 141.3545));
   await page.waitForFunction(() => window.__game?.map?.params.land === 'urban', null, { timeout: 90_000 });
   // An office sample away from the edges, the street in front of it.
   const b = await page.evaluate(() => {
@@ -223,7 +225,7 @@ test('city: far buildings are boxes, closer ones show their outside, the nearest
     const len = Math.hypot(front[0] - cx, front[2] - cz);
     return { i: mid.i, n: list.length, cx, cz, ux: (front[0] - cx) / len, uz: (front[2] - cz) / len, front, roof: det.rooms.find((r) => r.use === 'roof')!, hall: det.rooms.find((r) => r.level === 2 && (r.use === 'hall'))! };
   });
-  expect(b.n).toBeGreaterThan(5);
+  expect(b.n).toBeGreaterThanOrEqual(3);
   const stand = async (dist: number): Promise<number> => {
     await page.evaluate(([b, dist]) => {
       const g = window.__game!;
