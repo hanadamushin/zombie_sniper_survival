@@ -6,7 +6,6 @@ import type { CellOverride, RegionOverrides } from './types.ts';
 
 const gsdf = (name: string, x: number, z: number, grade = 2): RealPoi => ({ kind: POI.gsdf, grade, x, z, name: `陸上自衛隊${name}` });
 const asdf = (name: string, x: number, z: number, grade = 1): RealPoi => ({ kind: POI.asdf, grade, x, z, name: `航空自衛隊${name}` });
-const msdf = (name: string, x: number, z: number, grade = 2): RealPoi => ({ kind: POI.msdf, grade, x, z, name: `海上自衛隊${name}` });
 /** A garrison annotation replaced by one at (x, z): moved in from the area's edge so that the 180 × 100 m compound fits, or made large (grade 3). */
 const moveGsdf = (name: string, x: number, z: number, grade = 2, drop: string[] = []): CellOverride => ({
   dropPois: [`陸上自衛隊${name}`, ...drop],
