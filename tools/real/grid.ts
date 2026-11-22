@@ -343,6 +343,7 @@ export async function buildRealGrid(): Promise<RealGridBuild> {
     }
   }
   const cellMuni = new Int32Array(N).fill(-1);
+  let muniFixed = 0;
   const prefOf = new Int16Array(N);
   for (const i of landIds) {
     const mp = cellMuniPop.get(i);
@@ -382,6 +383,26 @@ export async function buildRealGrid(): Promise<RealGridBuild> {
       pref = p;
     }
     prefOf[i] = pref;
+    // R9: the cell's municipality is one of its own prefecture (a designated city's wards counted
+    // together): 21573 (福岡県) was 下関市 and 18646 (神奈川県) 大田区 — a single ward of 北九州市 /
+    // 川崎市 had fewer people in the cell than the town across the border.
+    if (mp && best >= 0 && muniPref[best] !== pref) {
+      const byKey = new Map<string, { pop: number; m: number; mPop: number }>();
+      for (const [m, p] of mp) {
+        if (muniPref[m] !== pref) continue;
+        const key = muniNames[m]!;
+        const e = byKey.get(key) ?? { pop: 0, m, mPop: 0 };
+        e.pop += p;
+        if (p > e.mPop) Object.assign(e, { m, mPop: p });
+        byKey.set(key, e);
+      }
+      let top: { pop: number; m: number } | null = null;
+      for (const e of byKey.values()) if (!top || e.pop > top.pop) top = e;
+      if (top) {
+        cellMuni[i] = top.m;
+        muniFixed++;
+      }
+    }
   }
   // Cells with no municipality at all (rocks off the coast): the nearest cell's.
   for (const i of landIds) {
@@ -399,6 +420,28 @@ export async function buildRealGrid(): Promise<RealGridBuild> {
     prefOf[i] = prefOf[best]!;
     cellMuni[i] = cellMuni[best]!;
   }
+
+  // Thinly populated cells take the prefecture of most of their area: the municipality of that
+  // prefecture with the most 1 km sub-cells.
+  for (const i of landIds) {
+    if (cellMuni[i]! < 0 || muniPref[cellMuni[i]!] === prefOf[i]) continue;
+    const count = new Map<number, number>();
+    const gx = i % W;
+    const gy = Math.floor(i / W);
+    for (let sy = 0; sy < SUBN; sy++) for (let sx = 0; sx < SUBN; sx++) {
+      const m = subMuni[(gy * SUBN + sy) * subW + gx * SUBN + sx]!;
+      if (m >= 0 && muniPref[m] === prefOf[i]) count.set(m, (count.get(m) ?? 0) + 1);
+    }
+    let n = 0;
+    for (const [m, c] of count) if (c > n) {
+      n = c;
+      cellMuni[i] = m;
+    }
+    if (n) muniFixed++;
+  }
+  const muniElsewhere = landIds.filter((i) => cellMuni[i]! >= 0 && muniPref[cellMuni[i]!] !== prefOf[i]);
+  say(`cells whose most populated municipality was of another prefecture: ${muniFixed}`);
+  if (muniElsewhere.length) throw new Error(`cells whose municipality is still of another prefecture: ${muniElsewhere.join(', ')}`);
 
   // ---- town halls (P05): the seat of each municipality ----
   const seatCell = new Int32Array(muniCodes.length).fill(-1);

@@ -1,5 +1,5 @@
 // R9: the strategic map after the nationwide rebuild — designated cities are labelled at their city
-// halls (R3), the label of a cell is a municipality of the cell's own prefecture (R5: 尼崎市 on an
+// halls (R3), the label and the municipality of a cell are of the cell's own prefecture (R5: 尼崎市 on an
 // 大阪府 cell), temporary stations never represent a cell (R7: 津島ノ宮), no sea crossing joins a cell
 // to itself (R8: 関門橋) and no airport is listed twice (R8: 福岡空港（奈多地区）).
 import { describe, expect, it } from 'vitest';
@@ -33,6 +33,11 @@ describe('real strategic map (R9)', () => {
     expect(grid.prefNames[grid.cells[20111]!.pref]).toBe('大阪府');
     expect(grid.places.find((p) => p.cell === 20111)?.name).not.toBe('尼崎市');
     expect(grid.prefNames[grid.cells[placeCell('下関市')!]!.pref]).toBe('山口県');
+    // The cell's municipality too (a designated city's wards counted together): 21573 was 下関市,
+    // 18646 大田区, 20111 尼崎市.
+    expect(grid.cells[21573]!.real!.muni).toBe('北九州市');
+    expect(grid.cells[18646]!.real!.muni).toBe('川崎市');
+    expect(grid.cells[20111]!.real!.muni).toBe('大阪市');
   });
 
   it('never picks a temporary station for a cell', () => {
