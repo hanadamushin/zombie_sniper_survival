@@ -1,4 +1,4 @@
-// R6: the real map of Chugoku. Enter the areas of the places the R5 prompt names, look from the
+// R6: the real map of Chugoku. Enter the areas of the places the R6 prompt names, look from the
 // highest firing position over the middle, measure the three budgets (draw calls, triangles, sim +
 // draw submission), open the strategic map over Chugoku.
 // Screenshots: test-results/realmap-cg-*.png (compared with the GSI map, docs/PROGRESS.md R6).
@@ -57,16 +57,23 @@ async function enter(page: Page, lat: number, lon: number): Promise<{ cell: numb
   return { cell: cell!, ms: Date.now() - t0 };
 }
 
-/** Stand at the best firing position (or a given point) and look in a direction. */
-async function lookFrom(page: Page, x: number | null, z: number | null, yaw: number, pitch = -0.14): Promise<void> {
-  await page.evaluate(([px, pz, y, p]) => {
+/** Stand at the best firing position (or a given point) and look in a direction; `toward`: from the firing
+ * position that best overlooks (x, z), look at it. */
+async function lookFrom(page: Page, x: number | null, z: number | null, yaw: number, pitch = -0.14, toward = false): Promise<void> {
+  await page.evaluate(([px, pz, y, p, tw]) => {
     const g = window.__game!;
     const map = g.map!;
     let tx = px;
     let tz = pz;
     let ty: number | undefined;
     let yawTo = y!;
-    if (tx === null || tz === null) {
+    if (tw && tx !== null && tz !== null) {
+      const [cx, cz] = [tx, tz];
+      const score = (v: (typeof map.vantages)[number]): number => v.pos[1] - Math.hypot(v.pos[0] - cx, v.pos[2] - cz) * 0.15;
+      const v = [...map.vantages].sort((a, b) => score(b) - score(a))[0]!;
+      [tx, ty, tz] = v.pos;
+      yawTo = Math.atan2(-(cx - tx), -(cz - tz));
+    } else if (tx === null || tz === null) {
       // The highest firing position that looks over the middle of the area (not the edge).
       const v = [...map.vantages].sort((a, b) => b.pos[1] - Math.hypot(b.pos[0] - 512, b.pos[2] - 512) * 0.05 - (a.pos[1] - Math.hypot(a.pos[0] - 512, a.pos[2] - 512) * 0.05))[0]!;
       [tx, ty, tz] = v.pos;
@@ -74,34 +81,30 @@ async function lookFrom(page: Page, x: number | null, z: number | null, yaw: num
     }
     g.debug.teleport(tx!, tz!, yawTo, p!, ty);
     g.debug.setClock(10);
-  }, [x, z, yaw, pitch] as const);
+  }, [x, z, yaw, pitch, toward] as const);
 }
 
-const PLACES: { name: string; lat: number; lon: number; x: number | null; z: number | null; yaw: number }[] = [
-  { name: 'umeda', lat: 34.7025, lon: 135.4959, x: null, z: null, yaw: 0 },
-  { name: 'namba', lat: 34.6659, lon: 135.5013, x: null, z: null, yaw: 0 },
-  { name: 'osaka_port', lat: 34.6553, lon: 135.4317, x: null, z: null, yaw: 0 },
-  { name: 'kyoto', lat: 34.9858, lon: 135.7588, x: null, z: null, yaw: 0 },
-  { name: 'kobe', lat: 34.6946, lon: 135.1952, x: null, z: null, yaw: 0 },
-  { name: 'kobe_port', lat: 34.6828, lon: 135.1887, x: null, z: null, yaw: 0 },
-  { name: 'sakai', lat: 34.5733, lon: 135.4830, x: null, z: null, yaw: 0 },
-  { name: 'kix', lat: 34.4114, lon: 135.2962, x: null, z: null, yaw: 0 }, // the island is in a sea cell: Rinku, the bridge
-  { name: 'itami', lat: 34.7855, lon: 135.4382, x: null, z: null, yaw: 0 },
-  { name: 'amagasaki', lat: 34.7330, lon: 135.4100, x: null, z: null, yaw: 0 }, // west of Umeda (Senzo is in the Itami cell)
-  { name: 'maizuru_hq', lat: 35.4748, lon: 135.3714, x: null, z: null, yaw: 0 }, // the district HQ, west of the cell of the piers
-  { name: 'shinodayama', lat: 34.4910, lon: 135.4500, x: null, z: null, yaw: 0 },
-  { name: 'otsu', lat: 35.0045, lon: 135.8686, x: null, z: null, yaw: 0 },
-  { name: 'biwako_bridge', lat: 35.0820, lon: 135.9200, x: null, z: null, yaw: 0 },
-  { name: 'hikone', lat: 35.2745, lon: 136.2595, x: null, z: null, yaw: 0 },
-  { name: 'hakkyo', lat: 34.1767, lon: 135.9075, x: null, z: null, yaw: 0 },
-  { name: 'odaigahara', lat: 34.1810, lon: 136.1100, x: null, z: null, yaw: 0 },
-  { name: 'koyasan', lat: 34.2130, lon: 135.5850, x: null, z: null, yaw: 0 },
-  { name: 'akashi_bridge', lat: 34.6316, lon: 135.0336, x: null, z: null, yaw: 0 },
-  { name: 'maizuru', lat: 35.4750, lon: 135.3870, x: null, z: null, yaw: 0 },
-  { name: 'nara', lat: 34.6851, lon: 135.8329, x: null, z: null, yaw: 0 },
-  { name: 'wakayama', lat: 34.2261, lon: 135.1675, x: null, z: null, yaw: 0 },
-  { name: 'tsu', lat: 34.7303, lon: 136.5086, x: null, z: null, yaw: 0 },
-  { name: 'himeji', lat: 34.8394, lon: 134.6939, x: null, z: null, yaw: 0 },
+const PLACES: { name: string; lat: number; lon: number; x: number | null; z: number | null; yaw: number; toward?: boolean }[] = [
+  { name: 'hiroshima', lat: 34.3955, lon: 132.4536, x: null, z: null, yaw: 0 },
+  { name: 'kaitaichi', lat: 34.3595, lon: 132.5305, x: null, z: null, yaw: 0 }, // the 13th Brigade (Kaitaichi), east of Hiroshima
+  { name: 'okayama', lat: 34.6661, lon: 133.9177, x: null, z: null, yaw: 0 },
+  { name: 'kurashiki', lat: 34.6013, lon: 133.7666, x: null, z: null, yaw: 0 }, // the most buildings of the region (919)
+  { name: 'seto_ohashi', lat: 34.4385, lon: 133.807, x: null, z: null, yaw: 0 }, // Kojima / Shimotsui: the Honshu end of the Seto Ohashi
+  { name: 'seto_ohashi_bridge', lat: 34.4385, lon: 133.807, x: 935, z: 1000, yaw: 0, toward: true }, // the firing position that overlooks the bridge's start (an embankment), looking at it
+  { name: 'onomichi', lat: 34.404, lon: 133.1938, x: null, z: null, yaw: 0 }, // the Honshu end of the Shimanami Kaido
+  { name: 'shimonoseki_north', lat: 33.99, lon: 130.9, x: null, z: null, yaw: 0 }, // the Honshu end of the Kanmon strait is in Fukuoka cells (Kyushu); the Yamaguchi cell north of it
+  { name: 'ozuki', lat: 34.045, lon: 131.05, x: null, z: null, yaw: 0 },
+  { name: 'kure_hq', lat: 34.24, lon: 132.555, x: null, z: null, yaw: 0 },
+  { name: 'kure', lat: 34.2463, lon: 132.5653, x: null, z: null, yaw: 0 },
+  { name: 'iwakuni', lat: 34.144, lon: 132.236, x: null, z: null, yaw: 0 }, // MSDF Iwakuni air station, shared with the US Marines
+  { name: 'daisen', lat: 35.371, lon: 133.546, x: null, z: null, yaw: 0 },
+  { name: 'sanbe', lat: 35.1405, lon: 132.6215, x: null, z: null, yaw: 0 },
+  { name: 'osorakan', lat: 34.5967, lon: 132.125, x: null, z: null, yaw: 0 },
+  { name: 'tottori', lat: 35.5036, lon: 134.2377, x: null, z: null, yaw: 0 },
+  { name: 'matsue', lat: 35.4723, lon: 133.0505, x: null, z: null, yaw: 0 },
+  { name: 'yamaguchi', lat: 34.1859, lon: 131.4714, x: null, z: null, yaw: 0 },
+  { name: 'yonago', lat: 35.4245, lon: 133.339, x: null, z: null, yaw: 0 },
+  { name: 'fukuyama', lat: 34.4893, lon: 133.3626, x: null, z: null, yaw: 0 },
 ];
 
 test('real map: the Chugoku areas, from a high point, within the budgets', async ({ page }) => {
@@ -110,9 +113,11 @@ test('real map: the Chugoku areas, from a high point, within the budgets', async
   await page.goto('/?seed=12&scenario=0');
   await startNewGame(page);
   const rows: string[] = [];
-  for (const p of PLACES) {
+  // PLACES=name,name: only those places (and the strategic map).
+  const only = process.env.PLACES?.split(',');
+  for (const p of PLACES.filter((q) => !only || only.includes(q.name))) {
     const { cell, ms } = await enter(page, p.lat, p.lon);
-    await lookFrom(page, p.x, p.z, p.yaw);
+    await lookFrom(page, p.x, p.z, p.yaw, -0.14, p.toward);
     await settle(page);
     const m = await measure(page);
     const info = await page.evaluate(() => window.__game!.debug.realInfo()!);
