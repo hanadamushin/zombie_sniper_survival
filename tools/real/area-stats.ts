@@ -39,7 +39,7 @@ const read = (region: string, cell: number): RealArea => decodeRealArea(gunzipSy
 
 if (only) {
   for (const region of REGIONS) {
-    let files: string[] = [];
+    let files: string[];
     try {
       files = readdirSync(`${dir}/${region}`);
     } catch {
