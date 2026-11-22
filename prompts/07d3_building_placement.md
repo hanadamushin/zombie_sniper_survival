@@ -122,3 +122,8 @@
 - 駅・病院（大）・大学・県庁など他の「セルに 1 つの施設」も、建っているかを全国で数えて表にする（建たないものは同じ方針で）
 - 変えた後に R9 の点検（`tools/real/check.ts`・`sightlines.ts`）を全国で流し直す
 
+
+## 07d-3 の結果（07d-3 が追記。後の 07d の担当・名所の L 担当へ）
+- 配置の規則は `src/data/placement.ts`（構成比 `MIX`・上限 `AREA_CAP`・施設の大きさと切る道 `SITES` / `CUTS`・駅 `STATIONS`・駅前 `STATION_FRONT`・空港・駐屯地・野営）、敷地の計画は `src/gen/real/sites.ts`、町並みは `src/gen/real/layout.ts`。新しい種類を足したら `MIX` のどこかに重みを書き、`node tools/real/census.ts --out tests/data/census.json` で全国の数を取り直す（`tests/census.test.ts` が全種類 1 回以上と、見本のセルの再現を確かめる）
+- 敷地が建たない理由は `siteDebug.log`（`sites.ts`）に関数を入れると出る（端・水面・道路の種類・急斜面）
+- 名所（L1〜L8）は今までどおり `REAL_LANDMARKS` と `addPois`。名所と物見櫓の点は施設の敷地の計画で先に確保される（敷地はそこを避ける）

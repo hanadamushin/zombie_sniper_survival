@@ -19,6 +19,7 @@ import { heightStats, scatterFlora } from './flora.ts';
 import { sampleHeight } from './height.ts';
 import { layout, terrainFn } from './lands.ts';
 import { layoutReal, realForest, realTerrain } from './real/layout.ts';
+import { ensureFarVantages } from './vantage.ts';
 import type { RealArea } from './real/format.ts';
 import { smoothstep } from './noise.ts';
 import { detailOf } from './buildings/index.ts';
@@ -385,6 +386,8 @@ function generateRealMap(params: GenParams, real: RealArea): TacticalMap {
   fillVantages(b, median);
   scatterFlora(b);
   scatterCover(b);
+  // 07d-3: three of the firing positions see far over the town, the trees and the cover (towers where not).
+  ensureFarVantages(b);
   for (let ty = 0; ty < TILES; ty++) {
     for (let tx = 0; tx < TILES; tx++) {
       const i = ty * N + tx;

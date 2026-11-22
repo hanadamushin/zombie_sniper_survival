@@ -24,7 +24,7 @@ import { COAST, FORECOURT, LOTS } from '../../data/placement.ts';
 import { REAL_AREA, REAL_LANDMARKS } from '../../data/realmap.ts';
 import { TACTICAL } from '../../data/tactical.ts';
 import { buildingDef } from '../buildings/catalog/index.ts';
-import { envelopeOf, generateBlueprint, type Rot } from '../buildings/index.ts';
+import { blueprintOf, envelopeOf, generateBlueprint, toWorld, type Rot } from '../buildings/index.ts';
 import {
   addEnterable, addRoad, addTower, forTiles, hAt, heightRange, homeDist, inHomeZone, N, occupy, rectFree, rngOf, SIZE,
   TILE, TILES, tileIndex, type Builder,
@@ -330,7 +330,8 @@ function buildSites(b: Builder, sites: readonly Site[], pois: MapPoi[], ctx: Tow
  * Firing positions on the roofs of the town (as R0's outside stairs were): the highest roofs of the
  * enterable offices and hotels with a way up (07d-2c: all but the warehouse), one block each (not a
  * site of several wings, whose front strip may be a forecourt), at most `climbable` and 150 m apart.
- * The shooter stands by the parapet of the side that looks out furthest (rays over the building
+ * The shooter stands on the roof deck (its blueprint: the slab at the eaves) 1 m in from the parapet
+ * where nothing stands to head height, on the side that looks out furthest (rays over the building
  * boxes and the ground); a roof that sees nothing 300 m off is left out.
  */
 function roofVantages(b: Builder): void {
@@ -376,15 +377,41 @@ function roofVantages(b: Builder): void {
     let best: [number, number, number] | null = null;
     let score = 0;
     // Each side: 0.6 m in from its parapet, three rays out (straight and ±30°).
-    for (const [nx, nz] of [[0, 1], [1, 0], [0, -1], [-1, 0]] as const) {
-      const x = nx > 0 ? p.x1 - 0.6 : nx < 0 ? p.x0 + 0.6 : cx;
-      const z = nz > 0 ? p.z1 - 0.6 : nz < 0 ? p.z0 + 0.6 : cz;
+    // The roof deck: the largest slab whose top is at the eaves (the parapet stands on its edge).
+    const bp = blueprintOf(p);
+    let deck: [number, number, number, number] | null = null;
+    for (const part of bp.parts) {
+      if (Math.abs(part.y1 - p.eaves) > 0.15 || part.y1 - part.y0 > 1) continue;
+      if (!deck || (part.x1 - part.x0) * (part.z1 - part.z0) > (deck[2] - deck[0]) * (deck[3] - deck[1])) deck = [part.x0, part.z0, part.x1, part.z1];
+    }
+    if (!deck || deck[2] - deck[0] < 4 || deck[3] - deck[1] < 4) continue;
+    // A spot on the deck where nothing stands or hangs within 4 m of the floor (parapet, stair house and its roof, rail, mast).
+    const freeAt = (lx: number, lz: number): boolean => !bp.parts.some((q) => !q.hidden && q.y1 > p.eaves + 0.05 && q.y0 < p.eaves + 4 && lx > q.x0 - 0.35 && lx < q.x1 + 0.35 && lz > q.z0 - 0.35 && lz < q.z1 + 0.35);
+    const [dx0, dz0, dx1, dz1] = deck;
+    const spots: [number, number][] = [];
+    // As close to the parapet as one can stand (the line down to the street must clear it), mid-side and corners.
+    for (const inset of [0.6, 0.8, 1.1]) {
+      for (const [lx, lz] of [[(dx0 + dx1) / 2, dz1 - inset], [dx1 - inset, (dz0 + dz1) / 2], [(dx0 + dx1) / 2, dz0 + inset], [dx0 + inset, (dz0 + dz1) / 2], [dx0 + inset, dz1 - inset], [dx1 - inset, dz1 - inset], [dx1 - inset, dz0 + inset], [dx0 + inset, dz0 + inset]] as const) {
+        if (freeAt(lx, lz) && !spots.some((q) => Math.hypot(q[0] - lx, q[1] - lz) < 2)) spots.push([lx, lz]);
+      }
+    }
+    for (const [lx, lz] of spots) {
+      const [x, z] = toWorld(p, lx, lz);
+      // Out over the nearest parapet (and ±30°).
+      const ex = Math.min(x - p.x0, p.x1 - x);
+      const ez = Math.min(z - p.z0, p.z1 - z);
+      const nx = ex <= ez ? (x - p.x0 < p.x1 - x ? -1 : 1) : 0;
+      const nz = ex <= ez ? 0 : z - p.z0 < p.z1 - z ? -1 : 1;
       let k = 0;
       for (const a of [-0.52, 0, 0.52]) {
         const dx = nx * Math.cos(a) - nz * Math.sin(a);
         const dz = nx * Math.sin(a) + nz * Math.cos(a);
         if (clear(x, y, z, dx, dz, p.building)) k++;
       }
+      // The line straight out must clear the parapet at the edge (a steep look down from a tower).
+      const edge = Math.max(0.3, nx !== 0 ? (nx > 0 ? p.x1 - x : x - p.x0) : nz > 0 ? p.z1 - z : z - p.z0);
+      const drop = ((y + T.player.eyeHeight.stand - hAt(b, x + nx * R.town.roofSight, z + nz * R.town.roofSight)) / R.town.roofSight) * edge;
+      if (T.player.eyeHeight.stand - drop < 1.5) k = 0;
       if (k > score) {
         score = k;
         best = [x, y, z];

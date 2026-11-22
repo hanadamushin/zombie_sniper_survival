@@ -122,7 +122,11 @@ export const TACTICAL = {
   navMaxSlope: 0.9,
 
   /** Vantage points: at least this many per map, hills must rise this far above the median ground; hill tops are kept clear of trees within hillClear, and of trees taller than the viewer within hillView. */
-  vantage: { min: 3, hillProminence: 9, separation: 200, towerHeight: 12, hillClear: 30, hillView: 130 },
+  /**
+   * 07d-3 (real areas): `far` — a firing position counts as seeing far when a target this far away is
+   * seen in one of 16 directions (R1's rule); towers added for it have a deck `farTower` m up.
+   */
+  vantage: { min: 3, hillProminence: 9, separation: 200, towerHeight: 12, hillClear: 30, hillView: 130, far: 300, farTower: 20 },
 
   /**
    * Terrain per land class. amp / wave: fbm amplitude (m) and base wavelength (m);
