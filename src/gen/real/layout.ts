@@ -301,10 +301,29 @@ function facility(b: Builder, rng: RngState, kind: number, grade: number, x: num
                   : null;
   if (kind === POI.gsdf) {
     // 07d-2f: a small garrison where it really is (07d-3 chooses the size; R0 puts the small one).
-    if (inHomeZone(b, x - 90, z - 50, x + 90, z + 50)) return null;
-    const [lo, hi] = rectFree(b, x - 90, z - 50, x + 90, z + 50, 14) ? heightRange(b, x - 90, z - 50, x + 90, z + 50) : [0, 99];
-    if (hi - lo > R.facilityMaxSlope * 3) return null;
-    return enterableIn(b, 'base.jgsdf_s', x - 90, z - 50, x + 90, z + 50, 0);
+    // R2: the compound (180 × 100 m: 1.8 × 1 km of the real ground, more than most real garrisons) seldom
+    // fits right at the annotation in a town, between the data roads: the nearest free and level enough
+    // spot within 160 m, either way round, the full size or the def's smallest (150 × 90 m).
+    for (let r = 0; r <= 160; r += 16) {
+      const steps = r === 0 ? 1 : Math.ceil((2 * Math.PI * r) / 16);
+      for (let s = 0; s < steps; s++) {
+        const a = (s / steps) * Math.PI * 2;
+        const cx = x + Math.cos(a) * r;
+        const cz = z + Math.sin(a) * r;
+        for (const [hw, hd] of [[90, 50], [75, 45]] as const) {
+          for (const rot of [0, 1] as const) {
+            const [ex, ez] = rot === 0 ? [hw, hd] : [hd, hw];
+            const [x0, z0, x1, z1] = [cx - ex, cz - ez, cx + ex, cz + ez];
+            if (inHomeZone(b, x0, z0, x1, z1) || !rectFree(b, x0, z0, x1, z1, 14)) continue;
+            const [lo, hi] = heightRange(b, x0, z0, x1, z1);
+            if (hi - lo > R.facilityMaxSlope * 3) continue;
+            const bd = enterableIn(b, 'base.jgsdf_s', x0, z0, x1, z1, rot);
+            if (bd) return bd;
+          }
+        }
+      }
+    }
+    return null;
   }
   if (!spec) return null;
   for (let tries = 0; tries < 12; tries++) {

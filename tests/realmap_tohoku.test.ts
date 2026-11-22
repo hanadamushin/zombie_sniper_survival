@@ -22,7 +22,7 @@ const SENDAI = at(38.2601, 140.8822);
 const SEIKAN = at(41.1447, 140.5156);
 const MIYAKO = at(39.6505, 141.98);
 const ZAO = at(38.1436, 140.44);
-const MORIOKA = at(39.7036, 141.1527);
+const AKITA = at(39.7186, 140.1024);
 
 describe.skipIf(!have)('Tohoku areas from the real data (R2)', () => {
   it('has every land cell of the region', () => {
@@ -47,6 +47,20 @@ describe.skipIf(!have)('Tohoku areas from the real data (R2)', () => {
     expect(rails.filter((l) => l.flags & LINE_TUNNEL).reduce((s, l) => s + len(l.pts), 0)).toBeGreaterThan(300);
   });
 
+  it('builds the Sendai and Aomori garrisons within 160 m of their annotation (between the town roads)', { timeout: 60_000 }, () => {
+    for (const cell of [SENDAI, at(40.8148, 140.7140)]) {
+      const map = mapFor(grid, cell);
+      const poi = map.pois!.find((p) => /仙台駐屯地|青森駐屯地/.test(p.name))!;
+      expect(poi.building, poi.name).toBeDefined();
+      const pl = map.placements.find((p) => p.def === 'base.jgsdf_s' && Math.hypot((p.x0 + p.x1) / 2 - poi.x, (p.z0 + p.z1) / 2 - poi.z) < 170);
+      expect(pl, poi.name).toBeDefined();
+    }
+  });
+
+  it('does not build the Zao ski lifts and ropeways (aerial lines) as track', () => {
+    expect(readRealArea(ZAO)!.lines.some((l) => l.kind === LINE.rail || l.kind === LINE.shinkansen)).toBe(false);
+  });
+
   it('lists the real SDF sites (training areas left out, one large garrison per HQ)', () => {
     const index = JSON.parse(readFileSync(INDEX, 'utf8')) as { cells: Record<string, { sdf: { kind: string; name: string }[] }> };
     const sdf = Object.values(index.cells).flatMap((c) => c.sdf);
@@ -57,7 +71,7 @@ describe.skipIf(!have)('Tohoku areas from the real data (R2)', () => {
   });
 
   it('passes the automatic inspection and the sight-line rules in sample cells', { timeout: 240_000 }, () => {
-    for (const cell of [SENDAI, SEIKAN, MIYAKO, ZAO, MORIOKA]) {
+    for (const cell of [SENDAI, SEIKAN, MIYAKO, ZAO, AKITA]) {
       expect(checkCell(grid, 'tohoku', cell).problems, String(cell)).toEqual([]);
       expect(sightCell(grid, cell).problems, String(cell)).toEqual([]);
     }

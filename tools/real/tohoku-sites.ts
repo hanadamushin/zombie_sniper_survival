@@ -10,8 +10,8 @@ export const TOHOKU_SITES: [string, number, number][] = [
   ['宮古・浄土ヶ浜', 39.6505, 141.9800], ['釜石', 39.2742, 141.8858], ['気仙沼', 38.9081, 141.5700], ['大船渡', 39.0819, 141.7083],
   ['蔵王(熊野岳)', 38.1436, 140.4400], ['八幡平', 39.9578, 140.8542], ['栗駒山', 38.9608, 140.7883], ['岩手山', 39.8525, 141.0011],
   ['青函トンネル本州側(奥津軽いまべつ)', 41.1447, 140.5156],
-  ['仙台駐屯地', 38.2808, 140.9058], ['霞目駐屯地', 38.2386, 140.9200], ['青森駐屯地', 40.8108, 140.6878],
-  ['大湊(海自)', 41.2747, 141.1361], ['三沢基地(空自)', 40.7031, 141.3686],
+  ['仙台駐屯地', 38.2700, 140.9200], ['霞目駐屯地', 38.2386, 140.9200], ['青森駐屯地', 40.8148, 140.7077],
+  ['大湊(海自)', 41.2523, 141.1403], ['三沢基地(空自)', 40.7031, 141.3686],
 ];
 const { lon0, latTop, kmPerLon, kmPerLat } = grid.proj;
 const args = process.argv.slice(2).map(Number);
@@ -24,5 +24,5 @@ for (const [name, lat, lon] of list) {
   const c = grid.cells[id];
   const x = Math.round((fx - Math.floor(fx)) * 1024);
   const z = Math.round((fy - Math.floor(fy)) * 1024);
-  console.log(`${name}: cell ${id} (${x}, ${z}) ${c ? `${grid.prefNames[c.pref]} ${c.real?.muni ?? ''} ${c.kind ?? ''} pop0=${c.pop0}` : 'sea'}`);
+  console.log(`${name}: cell ${id} (${x}, ${z}) ${c ? `${grid.prefNames[c.pref]} ${c.real?.muni ?? ''} ${c.land} pop0=${c.pop0}` : 'sea'}`);
 }

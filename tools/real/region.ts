@@ -360,6 +360,9 @@ async function buildCell(ctx: Ctx, cell: number, ov: RegionOverrides): Promise<C
           // the viaducts by Sapporo station 0 with lvOrder 1. (R0 read 100 as a bridge.)
           const state = Number(p.railState ?? 0);
           if (state === 400) continue;
+          // R2: rtCode1 4020 6… are the aerial lines (索道: ropeways, ski lifts; checked at Zao, Inawashiro,
+          // Iwate-kōgen, Hakkōda), not track on the ground: R0 built them as rail beds straight up the slopes.
+          if (String(p.rtCode1 ?? '').startsWith('40206')) continue;
           let flags = 0;
           if (state === 100 || state === 200 || state === 300) flags |= LINE_TUNNEL;
           else if (Number(p.lvOrder ?? 0) > 0) flags |= LINE_BRIDGE;

@@ -79,9 +79,9 @@ async function lookFrom(page: Page, x: number | null, z: number | null, yaw: num
 
 const PLACES: { name: string; lat: number; lon: number; x: number | null; z: number | null; yaw: number }[] = [
   { name: 'sendai', lat: 38.2601, lon: 140.8822, x: null, z: null, yaw: 0 },
-  { name: 'sendai_garrison', lat: 38.2808, lon: 140.9058, x: null, z: null, yaw: 0 },
+  { name: 'sendai_garrison', lat: 38.2700, lon: 140.9200, x: 900, z: 600, yaw: 0 }, // looking north at the compound
   { name: 'aomori', lat: 40.8244, lon: 140.7400, x: null, z: null, yaw: 0 },
-  { name: 'aomori_garrison', lat: 40.8108, lon: 140.6878, x: null, z: null, yaw: 0 },
+  { name: 'aomori_garrison', lat: 40.8148, lon: 140.7140, x: 150, z: 300, yaw: 0 }, // cell 8970, looking north at the compound
   { name: 'morioka', lat: 39.7036, lon: 141.1527, x: null, z: null, yaw: 0 },
   { name: 'akita', lat: 39.7186, lon: 140.1024, x: null, z: null, yaw: 0 },
   { name: 'yamagata', lat: 38.2404, lon: 140.3633, x: null, z: null, yaw: 0 },
@@ -92,7 +92,7 @@ const PLACES: { name: string; lat: number; lon: number; x: number | null; z: num
   { name: 'zao', lat: 38.1436, lon: 140.4400, x: null, z: null, yaw: 0 },
   { name: 'hachimantai', lat: 39.9578, lon: 140.8542, x: null, z: null, yaw: 0 },
   { name: 'seikan_south', lat: 41.1447, lon: 140.5156, x: null, z: null, yaw: 0 },
-  { name: 'ominato', lat: 41.2747, lon: 141.1361, x: null, z: null, yaw: 0 },
+  { name: 'ominato', lat: 41.2523, lon: 141.1403, x: null, z: null, yaw: 0 },
   { name: 'misawa', lat: 40.7031, lon: 141.3686, x: null, z: null, yaw: 0 },
 ];
 
