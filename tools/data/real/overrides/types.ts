@@ -22,6 +22,14 @@ export interface RegionOverrides {
   heightMul?: number;
   /** By cell id (the number in public/data/areas/<region>/<cell>.bin). */
   cells?: Record<number, CellOverride>;
+  /**
+   * R1: leave out the municipal wide roads (LINE.wide, 13 m+; not national / prefectural roads) where the
+   * 1 km census mesh under the road piece has at least this many people per km². In a dense city the
+   * real grid of wide streets every ~100 m becomes roads every ~10 m in the shrunk area, a field of
+   * asphalt; the town generator's own street lattice takes their place. Decided per tile piece (like the
+   * sparse local roads), so both cells sharing a road agree. Off when undefined.
+   */
+  dropWideRoadsAbove?: number;
   /** Place names on the strategic map: municipality name -> shown name (not used by R0). */
   names?: Record<string, string>;
 }

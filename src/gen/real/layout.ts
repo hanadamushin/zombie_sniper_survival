@@ -16,11 +16,12 @@
 // without real data the terrain fades into the 07c world function over REAL_AREA.seamBand.
 
 import { chance, rand, randInt, randRange, type RngState } from '../../core/rng.ts';
-import { REAL_AREA } from '../../data/realmap.ts';
+import { REAL_AREA, REAL_LANDMARKS } from '../../data/realmap.ts';
 import { TACTICAL } from '../../data/tactical.ts';
-import type { Rot } from '../buildings/index.ts';
+import { buildingDef } from '../buildings/catalog/index.ts';
+import { envelopeOf, type Rot } from '../buildings/index.ts';
 import {
-  addBuilding, addRoad, addStairs, forTiles, heightRange, homeDist, inHomeZone, N, occupy, rectFree, rngOf, SIZE, STAIR_DEPTH, STAIR_LENGTH,
+  addBuilding, addRoad, addStairs, addTower, forTiles, heightRange, homeDist, inHomeZone, N, occupy, rectFree, rngOf, SIZE, STAIR_DEPTH, STAIR_LENGTH,
   TILE, TILES, tileIndex, type Builder,
 } from '../builder.ts';
 import { enterableIn, farmstead } from '../lands.ts';
@@ -691,6 +692,32 @@ export function realForest(real: RealArea): (x: number, z: number) => number {
   return (x, z) => shareAt(real, (c) => c === LU.forest, x, z) + 0.35 * shareAt(real, (c) => c === LU.waste, x, z);
 }
 
+/**
+ * A landmark centred on (x, z), front to the south — or on the nearest free and flat enough spot within
+ * 48 m (rings of 8 points every 4 m), since the shrunk point often falls on a road.
+ */
+function landmark(b: Builder, id: string, x: number, z: number): Building | null {
+  const def = buildingDef(id);
+  const w = def.size.w[1];
+  const d = def.size.d[1];
+  for (let r = 0; r <= 48; r += 4) {
+    for (let k = 0; k < (r === 0 ? 1 : 8); k++) {
+      const cx = x + Math.cos((k / 8) * Math.PI * 2) * r;
+      const cz = z + Math.sin((k / 8) * Math.PI * 2) * r;
+      const [x0, z0, x1, z1] = [cx - w / 2, cz - d / 2, cx + w / 2, cz + d / 2];
+      if (inHomeZone(b, x0, z0, x1, z1) || !rectFree(b, x0 - 2, z0 - 2, x1 + 2, z1 + 2, 12)) continue;
+      const [lo, hi] = heightRange(b, x0, z0, x1, z1);
+      if (hi - lo > R.facilityMaxSlope) continue;
+      const bd = enterableIn(b, id, x0, z0, x1, z1, 0);
+      if (!bd) continue;
+      // The roof's front strip by the parapet (the stair house stands over the middle; front = south).
+      b.vantages.push({ pos: [cx, bd.base + envelopeOf(def).eaves, bd.z1 - 1], kind: 'roof' });
+      return bd;
+    }
+  }
+  return null;
+}
+
 export function layoutReal(b: Builder, real: RealArea, terrain: (x: number, z: number) => number): { water: Float32Array; pois: MapPoi[] } {
   const water = waterAndGround(b, real, terrain);
   realRoads(b, real, water);
@@ -698,6 +725,13 @@ export function layoutReal(b: Builder, real: RealArea, terrain: (x: number, z: n
   const rng = rngOf(b, 'real.facilities');
   const enterRng = rngOf(b, 'real.facilities.enterable');
   const pois: MapPoi[] = real.pois.map((p) => ({ kind: p.kind, grade: p.grade, x: p.x, z: p.z, name: p.name }));
+  // R1: landmarks (REAL_LANDMARKS) first, at their real point; the deck / roof is a firing position.
+  for (const p of pois) {
+    const id = REAL_LANDMARKS[p.name];
+    if (id) p.building = landmark(b, id, p.x, p.z)?.id;
+    // R1: other towers (an override's `addPois` of POI.tower): a lookout tower, a firing position.
+    else if (p.kind === POI.tower) p.building = addTower(b, p.x, p.z, p.grade > 0 ? p.grade : T.vantage.towerHeight)?.id;
+  }
   const order = [POI.gsdf, POI.prefOffice, POI.cityHall, POI.station, POI.hospital, POI.university, POI.school, POI.townHall, POI.police, POI.fire] as number[];
   for (const kind of order) {
     for (const p of pois) {
