@@ -96,6 +96,7 @@ const PLACES: { name: string; lat: number; lon: number; x: number | null; z: num
   { name: 'iruma', lat: 35.8419, lon: 139.4106, x: null, z: null, yaw: 0 },
   { name: 'kumotori', lat: 35.8555, lon: 138.9440, x: null, z: null, yaw: 0 },
   { name: 'okutama', lat: 35.8094, lon: 139.0965, x: null, z: null, yaw: 0 },
+  { name: 'chichibu_forest', lat: 35.9110, lon: 138.9923, x: null, z: null, yaw: 0 }, // the most trees of the region (cell 17972)
   { name: 'takao', lat: 35.6251, lon: 139.2437, x: null, z: null, yaw: 0 },
   { name: 'oshima', lat: 34.7500, lon: 139.3550, x: null, z: null, yaw: 0 },
   { name: 'mito', lat: 36.3418, lon: 140.4468, x: null, z: null, yaw: 0 },
@@ -116,10 +117,11 @@ test('real map: the Kanto areas, from a high point, within the budgets', async (
     const m = await measure(page);
     const info = await page.evaluate(() => window.__game!.debug.realInfo()!);
     rows.push(`${p.name} cell ${cell}: enter ${ms} ms (file ${info.loadMs.at(-1)?.toFixed(0)} ms), ${m.calls} calls, ${(m.triangles / 1e4).toFixed(1)}万 tris, sim ${m.tick.toFixed(2)} + draw ${m.draw.toFixed(2)} ms, pois ${info.pois.length}`);
+    console.log(rows.at(-1));
     await page.screenshot({ path: `test-results/realmap-kt-${p.name}.png` });
-    expect(m.calls, p.name).toBeLessThan(150);
-    expect(m.triangles, p.name).toBeLessThan(500_000);
-    expect(m.tick + m.draw, p.name).toBeLessThan(4);
+    expect.soft(m.calls, p.name).toBeLessThan(150);
+    expect.soft(m.triangles, p.name).toBeLessThan(500_000);
+    expect.soft(m.tick + m.draw, p.name).toBeLessThan(4);
   }
   console.log(`[realmap kanto]\n${rows.join('\n')}`);
   await page.evaluate(() => window.__game!.dispatch({ type: 'setMode', mode: 'world' }));

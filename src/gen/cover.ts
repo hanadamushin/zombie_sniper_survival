@@ -9,7 +9,7 @@
 import { chance, rand, randInt, randRange, type RngState } from '../core/rng.ts';
 import { TACTICAL } from '../data/tactical.ts';
 import { forTiles, hAt, heightRange, homeDist, inHomeZone, N, occupy, rectFree, resample, rngOf, SIZE, TILE, TILES, tileIndex, type Builder } from './builder.ts';
-import { smoothstep } from './noise.ts';
+import { hash01, smoothstep } from './noise.ts';
 import { editFade } from './world.ts';
 import { GROUND, type BrushKind } from './types.ts';
 
@@ -280,10 +280,15 @@ function ruralCover(b: Builder, rules: Rules): void {
   const R = C.rural;
   const rng = rngOf(b, 'cover');
 
+  // R3: the share of overgrown fields, lower where a real area has hundreds of plots.
+  const fields = b.areas.reduce((n, a) => n + (a.kind === 'field' ? 1 : 0), 0);
+  const overgrown = Math.min(R.overgrown, R.overgrownMax / Math.max(1, fields));
+  const plots = b.areas.reduce((n, a) => n + (a.kind === 'field' || a.kind === 'paddy' ? 1 : 0), 0);
+  const plotShare = Math.min(1, R.plotMax / Math.max(1, plots));
   // --- hedges and windbreaks along the north and west side of the field plots ---
   for (const a of b.areas) {
     if (a.kind !== 'field' && a.kind !== 'paddy') continue;
-    const factor = a.kind === 'paddy' ? R.paddyFactor : 1;
+    const factor = (a.kind === 'paddy' ? R.paddyFactor : 1) * plotShare;
     const sides: [number, number, number, number][] = [
       [a.x0 - 1, a.z0 - 1.5, a.x1 + 1, a.z0 - 1.5],
       [a.x0 - 1.5, a.z0 - 1, a.x0 - 1.5, a.z1 + 1],
@@ -304,7 +309,7 @@ function ruralCover(b: Builder, rules: Rules): void {
       hedgeLine(b, rules, 'hedge', x0 + (x1 - x0) * g1, z0 + (z1 - z0) * g1, x1, z1, r, hh, row);
     }
     // Fields nobody works any more: head-high grass.
-    if (a.kind === 'field' && rand(rng) < R.overgrown) {
+    if (a.kind === 'field' && rand(rng) < overgrown) {
       const beds = randInt(rng, R.overgrownBeds[0], R.overgrownBeds[1]);
       for (let i = 0; i < beds; i++) {
         const r = randRange(rng, R.reedRadius[0], R.reedRadius[1]);
@@ -316,8 +321,12 @@ function ruralCover(b: Builder, rules: Rules): void {
   }
 
   // --- homestead groves: a tall hedge and trees on two sides of every farmhouse ---
+  // (R3: of about groveMax of them where a real area has hundreds of houses.)
+  const houses = b.buildings.reduce((n, bd) => n + (bd.kind === 'house' ? 1 : 0), 0);
+  const groveShare = houses > R.groveMax ? R.groveMax / houses : 1;
   for (const bd of b.buildings) {
     if (bd.kind !== 'house') continue;
+    if (groveShare < 1 && hash01(bd.id, 0x67, b.params.mapSeed) >= groveShare) continue;
     const g = R.groveGap;
     const north = chance(rng, 0.5);
     const west = chance(rng, 0.5);

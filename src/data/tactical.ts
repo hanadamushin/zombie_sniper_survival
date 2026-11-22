@@ -159,6 +159,8 @@ export const TACTICAL = {
       hedge: 0.34,
       windbreak: 0.12,
       paddyFactor: 0.45,
+      /** R3: plots with the full chance above; a map with more (real rural areas: ~250) gets the chance scaled by plotMax / plots (random maps at most ~106: not affected). */
+      plotMax: 110,
       hedgeRadius: [0.9, 1.3],
       hedgeHeight: [2.2, 3],
       windbreakHeight: 3.3,
@@ -168,6 +170,13 @@ export const TACTICAL = {
       /** Homestead groves: hedge this far from the house walls on two sides, with trees. */
       groveGap: 6,
       groveHeight: 3.2,
+      /**
+       * R3: at most about this many homestead groves per map. A real rural area of the Kantō plain has ~300
+       * houses (random maps at most ~27, so they are not affected): with a grove on every house the hedges
+       * alone came to ~100k triangles per area and four such areas over the triangle budget. Above the
+       * cap each house keeps its grove with chance groveMax / houses.
+       */
+      groveMax: 60,
       bamboo: [4, 6],
       bambooRadius: [7, 11],
       bambooLength: [0, 26],
@@ -179,6 +188,8 @@ export const TACTICAL = {
       reedHeight: 2.3,
       overgrown: 0.22,
       overgrownBeds: [2, 4],
+      /** R3: at most about this many overgrown fields per map (a real rural area has ~200 plots, random maps at most ~78: not affected). */
+      overgrownMax: 18,
       bushes: 220,
       bushRadius: [1.6, 3.4],
       bushHeight: [1.9, 2.8],

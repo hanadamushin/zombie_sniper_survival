@@ -422,6 +422,10 @@ export async function buildRealGrid(): Promise<RealGridBuild> {
           if (c >= 0) cityHall.set(`${muniPref[m]}:${muniNames[m]}`, c);
           return;
         }
+        // R3: P05 (2022) codes the city hall of an ordinance-designated city with the code of the ward
+        // it stands in (さいたま市役所 11107 浦和区, 横浜市役所 14104 中区): without this the label went to
+        // the first ward's office (横浜市 at 鶴見区, where it also hid 川崎市).
+        if (c >= 0 && muniGrade[m] === 5 && a.P05_003 === `${muniNames[m]}役所`) cityHall.set(`${muniPref[m]}:${muniNames[m]}`, c);
         if (c >= 0) seatCell[m] = c;
       });
     }
