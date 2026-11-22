@@ -83,8 +83,8 @@ const PLACES: { name: string; cell: number }[] = [
   { name: 'tohoku_max_sendai', cell: 13647 },
   { name: 'kanto_max_utsunomiya', cell: 16811 },
   { name: 'chubu_max_hamamatsu', cell: 20132 },
-  { name: 'kinki_max', cell: 20612 },
-  { name: 'chugoku_max', cell: 20430 },
+  { name: 'kinki_max_izumi', cell: 20612 },
+  { name: 'chugoku_max_kurashiki', cell: 20430 },
   { name: 'shikoku_max_matsuyama', cell: 21757 },
   { name: 'kyushu_max_kumamoto', cell: 23576 },
   // The heaviest city cores (the most facilities and roads).
