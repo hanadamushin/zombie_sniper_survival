@@ -42,7 +42,8 @@ describe('real strategic map (R9)', () => {
 
   it('has no sea crossing within one cell and no airport twice', () => {
     for (const l of grid.seaLinks ?? []) expect(l.a, l.name).not.toBe(l.b);
-    const names = grid.landIds.flatMap((id) => (grid.cells[id]!.real?.airport ? [grid.cells[id]!.real!.airport!.name] : []));
+    const names = grid.landIds.flatMap((id) => (grid.cells[id]!.real?.airports ?? []).map((a) => a.name));
+    expect(names.length).toBeGreaterThan(70);
     const base = names.map((n) => n.replace(/[（(].*[）)]$/, ''));
     expect(new Set(base).size).toBe(base.length);
     expect(names.some((n) => n.includes('奈多'))).toBe(false);
