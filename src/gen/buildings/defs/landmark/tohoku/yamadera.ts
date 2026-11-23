@@ -20,7 +20,7 @@ export const LANDMARK_YAMADERA = landmarkDef({
   variant: 'yamadera',
   size: { w: [W, W], d: [D, D] },
   eaves: FLOOR,
-  top: 46,
+  top: 48,
   roof: 'hip',
   kind: 'house',
   build,
@@ -58,7 +58,7 @@ function build(L: Lm): void {
     L.box(x - 1.2, y0, z - 0.05, x + 1.2, y1, z + 0.1, 'paint', { paint: 'charcoal', solid: false });
   }
   // The woods on the shoulders (broad dark-green crowns).
-  for (const [x, z, y, r] of [[5, 8, 22, 4], [22, 3, 30, 4.5], [45, 6, 20, 4], [51, 15, 11, 3.5], [16, 12, 27, 3], [14, 9, 32, 5], [32, 7, 40, 5.5], [46.5, 9, 29, 4.5], [27, 5, 38, 3.5]] as const) {
+  for (const [x, z, y, r] of [[5, 8, 22, 4], [22, 5, 30, 4.5], [45, 6, 20, 4], [51, 15, 11, 3.5], [16, 12, 27, 3], [14, 9, 32, 5], [32, 7, 40, 5.5], [46.5, 9, 29, 4.5], [27, 5, 38, 3.5]] as const) {
     L.column(x, z, r, y, y + r * 1.3, 'paint', { paint: 'green', taper: 0.4, solid: false });
   }
 
