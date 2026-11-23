@@ -7,8 +7,9 @@
 // stand in a second yard instead (`?yard=2`, state.flags.yard === 2), once each, fronts facing south.
 
 import { BUILDING_DEFS, type BuildingDef } from '../../gen/buildings/index.ts';
-import { addEnterable, createFlatBuilder } from '../../gen/builder.ts';
+import { addEnterable, createFlatBuilder, N } from '../../gen/builder.ts';
 import { finishMap, type TacticalMap } from '../../gen/index.ts';
+import { applyLandmark } from '../../gen/real/landmarks.ts';
 
 /** The street between the two rows (z) and where the first building starts (x). */
 export const YARD = { street: 520, startX: 120, gap: 14, streetHalf: 9 } as const;
@@ -32,9 +33,11 @@ export function sdfYard(def: BuildingDef): boolean {
   return bigForYard(def) && (def.category === 'military' || def.category === 'base');
 }
 
-/** Which yard: 1 (or true / false) the streets, 2 the big types, 3 the big Self-Defense Force sites. */
-export type YardKind = boolean | 1 | 2 | 3;
-const yardNo = (k: YardKind): 1 | 2 | 3 => (k === 2 || k === true ? 2 : k === 3 ? 3 : 1);
+/** Which yard: 1 (or true / false) the streets, 2 the big types, 3 the big Self-Defense Force sites, 4 the landmarks (L1). */
+export type YardKind = boolean | 1 | 2 | 3 | 4;
+const yardNo = (k: YardKind): 1 | 2 | 3 | 4 => (k === 2 || k === true ? 2 : k === 3 ? 3 : k === 4 ? 4 : 1);
+/** L1: the landmarks stand in their own yard (`?landmarks=1`), not among the enterable types. */
+const isLandmark = (def: BuildingDef): boolean => def.category === 'landmark';
 
 export interface YardEntry {
   def: string;
@@ -50,7 +53,7 @@ let cachedSdf: { map: TacticalMap; entries: YardEntry[] } | null = null;
 function build(): { map: TacticalMap; entries: YardEntry[] } {
   const b = createFlatBuilder(0, { mapSeed: 11, land: 'suburb', lootSpots: 100000 });
   const entries: YardEntry[] = [];
-  const defs = BUILDING_DEFS.filter((def) => !bigForYard(def));
+  const defs = BUILDING_DEFS.filter((def) => !bigForYard(def) && !isLandmark(def));
   // Where each type stands along which street (both rows break at the same types).
   const slots: { x: number; street: number }[] = [];
   const depth: number[] = [0];
@@ -106,7 +109,7 @@ function build(): { map: TacticalMap; entries: YardEntry[] } {
 function buildBig(sdf = false): { map: TacticalMap; entries: YardEntry[] } {
   const b = createFlatBuilder(0, { mapSeed: sdf ? 13 : 12, land: 'suburb', lootSpots: 100000 });
   const entries: YardEntry[] = [];
-  const defs = BUILDING_DEFS.filter((def) => bigForYard(def) && sdfYard(def) === sdf);
+  const defs = BUILDING_DEFS.filter((def) => bigForYard(def) && sdfYard(def) === sdf && !isLandmark(def));
   const rows: BuildingDef[][] = [];
   let x = END_X;
   for (const def of defs) {
@@ -142,8 +145,48 @@ function buildBig(sdf = false): { map: TacticalMap; entries: YardEntry[] } {
 const BIG_START_X = 30;
 const BIG_START_Z = 20;
 
+/**
+ * L1: the landmark yard (`?landmarks=1`, flags.yard === 4): every landmark of every region on flat
+ * ground, fronts facing south onto a street, in rows from the north edge (like the big yard), with
+ * their moats and canals dug and their firing positions. The tests and the e2e measure it.
+ */
+function buildLandmarks(): { map: TacticalMap; entries: YardEntry[] } {
+  const b = createFlatBuilder(0, { mapSeed: 14, land: 'urban', lootSpots: 0 });
+  const water = new Float32Array(N * N).fill(NaN);
+  const entries: YardEntry[] = [];
+  const defs = BUILDING_DEFS.filter(isLandmark);
+  const gap = 24;
+  let x = LM_START;
+  let z0 = LM_START;
+  let deep = 0;
+  let first = 0;
+  for (const def of defs) {
+    const w = def.size.w[1];
+    const d = def.size.d[1];
+    if (x + w > END_X && x > LM_START) {
+      z0 += deep + 2 * YARD.streetHalf + gap;
+      x = LM_START;
+      deep = 0;
+    }
+    const bd = addEnterable(b, def.id, x, z0, w, d, 0);
+    applyLandmark(b, bd, water);
+    entries.push({ def: def.id, enter: bd.enter!, rot: 0 });
+    deep = Math.max(deep, d);
+    if (z0 === LM_START) first = z0 + deep + YARD.streetHalf;
+    x += w + gap;
+  }
+  const map = finishMap(b);
+  map.water = water;
+  map.spawn.edge = [LM_START - 8, first];
+  map.spawn.edgeYaw = -Math.PI / 2;
+  return { map, entries };
+}
+const LM_START = 30;
+let cachedLandmarks: { map: TacticalMap; entries: YardEntry[] } | null = null;
+
 function yardOf(kind: YardKind): { map: TacticalMap; entries: YardEntry[] } {
   const n = yardNo(kind);
+  if (n === 4) return (cachedLandmarks ??= buildLandmarks());
   return n === 3 ? (cachedSdf ??= buildBig(true)) : n === 2 ? (cachedBig ??= buildBig()) : (cached ??= build());
 }
 

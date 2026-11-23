@@ -23,9 +23,10 @@ export type MaterialId =
   | 'steel' | 'rust' | 'glass' | 'shutter' | 'door' | 'doorSteel' | 'frame'
   | 'flooring' | 'tatami' | 'carpet' | 'tileFloor' | 'vinyl' | 'paper' | 'fabric'
   | 'shelf' | 'counter' | 'appliance' | 'sign' | 'blood' | 'debris' | 'plant' | 'asphalt'
-  | 'olive';
+  | 'olive'
+  | 'paint';
 
-export type PartShape = 'box' | 'gable' | 'hip' | 'wedge';
+export type PartShape = 'box' | 'gable' | 'hip' | 'wedge' | 'cyl';
 /** Which half of the building a part belongs to: `shell` is the outside (mid range), `interior` only appears close by. */
 export type PartLayer = 'shell' | 'interior';
 
@@ -35,6 +36,8 @@ export type PartLayer = 'shell' | 'interior';
  *   gable  pitched roof, ridge along `axis` at y1, eaves at y0 on the two long sides
  *   hip    hipped roof, ridge along `axis` (shortened by the hips), eaves at y0 all round
  *   wedge  a ramp that rises from y0 to y1 towards `slope` (shed roofs, ramps; not for stairs — use steps)
+ *   cyl    L1: a 12-sided prism standing in the box (round in plan; an ellipse when the box is not
+ *          square), its top scaled by `taper` (1 straight, 0 a cone): towers, columns, tanks, finials
  */
 export interface Part {
   shape: PartShape;
@@ -52,6 +55,8 @@ export interface Part {
   axis?: 'x' | 'z';
   /** wedge: the side it rises towards. */
   slope?: 'x+' | 'x-' | 'z+' | 'z-';
+  /** L1: cyl: the top's size relative to the bottom (default 1). */
+  taper?: number;
   /** 0..1: picks the colour from the material's palette. */
   tint?: number;
   /** false: drawn only (decoration). Default: the material decides (materials.ts). */
@@ -62,6 +67,14 @@ export interface Part {
   hidden?: boolean;
   /** 07d-2f: the leaf of a door that opens with the area's key (gone once the placement is `open`). */
   key?: boolean;
+  /**
+   * L1: turn about the vertical axis through the part's centre (radians, counter-clockwise seen from
+   * above, as three.js turns about +y): the local x axis goes to (cos, -sin) in (x, z). The box
+   * [x0, x1] × [z0, z1] is the part's size before the turn. Diagonal walls, star points, round towers
+   * (a ring of turned boxes). A turned solid part collides as a row of small axis-aligned boxes along
+   * its long side (colliders.ts).
+   */
+  yaw?: number;
 }
 
 /**
@@ -188,6 +201,24 @@ export interface BuildingBlueprint {
   ladders: { x0: number; z0: number; x1: number; z1: number; y0: number; y1: number; nx: number; nz: number }[];
   /** 07d-2f: the ways through the `key` doors, added to `links` once the placement is `open`. */
   keyLinks?: NavLink[];
+  /** L1: firing positions on the outside of an exterior-only landmark (local, feet): its deck or roof, reached by an outside ladder. */
+  vantages?: [number, number, number][];
+  /**
+   * L1: what a landmark does to the ground of its lot (local polygons, inside the footprint): a moat
+   * or a canal (`water`: the ground dug `depth` m under the lot's ground, the surface `drop` m under
+   * it), a lawn, a paved square. gen/real/landmarks.ts applies them when the landmark is placed.
+   */
+  ground?: GroundFeature[];
+}
+
+/** L1: a polygon of a landmark's ground (BuildingBlueprint.ground). */
+export interface GroundFeature {
+  kind: 'water' | 'grass' | 'paved' | 'gravel';
+  /** Local (x, z) points, either winding. */
+  poly: [number, number][];
+  /** water: depth of the bed and of the surface under the lot's ground (m). */
+  depth?: number;
+  drop?: number;
 }
 
 export type RoofKind = 'flat' | 'gable' | 'hip' | 'shed';
@@ -220,6 +251,12 @@ export interface BuildingDef {
   lootable?: boolean;
   /** Override of ARCH.limits[category]. */
   limits?: { shell: number; interior: number };
+  /**
+   * L1: a landmark seen only from outside (nobody goes in: the doors stay shut). Every part is `shell`,
+   * there are no rooms or search points; it is drawn as its outside out to the fog (never the far box)
+   * and the catalog test checks the outside only (docs/realmap_guide.md §7).
+   */
+  exteriorOnly?: boolean;
   generate(rng: RngState, params: GenerateParams): BuildingBlueprint;
 }
 

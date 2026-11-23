@@ -184,6 +184,8 @@ export const CUTS: Record<string, readonly number[]> = {
   station: [1, 2, 3, 4, 10, 11],
   big: [3, 4],
   facility: [4],
+  /** L1: a landmark's site (the prefectural, wide and local roads under it go; national roads and railways stay). */
+  landmark: [2, 3, 4],
 };
 
 /** Per-area caps of the facility kinds (the real cells hold dozens of schools; the area holds a few). */

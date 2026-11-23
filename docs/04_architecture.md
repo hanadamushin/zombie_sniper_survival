@@ -400,6 +400,7 @@ export interface InputFrame { moveX: number; moveZ: number; lookDX: number; look
   - 地図のキャッシュのキーに実データの有無を含める（`…:r`）。`WorldContext.around[i].real` で隣が実データかを知り、隣が乱数の区域なら境界の 120m で 07c の地形へ混ぜる
   - 追加したもの（追加のみ）: `GROUND.water` / `GROUND.sand`、`TacticalMap.water`（高さの標本ごとの水面、NaN は乾いた所。水面のタイルは通行不可）、`TacticalMap.pois`（`MapPoi`: 施設の種類・格・位置・名前・建てた建物）、`Builder.forestAt`（森の分布を土地利用から）、`collision.ts` の `waterDepthAt`（プレイヤーは 0.9m より深い水へ入らない・浅い所は 0.55 倍の速さ）
   - 確認: `node tools/real/area-map.ts <セル>`（ゲームが作る区域の PNG）、`node tools/real/check.ts <地方>`（自動点検）
+  - 名所（L1）: 表 `src/data/landmarks/`（`LandmarkSpot`、`LANDMARK_GRID`）→ `gen/real/landmarks.ts`（`realToArea` / `landmarksIn` / `allLandmarks` / `applyLandmark`）→ `layoutReal` が `planLandmark`（`sites.ts`）で施設より先に敷地を取り、`buildSites` で建て、`applyLandmark` が地面（`BuildingBlueprint.ground`）と射点（`.vantages`）を当てはめる。設計図は `BuildingDef.exteriorOnly`（部屋なし・`lootable` なし・描画は `RENDER.enterables.landmarkFar` まで外観で遠景の箱なし）。追加した部品: `Part.yaw`（垂直軸の回転。当たり判定は小さな箱の列）、形 `cyl`（12 角柱、`Part.taper`。描画のプールが 1 つ増える）、材質 `paint`（`data/render.ts` の `PAINT`）。`MapPoi` の種類 `POI.landmark`（21、表だけの名所。ファイルには書かない）。試験用の地図 `state.flags.yard === 4`（`?landmarks=1`）。戦略地図は `MapCanvas` の `landmarks`
 
 ## 8. 描画方針（性能予算）
 

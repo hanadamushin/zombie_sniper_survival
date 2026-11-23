@@ -77,6 +77,8 @@ export const POI = {
   post: 18,
   park: 19,
   tower: 20,
+  /** L1: a landmark of the table (src/data/landmarks/) with no point of its own in the data: added by layout.ts, never in a file. */
+  landmark: 21,
 } as const;
 export type PoiKind = (typeof POI)[keyof typeof POI];
 

@@ -291,7 +291,7 @@ export function addEnterable(b: Builder, defId: string, x0: number, z0: number, 
   b.placements.push(place);
   const building: Building = {
     id, kind: def.kind, x0, z0, x1: place.x1, z1: place.z1, base: hi, height: place.height, roof: def.roof === 'flat' ? 'flat' : 'gable',
-    tint: 0.5, lootable: def.lootable ?? true, access: 'none', enter,
+    tint: 0.5, lootable: !def.exteriorOnly && (def.lootable ?? true), access: 'none', enter,
   };
   b.buildings.push(building);
   b.solids.push({ x0, z0, x1: place.x1, z1: place.z1, y0: hi - ARCH.foundation, y1: hi + place.height, kind: 'building', ref: id, enter });

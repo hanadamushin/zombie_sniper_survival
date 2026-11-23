@@ -15,7 +15,7 @@
 import * as THREE from 'three';
 import { RENDER } from '../../data/render.ts';
 import { ARCH } from '../../data/architecture.ts';
-import { blueprintOf, dirToWorld, placementKey, rectToWorld, type BuildingPlacement, type MaterialId, type Part, type PartShape } from '../../gen/buildings/index.ts';
+import { blueprintOf, buildingDef, dirToWorld, placementKey, rectToWorld, type BuildingPlacement, type MaterialId, type Part, type PartShape } from '../../gen/buildings/index.ts';
 import { MATERIALS } from '../../gen/buildings/materials.ts';
 import { hash01 } from '../../gen/noise.ts';
 import type { TacticalMap } from '../../gen/index.ts';
@@ -45,6 +45,23 @@ function wedgeGeometry(): THREE.BufferGeometry {
   return geo;
 }
 
+/** L1: unit 12-sided prism: radius 0.5 (to the corners), y 0..1, with caps; the top scaled by the per-instance `aTaper`. */
+function cylGeometry(): THREE.BufferGeometry {
+  const geo = new THREE.CylinderGeometry(0.5, 0.5, 1, 12, 1, false);
+  geo.translate(0, 0.5, 0);
+  return geo.toNonIndexed();
+}
+
+function cylMaterial(): THREE.MeshLambertMaterial {
+  const m = new THREE.MeshLambertMaterial();
+  m.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float aTaper;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed.xz *= mix( 1.0, aTaper, position.y );');
+  };
+  return m;
+}
+
 function hipMaterial(): THREE.MeshLambertMaterial {
   const m = new THREE.MeshLambertMaterial({ side: THREE.DoubleSide });
   m.onBeforeCompile = (shader) => {
@@ -72,6 +89,7 @@ class Pool {
     if (this.id === 'gable') return gableGeometry();
     if (this.id === 'hip') return hipGeometry();
     if (this.id === 'wedge') return wedgeGeometry();
+    if (this.id === 'cyl') return cylGeometry();
     return new THREE.BoxGeometry(1, 1, 1);
   }
   private make(capacity: number): THREE.InstancedMesh {
@@ -79,14 +97,16 @@ class Pool {
     let material: THREE.Material;
     if (this.id === 'glass') material = new THREE.MeshLambertMaterial({ transparent: true, opacity: E.glassOpacity, depthWrite: false, side: THREE.DoubleSide });
     else if (this.id === 'hip') material = hipMaterial();
+    else if (this.id === 'cyl') material = cylMaterial();
     else material = new THREE.MeshLambertMaterial({ side: this.id === 'box' ? THREE.FrontSide : THREE.DoubleSide });
     const mesh = new THREE.InstancedMesh(geo, material, capacity);
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     mesh.setColorAt(0, new THREE.Color(0));
     mesh.instanceColor!.setUsage(THREE.DynamicDrawUsage);
-    if (this.id === 'hip') {
-      this.hip = new THREE.InstancedBufferAttribute(new Float32Array(capacity), 1);
-      geo.setAttribute('aHip', this.hip);
+    if (this.id === 'hip' || this.id === 'cyl') {
+      // The per-instance shape number: the hip's ridge inset, the prism's taper (L1).
+      this.hip = new THREE.InstancedBufferAttribute(new Float32Array(capacity).fill(1), 1);
+      geo.setAttribute(this.id === 'hip' ? 'aHip' : 'aTaper', this.hip);
     }
     mesh.count = 0;
     mesh.frustumCulled = false;
@@ -176,6 +196,8 @@ interface Held {
 }
 interface Building {
   place: BuildingPlacement;
+  /** L1: an exterior-only landmark: its outside out to RENDER.enterables.landmarkFar, no inside, no far box. */
+  landmark: boolean;
   stage: Stage;
   shell: Held[];
   inside: Held[];
@@ -190,7 +212,7 @@ function guessTris(p: BuildingPlacement): [number, number] {
   const storeys = Math.max(1, Math.round(p.eaves / 3.2));
   return [Math.min(4000, 300 + Math.sqrt(area) * storeys * 14), Math.min(8000, 200 + area * 0.9)];
 }
-const trisOf = (held: Held[]): number => held.reduce((n, h) => n + h.count * (h.pool === 'box' || h.pool === 'glass' ? 12 : 8), 0);
+const trisOf = (held: Held[]): number => held.reduce((n, h) => n + h.count * (h.pool === 'box' || h.pool === 'glass' ? 12 : h.pool === 'cyl' ? 44 : 8), 0);
 
 const m4 = new THREE.Matrix4();
 const pos = new THREE.Vector3();
@@ -205,8 +227,29 @@ function colourOf(mat: MaterialId, tint: number | undefined, seed: number, salt:
   return list[Math.min(list.length - 1, Math.floor(t * list.length))]!;
 }
 
+const yawM = new THREE.Matrix4();
+const shift = new THREE.Matrix4();
+
 /** Instance transform of a part in the map frame (gen/buildings/place.ts turns the local frame). */
 function partMatrix(p: BuildingPlacement, part: Part): void {
+  partMatrixFlat(p, part);
+  if (!part.yaw) return;
+  // L1: a turned part — about the vertical through its centre, the local turn carried into the world frame.
+  const [ux, uz] = dirToWorld(p.rot, Math.cos(part.yaw), -Math.sin(part.yaw));
+  const [ox, oz] = dirToWorld(p.rot, 1, 0);
+  const angle = Math.atan2(-uz, ux) - Math.atan2(-oz, ox);
+  const r = rectToWorld(p, part.x0, part.z0, part.x1, part.z1);
+  const cx = (r[0] + r[2]) / 2;
+  const cz = (r[1] + r[3]) / 2;
+  yawM.makeRotationY(angle);
+  shift.makeTranslation(cx, 0, cz);
+  yawM.premultiply(shift);
+  shift.makeTranslation(-cx, 0, -cz);
+  yawM.multiply(shift);
+  m4.premultiply(yawM);
+}
+
+function partMatrixFlat(p: BuildingPlacement, part: Part): void {
   const r = rectToWorld(p, part.x0, part.z0, part.x1, part.z1);
   const y0 = p.base + part.y0;
   const y1 = p.base + part.y1;
@@ -217,6 +260,12 @@ function partMatrix(p: BuildingPlacement, part: Part): void {
   const cz = (r[1] + r[3]) / 2;
   if (part.shape === 'box') {
     m4.compose(pos.set(cx, (y0 + y1) / 2, cz), quat.identity(), scl.set(wx, h, wz));
+    return;
+  }
+  if (part.shape === 'cyl') {
+    // The unit prism's radius is to its corners: a little wider so that its flat sides touch the box.
+    const f = 1 / Math.cos(Math.PI / 12);
+    m4.compose(pos.set(cx, y0, cz), quat.identity(), scl.set(wx * f, h, wz * f));
     return;
   }
   if (part.shape === 'wedge') {
@@ -330,6 +379,7 @@ export function buildEnterables(map: TacticalMap): EnterablePart {
     const wx = p.x1 - p.x0;
     const wz = p.z1 - p.z0;
     const seed = p.seed;
+    if (show && buildingDef(p.def).exteriorOnly) show = false; // L1: a landmark has no far box
     if (show) {
       m4.compose(pos.set((p.x0 + p.x1) / 2, p.base - SUNK + (p.eaves + SUNK) / 2, (p.z0 + p.z1) / 2), quat.identity(), scl.set(wx, p.eaves + SUNK, wz));
       farBox.setColorAt(at.box, col.setHex(colourOf(p.roof === 'flat' ? 'concrete' : 'siding', undefined, seed, 1)));
@@ -376,7 +426,8 @@ export function buildEnterables(map: TacticalMap): EnterablePart {
       partMatrix(p, part);
       pl.mesh.setMatrixAt(slot, m4);
       pl.mesh.setColorAt(slot, col.setHex(colourOf(part.mat, part.tint, p.seed, i)).multiplyScalar(shade));
-      if (pl.hip) {
+      if (pl.hip && part.shape === 'cyl') pl.hip.setX(slot, part.taper ?? 1);
+      else if (pl.hip) {
         // The ridge ends move in by half the short span (in units of the long side).
         const along = (part.axis ?? 'x') === 'x' ? part.x1 - part.x0 : part.z1 - part.z0;
         const across = (part.axis ?? 'x') === 'x' ? part.z1 - part.z0 : part.x1 - part.x0;
@@ -425,7 +476,7 @@ export function buildEnterables(map: TacticalMap): EnterablePart {
       if (b) b.place = p;
       else {
         const [st, it] = guessTris(p);
-        seenKeys.set(key, (b = { place: p, stage: 0, shell: [], inside: [], shellTris: st, insideTris: it }));
+        seenKeys.set(key, (b = { place: p, landmark: buildingDef(p.def).exteriorOnly === true, stage: 0, shell: [], inside: [], shellTris: st, insideTris: it }));
       }
       list.push(b);
     }
@@ -449,7 +500,7 @@ export function buildEnterables(map: TacticalMap): EnterablePart {
         const dist = Math.hypot(Math.max(p.x0 - cx, 0, cx - p.x1), Math.max(p.z0 - cz, 0, cz - p.z1));
         const inside = dist === 0 && cy > p.base - 1 && cy < p.base + p.height + 1;
         const hy = (s: Stage): number => (b.stage >= s ? E.hysteresis : 0);
-        const stage: Stage = inside || dist < E.near + hy(2) ? 2 : dist < E.mid + hy(1) ? 1 : 0;
+        const stage: Stage = b.landmark ? (dist < E.landmarkFar + hy(1) ? 1 : 0) : inside || dist < E.near + hy(2) ? 2 : dist < E.mid + hy(1) ? 1 : 0;
         if (stage === 0) {
           if (b.stage > 0) setStage(b, 0);
         } else close.push({ b, stage, dist: inside ? -1 : dist - (b.stage > 0 ? E.hysteresis : 0) });
@@ -461,7 +512,8 @@ export function buildEnterables(map: TacticalMap): EnterablePart {
         let stage = c.stage;
         if (tris) {
           const cost = (stage >= 2 ? c.b.insideTris : 0) + c.b.shellTris;
-          if (cost > tris.tris && c.dist >= 0) {
+          // L1: a landmark keeps its outside whatever is left (it has no far box to fall back to).
+          if (cost > tris.tris && c.dist >= 0 && !c.b.landmark) {
             stage = stage === 2 && c.b.shellTris <= tris.tris ? 1 : 0;
           }
           tris.tris -= stage >= 2 ? c.b.shellTris + c.b.insideTris : stage === 1 ? c.b.shellTris : 0;

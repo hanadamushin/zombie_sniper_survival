@@ -792,6 +792,7 @@ input[type='checkbox'] { accent-color: var(--khaki); }
 .marker-legend span { display: inline-flex; align-items: center; gap: 4px; }
 .marker-legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6); }
 .marker-legend .dash { display: inline-block; width: 16px; border-top: 2px dashed var(--paper-dim); }
+.marker-legend .diamond { display: inline-block; width: 7px; height: 7px; transform: rotate(45deg); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.7); }
 .supply-legend { display: flex; align-items: center; gap: 6px; margin: 6px 0 0; font-size: var(--fs-s); color: var(--paper-dim); }
 .supply-badge { display: inline-grid; place-items: center; width: 16px; height: 16px; color: #fff; font-size: var(--fs-xs); font-weight: bold; }
 

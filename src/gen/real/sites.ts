@@ -790,6 +790,40 @@ const hashOf = (i: number): number => {
   return (Math.imul(h, 0xc2b2ae35) >>> 0) / 2 ** 32;
 };
 
+/**
+ * L1: a landmark's site (docs/realmap_guide.md §7), planned before the facilities so that they, the
+ * town streets and the minor roads (`cut`: they stop at its fence) keep out of it. Its front faces
+ * `rot` (the table's); the centre moves at most `reach` m from the shrunk real point, then twice and
+ * three times as far, onto dry ground clear of the roads that stay. The footprint is the type's
+ * largest. Null when nothing fits (the census and the tests report it).
+ */
+export function planLandmark(P: Planner, id: string, x: number, z: number, rot: Rot, reach: number, poi: number): Site | null {
+  const def = buildingDef(id);
+  const w = def.size.w[1];
+  const d = def.size.d[1];
+  const big = Math.max(w, d) >= SITES.big;
+  const cut = CUTS.landmark!;
+  for (const far of [reach, reach * 2, reach * 3]) {
+    const step = far <= 60 ? 4 : 8;
+    let best: { r: Rect; score: number } | null = null;
+    for (let dz = -far; dz <= far; dz += step) {
+      for (let dx = -far; dx <= far; dx += step) {
+        const dist = Math.hypot(dx, dz);
+        if (dist > far || (best && dist > best.score)) continue;
+        const r = rectOf(x + dx, z + dz, w, d, rot);
+        const c = check(P, r, cut, big, false, true);
+        if (!c) continue;
+        const [lo, hi] = rangeOf(P.b, r[0], r[1], r[2], r[3], big ? 8 : 4);
+        if (hi - lo > (big ? SITES.levelRange.big : SITES.levelRange.small)) continue;
+        const score = dist + c.cut * 0.3;
+        if (!best || score < best.score) best = { r, score };
+      }
+    }
+    if (best) return take(P, { def: id, w, d, rot, x0: best.r[0], z0: best.r[1], x1: best.r[2], z1: best.r[3], cut, big, level: NaN }, poi, 'landmark');
+  }
+  return null;
+}
+
 /** Mark the landmarks and lookout towers of the area as taken before the sites are planned. */
 export function reserve(P: Planner, x: number, z: number, half: number): void {
   P.taken.push([x - half, z - half, x + half, z + half]);

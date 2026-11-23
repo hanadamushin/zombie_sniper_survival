@@ -2740,3 +2740,91 @@ R1〜R8 の途中で共通部分に入った修正を全地方に行き渡らせ
 - 関数・ファイル: `src/gen/placement.ts`（`districtOf` `pickType` `newTally` `tallyAdd`）、`src/gen/real/sites.ts`（`createPlanner` `planSites` `levelSites` `cutLine` `trackBand` `LineIndex` `siteDebug`）、`src/gen/vantage.ts`（`ensureFarVantages`）、`zombies.ts` の `spawnIndoor`
 - 道具: `tools/real/census.ts`、`tools/real/sight-sample.ts`、`tools/zombie-sight.ts`、`tools/loot-day.ts`。テスト `tests/census.test.ts`（集計 `tests/data/census.json`）、e2e `e2e/placement.spec.ts`
 - コマンド・イベント・文言の追加なし
+
+## L1 名所: 北海道 — 2026-11-23
+
+発注者の要望「各地の主要な観光名所は再現したい。建物の中に入れる必要は無い」。L1 は **名所の共通の仕組み**（L2〜L8 は表に 1 行と設計図を足すだけ）と **北海道の名所 8 種類** を作った。**共通部分を直した**（下の「共通部分の変更」: 設計図の型・描画・当たり判定・区域の生成・試験用の地図・戦略地図）。手引きは `docs/realmap_guide.md` 7 節（書き直した）。
+
+### 完了したこと
+- **名所の仕組み**（手引き 7 節）
+  - 外観だけの設計図: `BuildingDef.exteriorOnly`（部屋・探索ポイント・開いた扉なし、`lootable` なし）。組み立ては `src/gen/buildings/defs/landmark/common.ts` の `landmarkDef` と道具（箱・屋根・`bar`（斜めの壁）・`column`（12 角柱）・`ring`・窓の板・外のはしご・射点・地面・崩壊後の小物 6 種）
+  - 描画: 名所は霧の先（`RENDER.enterables.landmarkFar` 900m）まで外観で描き、遠景の箱にしない。三角形の予算で遠景に落とさない（内部は無い）
+  - 置き場所の表: `src/data/landmarks/<地方>.ts` × 8（北海道以外は空）。1 行 = 設計図の id・緯度経度・正面の向き（任意で `poi`＝区域データの点の名前、`reach`）。`src/gen/real/landmarks.ts` が緯度経度 → セル → 区域の点、`layoutReal` が **施設より先に敷地として計画**（`sites.ts` の `planLandmark`: 点から 48 / 96 / 144m 以内、国道・高速・鉄道・水面にかからない平らな所。県道以下の道は敷地の柵で止まり、町並み・施設・物見櫓は避ける。地面は均す）。**区域の生成のコードを地方ごとに触らない**（R1 の `REAL_LANDMARKS` と `landmark()` は廃止し、表へ移した）
+  - 地面と射点: 設計図の `ground`（堀・運河の水面を敷地から掘る、芝生・舗装・砂利）と `vantages`（射点）を `applyLandmark` が区域にも試験用の地図にも当てはめる
+  - 戦略地図: 名所のあるセルに金色の菱形と名称（拡大時。複数なら「○○ ほか N」）、凡例「名所」、セル情報に「名所: …」（`MapCanvas` の `landmarks`、文言 `world.legend.landmark` / `world.landmarks*`）
+  - 試験用の地図 `?landmarks=1`（`state.flags.yard === 4`、`debug.openYard(4)`）: 全地方の名所が平らな地面に並ぶ（堀・運河・射点つき）。名所はふつうの試験用の地図（`?yard=1〜3`）からは外した
+  - カタログの自動検査: 名所は外観の検査だけ（決定性・三角形・生成時間・敷地に収まる・**当たり判定の箱が描いた部品と重なる**・地面と射点とはしごが敷地の中・shell だけで部屋なし）
+- **北海道の名所**（`src/gen/buildings/defs/landmark/hokkaido/`、表 `src/data/landmarks/hokkaido.ts`）
+
+| 名所 | 設計図 | 寸法（敷地・高さ） | 外観の三角形 | 区域（セル）と置いた位置 | 縮めた点からの距離 |
+|---|---|---|---|---|---|
+| さっぽろテレビ塔 | `sapporo_tv_tower` | 20×20m、147.2m（展望台の屋根 94m） | 2,628 | 札幌 4800（810, 181）、時計を大通公園（西）へ | 8m（R1 の点） |
+| 札幌市時計台 | `sapporo_clock_tower` | 16×32m、19.8m | 1,124 | 4800（776, 132）、正面は南（北一条通） | 25m |
+| 北海道庁旧本庁舎（赤れんが庁舎） | `hokkaido_akarenga` | 62×44m、八角塔 33m | 2,144 | 4800（730, 216）、正面は東 | 72m（下の注） |
+| 北海道大学 クラーク像 | `hokudai_clark` | 32×32m（胸像 3m・ハルニレ 17〜21m） | 860 | 4800（710, 68） | 6m |
+| 北海道大学 ポプラ並木 | `hokudai_poplar` | 96×18m、ポプラ 24〜28m | 3,412 | 4800（666, 23） | 16m（点が区域の北端 z = 7） |
+| 五稜郭（堀・石垣・箱館奉行所） | `goryokaku` | 136×136m、奉行所の太鼓櫓 14.5m | 1,444 | 函館 7133（498, 200） | 96m（敷地が大きい） |
+| 五稜郭タワー | `goryokaku_tower` | 25×25m、107m（展望台の屋根 94m） | 1,812 | 7133（392, 243）、五稜郭の南西 | 23m（R1 の点） |
+| 小樽運河（倉庫群） | `otaru_canal` | 150×48m、倉庫の棟 10〜11m | 1,932 | 小樽 4463（580, 566）、運河は南北・散策路は西 | 91m（海と国道を避けた） |
+
+  - 生成時間（Node、9 回の最小）: 0.05〜0.17ms。すべて外観 6,000 三角形以下（大きな塔の上限 8,000 は使っていない）
+  - 形の要点: テレビ塔＝朱色の格子（脚は根元で大きく開き展望台の下で 8m に絞る・水平の輪 6 段・面の中央の縦材）、ガラスの展望台、電光時計（公園側）、上の細い格子と紅白のアンテナ、足元の建物。時計台＝白い下見板・赤い切妻屋根・正面の妻の上に時計塔（4 面の文字盤・鐘楼・赤い四角錐の屋根）・2 層のポーチ。赤れんが＝赤レンガの 2 階建て・白い石の帯・縦長の窓 2 段・スレートの寄棟と屋根窓と煙突・正面の 3 つの張り出しとペディメント・中央の八角塔（バルコニー・ドーム・頂塔）。五稜郭＝星形の堀（水面）・内側の石垣・正面と裏門の木橋・中央の奉行所（入母屋の瓦屋根・太鼓櫓）・木立。五稜郭タワー＝白い円柱の塔身・星形の 2 層の展望台（四角の核＋5 つの菱形の尖り）・足元のガラスのアトリウム・尖塔。小樽運河＝幅 20m の水面・海側に石造倉庫 6 棟（黒・茶・赤の切妻、棟の鯱、鉄扉の小窓）・散策路のガス灯 12 基・石橋・艀 2 艘。クラーク像＝花崗岩の台座と胸像・芝生の輪の小道・ハルニレ 4 本。ポプラ並木＝細い円錐のポプラ 2 列（2 本欠け）・砂利道・ロープの柵・倒れた幹
+  - 崩壊後 90 日の雰囲気: 焦げた車・放置車両・避難テント・土嚢・救援物資の箱・倒れた案内板・壁の焦げ跡・割れた窓（黒い板）を 1 つの名所に 1〜3 点
+  - **登って撃てる名所**: テレビ塔と五稜郭タワーの展望台の屋根（地上 94m）。外のはしご（テレビ塔は格子の中、五稜郭タワーは塔身の背面）で登り、展望台の床と屋根のはっちを抜ける（はしごの筒で囲う）。屋根に手すり。試験用の地図ではしごを実際に登って屋根に立つことをテストと e2e で確かめた
+
+### 外したもの・変えたもの（理由）
+- **五稜郭の大きさ**: 実在の星形は堀を含めて約 500m。区域は 1/10 に縮めた町なので、実寸では区域の半分を占め、縮めると 50m の染みになる。**約 1/4（130m）** で描いた（展望台から星形と分かり、町に収まる大きさ）。建物（奉行所）は実寸。半月堡（三角の出島）は堀の幅が足りないので省いた
+- **赤れんが庁舎の位置**: 実在の点（北三条）の周りは国道（5・230 号）と JR の高架に挟まれ、62×44m が入らない（縮めた町では実在の 600m に当たる）。表の順で 3 番目に探して大通の南側（点から 72m）に建った。国道を敷地で切る案は札幌の中心の道路が行き止まるので採らなかった
+- **小樽運河の位置**: 縮めた点の周りは海と国道 5 号で、91m 北の陸に建った（運河の水は敷地の中で掘ったもの。海とはつながらない）
+- 北大のクラーク像は胸像が 3m しかないので、遠目に分かるのは芝生の輪とハルニレ。近くでは台座と胸像と銘板が分かる。古河講堂などは足していない
+- 函館の五稜郭タワーは R1 の注記の点（手直しの `addPois`）に合わせた（表の `poi`）。テレビ塔も同じ
+
+### 確認（スクリーンショット、`e2e/landmarks.spec.ts`。`test-results/` 以下）
+- 試験用の地図（`?landmarks=1`）: `landmark-yard-<名前>-street.png`（正面 200m の地上）と `-air.png`（斜め上空）を 8 種類、`landmark-yard-sapporo_tv_tower-deck.png` / `goryokaku_tower-deck.png`（はしごを登って展望台の屋根から）
+- 実際の区域: `landmark-sapporo-<名前>-street/air.png`（札幌 5 種類）、`landmark-hakodate-goryokaku(-tower)-*.png`、`landmark-otaru-otaru_canal-*.png`、3 指標の計測点 `landmark-<町>-budget.png`、戦略地図 `landmark-strategic.png`
+- 自分の目での判定（実物の写真の記憶と比べて）: テレビ塔（朱の格子・展望台・電光時計・アンテナ）、時計台（白壁・赤屋根・時計塔）、赤れんが（赤レンガと八角塔）、五稜郭（上空・タワーから星形の堀と奉行所）、五稜郭タワー（白い塔と星形の展望台）、小樽運河（運河と石造倉庫とガス灯）、ポプラ並木 は **それと分かる**。クラーク像は近くでないと分からない（上記）
+
+### 性能（GPU なし・SwiftShader、1280×720、sim 1 ステップ＋`renderer.draw` 1 回を直接計測）
+| 場面 | ドローコール | 三角形 | sim ＋ 描画発行 |
+|---|---|---|---|
+| 試験用の地図（全 8 種類が外観で見える、北西の角から） | 10 | 4.8 万 | 0.03 ＋ 0.52 ms |
+| 同、中央から | 9 | 8.5 万 | 0.01 ＋ 0.41 ms |
+| 札幌 4800（**名所の最も多いセル**: 5 種類）、テレビ塔の展望台の屋根から他の名所を見下ろす | L1_SAPPORO |
+| 函館 7133（2 種類）、五稜郭タワーの屋根から | L1_HAKODATE |
+| 小樽 4463、運河の 220m 南の地上 | L1_OTARU |
+
+- 名所は描画のプールを共有するので、名所が増えてもドローコールは増えない（`cyl` の形を使う名所があると区域で +1）。予算内（ドローコール < 150、三角形 < 50 万、sim＋描画発行 < 4ms）
+
+### 共通部分の変更（共通部分を直した）
+1. 設計図の型（追加のみ）: `BuildingDef.exteriorOnly`、`Part.yaw`（垂直軸の回転）、`Part.taper`、形 `'cyl'`（12 角柱）、`BuildingBlueprint.vantages` / `ground`、`GroundFeature`、材質 `'paint'`（`data/render.ts` の `PAINT`: 名前つきの 22 色。追記のみ）
+2. 当たり判定（`colliders.ts`）: 回した箱は長い辺に沿った小さな箱の列、`cyl` は内接する四角（先細りは 3 段）。`SHAPE_TRIS.cyl` 44
+3. 描画（`render/tactical/enterables.ts`）: `yaw` の回転、`cyl` のプール（`aTaper`）、名所の段（霧の先まで外観・遠景の箱なし・予算で落とさない）、`RENDER.enterables.landmarkFar`
+4. 区域の生成: `layout.ts`（表の名所を施設より先に、`applyLandmark`、名所に使った `POI.tower` の点に物見櫓を建てない）、`sites.ts` の `planLandmark`、`CUTS.landmark`、`format.ts` の `POI.landmark`（21、ファイルには書かない）、`src/data/realmap.ts` の `REAL_LANDMARKS` を削除
+5. `builder.ts` の `addEnterable`: 外観だけの種類は探索の対象にしない。`BALANCE.zombie.indoor.weights` に `landmark.` 0（屋内のゾンビを置かない）
+6. 試験用の地図: `yard.ts`（`yardMap(4)`・名所はふつうの試験用の地図から外した）、`area.ts`、`main.ts`（`?landmarks=1`、`openYard(4)`、**`debug.teleport` が落下の高さを消す**: 上空から撮った後に地上へ戻すと落下で死んでいた）
+7. 戦略地図: `MapCanvas.tsx`（`landmarks`・`LANDMARK_COLOR`）、`WorldMap.tsx`（凡例・セル情報）、`styles.css`（凡例の菱形）
+8. 全国の集計 `tests/data/census.json` を取り直した（北海道の 3 セルの建物の数が変わる。他のセルは同じ）
+
+### テスト
+- `tests/landmarks.test.ts`（新設 5 件）: 表の格子が grid.json と同じ（テレビ塔が 4800 の (810, 173)）、表の名所は外観だけの設計図で全名所が表と ja.ts にある、試験用の地図に全名所と堀・運河の水面、**はしごを登って展望台の屋根の射点に着く**、データのある地方の全名所が区域に建ち点から `reach`×3 以内・敷地に他の建物なし
+- `tests/buildings.test.ts`: 名所は外観の検査だけ（上記）。`tests/realmap_hokkaido.test.ts` のテレビ塔・五稜郭タワーの屋上（地上 80m 超の射点）はそのまま通る
+- `npm run check` 931 件・`npm run build` 通過
+- e2e: `e2e/landmarks.spec.ts`（新設 2 件: 試験用の地図・実際の区域）と `e2e/realmap*.spec.ts`: L1_E2E
+
+### 未完了・既知の問題
+- 名所の中のゾンビの通り道: 60m を超える敷地（五稜郭・小樽運河・ポプラ並木）は通行グリッドで塞がない（07d-3 の大きな敷地と同じ）ので、ゾンビは堀・建物の壁で止まって回り込む。五稜郭の中へは橋だけ（ゾンビの経路は橋を知らない）
+- 回した箱（石垣）の当たり判定は細かい箱の列なので、斜めの石垣の角で最大 0.3m ほど外へ出る
+- 小樽運河・五稜郭の水面は敷地の地面から掘った池で、区域の川・海とはつながらない
+- 赤れんが庁舎・小樽運河は実在の点から 70〜90m ずれる（上記）
+
+### 次のセッションへの注意（L2〜L8）
+- 手引き `docs/realmap_guide.md` 7 節だけで作れる: 設計図（`landmarkDef`）・カタログに 1 行・表に 1 行・ja.ts の末尾に名前。e2e は `LANDMARKS=<id の一部>,… npx playwright test e2e/landmarks.spec.ts`、実際の区域の地点は同じ spec の `CELLS` に足す
+- 色は `PAINT` に **追記だけ**（順で色が決まる）。足りない形は `common.ts` に関数を足す（既存は変えない）
+- 原爆ドーム（L6）の扱い（演出なし・射点なし・周り 60m にゾンビを初期配置しない）は L1 では仕組みを作っていない。L6 が足す（例: 表に `noSpawn` を足し、`zombies.ts` の初期配置で避ける）
+
+### 追加した共有型・コマンド・イベント
+- 型（追加のみ）: `BuildingDef.exteriorOnly?`、`Part.yaw?` / `taper?`、`PartShape` に `'cyl'`、`MaterialId` に `'paint'`、`BuildingBlueprint.vantages?` / `ground?`、`GroundFeature`、`LandmarkSpot`、`YardKind` に 4
+- データ: `src/data/landmarks/`（表 8 地方と `LANDMARK_GRID`）、`PAINT`（`data/render.ts`）、`RENDER.enterables.landmarkFar`、`CUTS.landmark`、`POI.landmark`
+- 関数: `src/gen/real/landmarks.ts`（`realToArea` `landmarksIn` `allLandmarks` `applyLandmark`）、`sites.ts` の `planLandmark`、`defs/landmark/common.ts`（`landmarkDef` `paint`）
+- 文言: `world.legend.landmark`、`world.landmarks`、`world.landmarks.more`、`landmark.<名前>` × 8。デバッグ: `?landmarks=1`、`debug.openYard(4)`
+- コマンド・イベント・依存の追加なし。`STATE_VERSION` 据え置き（地図は再生成なので旧セーブも読める。北海道の 3 セルの町並みは変わる）

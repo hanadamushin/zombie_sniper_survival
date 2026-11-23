@@ -1,5 +1,36 @@
 // Rendering constants (camera, view distance, sky colours). Colours are 0xRRGGBB.
 
+/**
+ * L1: named colours for the landmarks (material `paint`): a landmark has to be its own colour (the
+ * TV tower's orange, the clock tower's white and red, castle walls, copper roofs, gold). Append only:
+ * the order picks the colour (`tint` = (index + 0.5) / count).
+ */
+export const PAINT = {
+  white: 0xeeede6,
+  offWhite: 0xd8d2c0,
+  black: 0x1f2022,
+  charcoal: 0x3a3b3f,
+  intlOrange: 0xd45a2c,
+  red: 0xb32a22,
+  brickRed: 0x9c4a36,
+  copper: 0x5f9a86,
+  gold: 0xc8a040,
+  navy: 0x2b3a58,
+  skyBlue: 0x8cb2cc,
+  yellow: 0xe0c24a,
+  green: 0x3f6a3a,
+  brown: 0x6a4a32,
+  stone: 0xb6aa8e,
+  gray: 0x8a8a86,
+  silver: 0xc3c7cb,
+  roofRed: 0x8c2f26,
+  slateBlue: 0x4f5c6a,
+  poplar: 0x3f5f2e,
+  windowDark: 0x23282c,
+  lampGlass: 0xe8dca0,
+} as const;
+export type PaintName = keyof typeof PAINT;
+
 export const RENDER = {
   camera: {
     fov: 70,
@@ -84,7 +115,9 @@ export const RENDER = {
    * pooled per shape; a pool starts with `capacity` slots and doubles when full. 07d-3: the outsides and
    * insides of all the maps drawn take at most `triBudget` triangles, nearest first (the far outline beyond).
    */
-  enterables: { near: 40, mid: 300, hysteresis: 15, perFrame: 1, capacity: 4096, glassOpacity: 0.32, interiorShade: 0.82, triBudget: 140_000 },
+  enterables: { near: 40, mid: 300, hysteresis: 15, perFrame: 1, capacity: 4096, glassOpacity: 0.32, interiorShade: 0.82, triBudget: 140_000,
+    /** L1: exterior-only landmarks keep their outside out to here (past the fog's far end), never the far box. */
+    landmarkFar: 900 },
   /** 07d: colours of the building materials (gen/buildings/types.ts MaterialId); Part.tint picks one. */
   materials: {
     concrete: [0x9a9790, 0x8c8a85, 0xa8a49a, 0x7f817f],
@@ -120,6 +153,8 @@ export const RENDER = {
     plant: [0x4a6634],
     asphalt: [0x47484b],
     olive: [0x4f5a3a, 0x5d6644, 0x7d7458, 0x3e4632],
+    /** L1: the landmarks' named colours (PAINT; pick one with gen/buildings/defs/landmark/common.ts paint()). */
+    paint: Object.values(PAINT),
   },
   buildings: {
     /** Wall colours by kind (picked by Building.tint). */

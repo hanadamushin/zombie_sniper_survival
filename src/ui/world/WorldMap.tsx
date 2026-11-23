@@ -15,10 +15,21 @@ import { tk } from '../command/format.ts';
 import { t, type TextKey } from '../i18n/ja.ts';
 import type { UiActions } from '../store.ts';
 import { cellName, fmt, formatDuration, intelOf, knownCount, roughly, zBand, zBandValue } from './info.ts';
-import { MapCanvas, MARKER_COLOR, SUPPLY_COLOR, setSupplyGlyph, type MapFocus, type MapMarker } from './MapCanvas.tsx';
+import { LANDMARK_COLOR, MapCanvas, MARKER_COLOR, SUPPLY_COLOR, setSupplyGlyph, type MapFocus, type MapMarker } from './MapCanvas.tsx';
+import { allLandmarks } from '../../gen/real/landmarks.ts';
 import { legendGradient, lootColor, popColor, UNKNOWN, zColor } from './palette.ts';
 
 type ViewMode = 'z' | 'loot' | 'pop';
+
+/** L1: the landmarks per cell (names from ja.ts; one label per cell: the first name and how many more). */
+let landmarkCache: { list: { cell: CellId; name: string }[]; byCell: Map<CellId, string[]> } | null = null;
+function landmarkMarks(): { list: { cell: CellId; name: string }[]; byCell: Map<CellId, string[]> } {
+  if (landmarkCache) return landmarkCache;
+  const byCell = new Map<CellId, string[]>();
+  for (const l of allLandmarks()) byCell.set(l.cell, [...(byCell.get(l.cell) ?? []), t(l.spot.id as TextKey)]);
+  const list = [...byCell].map(([cell, names]) => ({ cell, name: names.length > 1 ? t('world.landmarks.more', { name: names[0]!, n: names.length - 1 }) : names[0]! }));
+  return (landmarkCache = { list, byCell });
+}
 const VIEWS: readonly ViewMode[] = ['z', 'loot', 'pop'];
 
 interface Props {
@@ -120,6 +131,7 @@ export function WorldMap({ state, grid, actions }: Props) {
         path={travel ? travel.path.slice(Math.floor(travel.progress)) : route?.path}
         focus={focus}
         labels
+        landmarks={landmarkMarks().list}
         onHover={setHover}
         onPick={(cell) => !travel && setSelected(cell === here ? null : cell)}
       />
@@ -145,6 +157,7 @@ export function WorldMap({ state, grid, actions }: Props) {
             <span key={k}><i class="dot" style={{ background: MARKER_COLOR[k] }} />{t(`world.legend.${k}` as TextKey)}</span>
           ))}
           <span><i class="dash" />{t('world.legend.sea')}</span>
+          <span data-testid="map-landmark-legend"><i class="diamond" style={{ background: LANDMARK_COLOR }} />{t('world.legend.landmark')}</span>
         </p>
         <p class="legend supply-legend" data-testid="map-supply-legend">
           <span class="supply-badge" style={{ background: SUPPLY_COLOR }}>{t('world.supplyGlyph')}</span>
@@ -186,6 +199,7 @@ export function WorldMap({ state, grid, actions }: Props) {
           )}
         </dl>
         {info.real && <RealFacts facts={info.real} />}
+        {landmarkMarks().byCell.has(shown) && <p class="help" data-testid="info-landmarks">{t('world.landmarks', { names: landmarkMarks().byCell.get(shown)!.join('・') })}</p>}
         {hub && <p class="help">{t('world.hub', { name: hub.name })}</p>}
         {sea && <p class="help">{t('world.sea', { name: sea.name })}</p>}
 
