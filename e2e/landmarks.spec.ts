@@ -64,13 +64,16 @@ async function shoot(page: Page, file: string, x: number, z: number, yaw: number
   if (y !== undefined) await page.evaluate(([px, pz]) => window.__game!.debug.teleport(px!, pz!), [x, z] as const);
 }
 
-/** The real areas have zombies: the photographer stays alive (full health before and after each wait). */
+/** The real areas have zombies: the photographer stays alive (health topped up every 50 ms from now on). */
 async function heal(page: Page): Promise<void> {
   await page.evaluate(() => {
-    const p = window.__game!.state!.player;
-    const w = window as unknown as { hp0?: number };
-    w.hp0 ??= p.hp;
-    if (p.hp > 0) p.hp = w.hp0;
+    const w = window as unknown as { hp0?: number; healing?: number };
+    if (w.healing) return;
+    w.hp0 = window.__game!.state!.player.hp;
+    w.healing = window.setInterval(() => {
+      const p = window.__game!.state?.player;
+      if (p && p.hp > 0 && p.hp < w.hp0!) p.hp = w.hp0!;
+    }, 50);
   });
 }
 
@@ -177,6 +180,7 @@ test('real map: the landmarks at their place, the busiest cell within the budget
   const errors = trackErrors(page);
   await page.goto('/?seed=12&scenario=0');
   await startNewGame(page);
+  await heal(page);
   const rows: string[] = [];
   for (const c of CELLS) {
     const cell = await page.evaluate(([la, lo]) => window.__game!.debug.gotoLatLon(la!, lo!), [c.lat, c.lon]);
