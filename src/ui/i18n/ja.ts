@@ -876,6 +876,20 @@ export const ja = {
   'landmark.kakunodate_bukeyashiki': '角館 武家屋敷通り',
   'landmark.yamadera': '山寺（立石寺） 五大堂',
   'landmark.tsuruga_castle': '会津若松城（鶴ヶ城） 天守',
+  // L3a tokyo
+  'landmark.tokyo_skytree': '東京スカイツリー',
+  'landmark.tokyo_tower': '東京タワー',
+  'landmark.tokyo_station': '東京駅丸の内駅舎',
+  'landmark.national_diet': '国会議事堂',
+  'landmark.tokyo_metropolitan_government': '東京都庁第一本庁舎',
+  'landmark.yasuda_auditorium': '東京大学 安田講堂',
+  'landmark.akamon': '東京大学 赤門',
+  'landmark.sensoji': '浅草寺 雷門と五重塔',
+  'landmark.kokyo_nijubashi': '皇居 二重橋と伏見櫓',
+  'landmark.rainbow_bridge': 'レインボーブリッジ',
+  'landmark.meiji_jingu_otorii': '明治神宮 大鳥居',
+  'landmark.nippon_budokan': '日本武道館',
+  'landmark.tokyo_dome': '東京ドーム',
 } as const;
 
 export type TextKey = keyof typeof ja;

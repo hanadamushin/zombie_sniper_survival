@@ -908,7 +908,7 @@ export function layoutReal(b: Builder, real: RealArea, terrain: (x: number, z: n
       pois.push({ kind: POI.landmark, grade: 0, x: m.x, z: m.z, name: m.spot.id });
     }
     taken.add(poi);
-    planLandmark(P, m.spot.id, pois[poi]!.x, pois[poi]!.z, m.spot.rot, m.spot.reach ?? 48, poi, { level: m.spot.level, drain: m.spot.drain });
+    planLandmark(P, m.spot.id, pois[poi]!.x, pois[poi]!.z, m.spot.rot, m.spot.reach ?? 48, poi, { level: m.spot.level, drain: m.spot.drain, cutRoads: m.spot.cutRoads });
   }
   // R1, R9: the lookout towers keep their spot (they were placed for the sight lines).
   pois.forEach((p, i) => {

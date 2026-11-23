@@ -186,6 +186,12 @@ export const CUTS: Record<string, readonly number[]> = {
   facility: [4],
   /** L1: a landmark's site (the prefectural, wide and local roads under it go; national roads and railways stay). */
   landmark: [2, 3, 4],
+  /**
+   * L3a: a landmark whose table line says `cutRoads` (central Tokyo: an expressway or a national road
+   * every 60–120 m of the area) stops every road at its fence. The expressways are drawn as avenues on
+   * the ground (no decks), so cutting one is the same as cutting a national road. Railways stay.
+   */
+  landmarkRoads: [0, 1, 2, 3, 4],
 };
 
 /** Per-area caps of the facility kinds (the real cells hold dozens of schools; the area holds a few). */

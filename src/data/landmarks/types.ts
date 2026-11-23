@@ -31,4 +31,11 @@ export interface LandmarkSpot {
    * Default 0. Sea and rivers in the share are filled as well, so keep it small.
    */
   drain?: number;
+  /**
+   * L3a: the lot may cut every road — expressways and national roads too (they stop at its fence, like
+   * the minor roads). For the heart of a great city, where an expressway or a national road runs every
+   * 60–120 m of the shrunk area and no lot of a big landmark fits between them (central Tokyo). The
+   * expressways are avenues on the ground in an area (no decks). Railways are never cut. Default false.
+   */
+  cutRoads?: boolean;
 }

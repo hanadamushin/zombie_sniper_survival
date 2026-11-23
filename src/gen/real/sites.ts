@@ -797,12 +797,13 @@ const hashOf = (i: number): number => {
  * three times as far, onto dry ground clear of the roads that stay. The footprint is the type's
  * largest. Null when nothing fits (the census and the tests report it).
  */
-export function planLandmark(P: Planner, id: string, x: number, z: number, rot: Rot, reach: number, poi: number, opts: { level?: number; drain?: number } = {}): Site | null {
+export function planLandmark(P: Planner, id: string, x: number, z: number, rot: Rot, reach: number, poi: number, opts: { level?: number; drain?: number; cutRoads?: boolean } = {}): Site | null {
   const def = buildingDef(id);
   const w = def.size.w[1];
   const d = def.size.d[1];
   const big = Math.max(w, d) >= SITES.big;
-  const cut = CUTS.landmark!;
+  // L3a: `cutRoads` lets the lot stop the expressways and national roads too (central Tokyo).
+  const cut = opts.cutRoads ? CUTS.landmarkRoads! : CUTS.landmark!;
   // L2: a landmark may ask for more slope (`level`, m: a temple on a mountainside, its terrace cut
   // into the hill) or to stand over a share of water (`drain`: a castle over the remains of its own
   // moat in the area data; the water under the lot is filled, the blueprint digs its own).

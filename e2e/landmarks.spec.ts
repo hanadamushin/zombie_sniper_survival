@@ -111,8 +111,9 @@ async function portraits(page: Page, prefix: string, l: Lm, dist = 200): Promise
   await shoot(page, `${prefix}-${name}-street`, cx, south ? l.z1 + dist : l.z0 - dist, south ? 0 : Math.PI, Math.min(0.6, pitch));
   // The air: as far again up as the landmark is tall, looking down at it (from the south-east, or
   // the side that stays in the area).
-  const r = Math.max(70, Math.max(l.x1 - l.x0, l.z1 - l.z0) * 1.1, l.top * 1.1);
-  const h = l.base + Math.max(60, l.top * 1.2);
+  // L3a: a very tall tower (Skytree 634 m) is shot from inside the fog's reach (800 m), not from above its top.
+  const r = Math.min(420, Math.max(70, Math.max(l.x1 - l.x0, l.z1 - l.z0) * 1.1, l.top * 1.1));
+  const h = l.base + Math.min(380, Math.max(60, l.top * 1.2));
   const ax = cx + (cx + r * 0.7 <= AREA - 8 ? 1 : -1) * r * 0.7;
   const az = cz + (cz + r * 0.7 <= AREA - 8 ? 1 : -1) * r * 0.7;
   const yaw = Math.atan2(-(cx - ax), -(cz - az));
@@ -196,6 +197,13 @@ const CELLS: { name: string; lat: number; lon: number }[] = [
   { name: 'kakunodate', lat: 39.597, lon: 140.5625 },
   { name: 'yamadera', lat: 38.3127, lon: 140.438 },
   { name: 'aizu', lat: 37.4877, lon: 139.9298 },
+  // L3a tokyo: Marunouchi (18480: the station, Nijūbashi, the Diet, Tokyo Tower, the Rainbow Bridge —
+  // measured from Tokyo Tower's deck), Hongō (18313: Skytree, Sensō-ji, Yasuda, Akamon, Budōkan,
+  // Tokyo Dome), Shinjuku, Yoyogi.
+  { name: 'tokyo-marunouchi', lat: 35.68124, lon: 139.76712 },
+  { name: 'tokyo-hongo', lat: 35.71336, lon: 139.76223 },
+  { name: 'tokyo-shinjuku', lat: 35.68959, lon: 139.69171 },
+  { name: 'tokyo-yoyogi', lat: 35.6731, lon: 139.6989 },
 ];
 
 test('real map: the landmarks at their place, the busiest cell within the budgets, the marks on the strategic map', async ({ page }) => {

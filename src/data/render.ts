@@ -33,6 +33,15 @@ export const PAINT = {
   bronze: 0x4d4b3a,
   cedar: 0x2a4128,
   thatch: 0x8a7a55,
+  // L3a (Tokyo): Skytree's pale blue white, the decks' glass, tapestry brick, autumn ginkgo, weathered
+  // cypress (the great torii), light granite, the Budokan's grey-green roof.
+  skytree: 0xdce3ea,
+  deckGlass: 0x3d4c5a,
+  brickBrown: 0x7c4f36,
+  ginkgo: 0xd8b636,
+  hinoki: 0x857463,
+  granite: 0xc9c5bb,
+  grayGreen: 0x7d8a84,
 } as const;
 export type PaintName = keyof typeof PAINT;
 
