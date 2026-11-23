@@ -13,7 +13,9 @@ const grid = loadGrid();
 const DIR = new URL('../public/data/areas/', import.meta.url);
 const have = REGIONS.every((r) => existsSync(new URL(`${r}/index.json`, DIR)));
 
-describe.skipIf(!have)('real map: all regions (R9)', () => {
+// Reading and decoding all 4,108 area files takes 2-4 s alone; under the parallel suite it went past
+// vitest's default 5 s now and then (the one unexplained failure in R9). Give it room.
+describe.skipIf(!have)('real map: all regions (R9)', { timeout: 60_000 }, () => {
   it('has one area file per land cell, in its region folder', () => {
     let total = 0;
     for (const [r, region] of REGIONS.entries()) {

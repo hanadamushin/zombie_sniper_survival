@@ -2740,3 +2740,8 @@ R1〜R8 の途中で共通部分に入った修正を全地方に行き渡らせ
 - 関数・ファイル: `src/gen/placement.ts`（`districtOf` `pickType` `newTally` `tallyAdd`）、`src/gen/real/sites.ts`（`createPlanner` `planSites` `levelSites` `cutLine` `trackBand` `LineIndex` `siteDebug`）、`src/gen/vantage.ts`（`ensureFarVantages`）、`zombies.ts` の `spawnIndoor`
 - 道具: `tools/real/census.ts`、`tools/real/sight-sample.ts`、`tools/zombie-sight.ts`、`tools/loot-day.ts`。テスト `tests/census.test.ts`（集計 `tests/data/census.json`）、e2e `e2e/placement.spec.ts`
 - コマンド・イベント・文言の追加なし
+
+### 取りまとめ: 07d-3 の後始末とテストの揺れ — 2026-11-23
+- 07d-3 が「1 棟あたりの探索ポイントを数か所に絞る」ようにしたため、試験用の地図（yard）で全種類の棚を探索する e2e 6 件（`buildings-*.spec.ts` の「entered, climbed and searched」）が落ちていた。yard だけは全部の棚を探索ポイントにする `GenParams.allShelves` を足した（`src/sim/tactical/yard.ts`）。ゲームの区域は 07d-3 のまま。6 件とも通過
+- **R9 が残した「`npm run check` が 5 回に 1 回だけ 1 件落ちる」の原因**: 重いテスト（全国 4,108 区域を読む `realmap_all`、300 秒の襲来を回す `build` など）が、並列実行の負荷で vitest の既定の時間制限 5 秒を超えていた。`vite.config.ts` の `testTimeout` を 30 秒にした（速さの予算はテストの中で個別に検査しているので、これで緩むものはない）。全件を 4 回続けて通過
+
