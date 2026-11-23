@@ -196,6 +196,8 @@ export const RENDER = {
     reedWidth: 1.55,
     /** Reeds, bushes and bamboo of a neighbouring map are drawn when the camera is within this distance of its square (07c). */
     fineRange: 350,
+    /** Hedges of a map quadrant are drawn while the camera is within this distance of it (they are low and fade into the fog well before; most triangles of a flat farm plain). */
+    hedgeRange: 560,
     bambooSpacing: 1.6,
     bambooUnder: 3.2,
   },

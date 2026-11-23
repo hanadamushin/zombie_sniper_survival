@@ -172,11 +172,11 @@ export function buildBrush(map: TacticalMap): BrushPart {
   const color = new THREE.Color();
   /** Fine undergrowth is split into the four 512 m quadrants of the map, so that far ones can be hidden (07c). */
   const half = map.size / 2;
-  const quadrants: { mesh: THREE.InstancedMesh; x0: number; z0: number }[] = [];
+  const quadrants: { mesh: THREE.InstancedMesh; x0: number; z0: number; range: number }[] = [];
   const add = <T extends { x: number; z: number }>(name: string, geo: THREE.BufferGeometry, material: THREE.Material, list: T[], each: (mesh: THREE.InstancedMesh, k: number, item: T) => void): void => {
     disposables.push(geo, material);
-    // Hedges and box scenery are always drawn (they are what blocks the view from afar).
-    const split = name !== 'brush-boxes' && name !== 'brush-hedges';
+    // Box scenery is always drawn (it is what blocks the view from afar); hedges per quadrant up to `hedgeRange`.
+    const split = name !== 'brush-boxes';
     for (let qd = 0; qd < (split ? 4 : 1); qd++) {
       const x0 = (qd % 2) * half;
       const z0 = Math.floor(qd / 2) * half;
@@ -188,7 +188,7 @@ export function buildBrush(map: TacticalMap): BrushPart {
       mesh.name = name;
       group.add(mesh);
       disposables.push(mesh);
-      if (split) quadrants.push({ mesh, x0, z0 });
+      if (split) quadrants.push({ mesh, x0, z0, range: name === 'brush-hedges' ? P.hedgeRange : P.fineRange });
     }
   };
 
@@ -229,10 +229,10 @@ export function buildBrush(map: TacticalMap): BrushPart {
   return {
     object: group,
     update(x, z) {
-      // Hedges and wrecks always; reeds, bushes and bamboo only in the quadrants within reach (they are most of the triangles).
+      // Wrecks always; hedges, reeds, bushes and bamboo only in the quadrants within reach (they are most of the triangles).
       for (const qd of quadrants) {
         const d = Math.hypot(Math.max(qd.x0 - x, 0, x - qd.x0 - half), Math.max(qd.z0 - z, 0, z - qd.z0 - half));
-        qd.mesh.visible = d < P.fineRange;
+        qd.mesh.visible = d < qd.range;
       }
     },
     dispose() {
