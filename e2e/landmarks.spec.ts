@@ -83,6 +83,9 @@ async function heal(page: Page): Promise<void> {
   });
 }
 
+/** The side of an area (m). */
+const AREA = 1024;
+
 interface Lm { def: string; x0: number; z0: number; x1: number; z1: number; base: number; top: number; vantage: [number, number, number] | null }
 
 async function landmarksOf(page: Page): Promise<Lm[]> {
@@ -101,12 +104,17 @@ async function portraits(page: Page, prefix: string, l: Lm, dist = 200): Promise
   const cz = (l.z0 + l.z1) / 2;
   const name = l.def.replace('landmark.', '');
   const pitch = Math.atan2(Math.max(4, l.top * 0.55) - 1.6, dist);
-  await shoot(page, `${prefix}-${name}-street`, cx, l.z1 + dist, 0, Math.min(0.6, pitch));
-  // The air: as far again up as the landmark is tall, looking down at it.
+  // L2: stay in the area (a point past its edge is in the next cell: the game moves there and the
+  // other shots and the budget's firing position would be read in the wrong map). A landmark near
+  // the south edge is shot from the north.
+  const south = l.z1 + dist <= AREA - 8;
+  await shoot(page, `${prefix}-${name}-street`, cx, south ? l.z1 + dist : l.z0 - dist, south ? 0 : Math.PI, Math.min(0.6, pitch));
+  // The air: as far again up as the landmark is tall, looking down at it (from the south-east, or
+  // the side that stays in the area).
   const r = Math.max(70, Math.max(l.x1 - l.x0, l.z1 - l.z0) * 1.1, l.top * 1.1);
   const h = l.base + Math.max(60, l.top * 1.2);
-  const ax = cx + r * 0.7;
-  const az = cz + r * 0.7;
+  const ax = cx + (cx + r * 0.7 <= AREA - 8 ? 1 : -1) * r * 0.7;
+  const az = cz + (cz + r * 0.7 <= AREA - 8 ? 1 : -1) * r * 0.7;
   const yaw = Math.atan2(-(cx - ax), -(cz - az));
   const down = -Math.atan2(h - (l.base + l.top * 0.4), Math.hypot(ax - cx, az - cz));
   await shoot(page, `${prefix}-${name}-air`, ax, az, yaw, down, h);
@@ -214,7 +222,11 @@ test('real map: the landmarks at their place, the busiest cell within the budget
     if (deck) {
       const [vx, vy, vz] = deck.vantage!;
       await page.evaluate(([x, y, z, tx, tz]) => window.__game!.debug.teleport(x!, z!, Math.atan2(-(tx! - x!), -(tz! - z!)), -0.35, y! + 0.05), [vx, vy, vz, mx, mz] as const);
-    } else await page.evaluate(([x, z]) => window.__game!.debug.teleport(x!, z! + 220, 0, 0.05), [mx, mz] as const);
+    } else {
+      // From the south (or the north when the south is past the area's edge: L2, Aomori).
+      const s = mz + 220 <= AREA - 8 ? 1 : -1;
+      await page.evaluate(([x, z, yw]) => window.__game!.debug.teleport(x!, z!, yw!, 0.05), [mx, mz + s * 220, s > 0 ? 0 : Math.PI] as const);
+    }
     await heal(page);
     await settle(page);
     await heal(page);
@@ -226,6 +238,8 @@ test('real map: the landmarks at their place, the busiest cell within the budget
     expect(m.tick + m.draw, c.name).toBeLessThan(4);
   }
   console.log(`[landmarks in the real areas]\n${rows.join('\n')}`);
+  // L2: the photographer is alive (a fall from a firing position in the wrong map killed it once).
+  expect(await page.evaluate(() => window.__game!.state!.player.hp)).toBeGreaterThan(0);
   await page.evaluate(() => window.__game!.dispatch({ type: 'setMode', mode: 'world' }));
   await expect(page.getByTestId('map-landmark-legend')).toBeVisible();
   await page.waitForTimeout(1500);
