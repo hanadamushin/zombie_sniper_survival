@@ -317,9 +317,15 @@ test('firing range: scope, a zeroed head shot at 300 m, ears, and 600 zombies wi
     let t0 = performance.now();
     for (let i = 0; i < 300; i++) g.sim.tick(s, 1 / 60, { ...g.debug.noInput });
     const tick = (performance.now() - t0) / 300;
-    t0 = performance.now();
-    for (let i = 0; i < 20; i++) g.renderer.draw(s, 0, 0);
-    const draw = (performance.now() - t0) / 20;
+    // Median of 20 draws: one garbage-collection pause must not decide the result.
+    const draws: number[] = [];
+    for (let i = 0; i < 20; i++) {
+      t0 = performance.now();
+      g.renderer.draw(s, 0, 0);
+      draws.push(performance.now() - t0);
+    }
+    draws.sort((a, b) => a - b);
+    const draw = draws[10]!;
     return { zombies: s.tactical!.zombies.length, calls: b.calls, triangles: b.triangles, cpu: (b.cpuMs - a.cpuMs) / Math.max(1, b.frames - a.frames), tick, draw, scale: auto };
   });
   console.log(`range, ${stats.zombies} zombies: ${stats.calls} draw calls, ${stats.triangles} triangles, sim step ${stats.tick.toFixed(3)} ms + draw submission ${stats.draw.toFixed(2)} ms (frame average incl. UI: ${stats.cpu.toFixed(2)} ms; automatic scale had reached ${stats.scale})`);

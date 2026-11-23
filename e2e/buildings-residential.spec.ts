@@ -59,9 +59,15 @@ async function measure(page: Page): Promise<{ calls: number; triangles: number; 
     let t0 = performance.now();
     for (let i = 0; i < 120; i++) g.sim.tick(s, 1 / 60, { ...g.debug.noInput });
     const tick = (performance.now() - t0) / 120;
-    t0 = performance.now();
-    for (let i = 0; i < 20; i++) g.renderer.draw(s, 0, 0);
-    const draw = (performance.now() - t0) / 20;
+    // Median of 20 draws: one garbage-collection pause must not decide the result.
+    const draws: number[] = [];
+    for (let i = 0; i < 20; i++) {
+      t0 = performance.now();
+      g.renderer.draw(s, 0, 0);
+      draws.push(performance.now() - t0);
+    }
+    draws.sort((a, b) => a - b);
+    const draw = draws[10]!;
     return { calls: info.calls, triangles: info.triangles, tick, draw };
   });
 }
