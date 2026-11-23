@@ -203,6 +203,8 @@ export interface GenParams {
   isHome: boolean;
   /** Number of searchable buildings wanted (sim/world/derive.ts cellTactical().lootSpots). */
   lootSpots: number;
+  /** Test yard (sim/tactical/yard.ts): every open shelf of an enterable building is a search point (no per-building cap, 07d-3). */
+  allShelves?: boolean;
   /** 07c: absent for stand-alone maps (tests, the firing range) — then nothing continues past the edge. */
   world?: WorldContext;
   /** R0: the cell's real-map data (public/data/areas/<region>/<cell>.bin); absent: the random layout of 03. */

@@ -119,8 +119,8 @@ function placeLootSpots(b: Builder): LootSpot[] {
       });
       const order = keyed ? [...open].sort((p, q) => (q.key ? 1 : 0) - (p.key ? 1 : 0) || (det.bp.rooms[q.room]?.key ? 1 : 0) - (det.bp.rooms[p.room]?.key ? 1 : 0)) : open;
       // 07d-3: a few points a building, spread over its floors (every n-th shelf), so that several buildings are searched.
-      const cap = keyed ? BALANCE.world.lootPerKeyBuilding : BALANCE.world.lootPerBuilding;
-      const stride = keyed ? 1 : Math.max(1, Math.floor(order.length / cap));
+      const cap = b.params.allShelves ? Infinity : keyed ? BALANCE.world.lootPerKeyBuilding : BALANCE.world.lootPerBuilding;
+      const stride = keyed || b.params.allShelves ? 1 : Math.max(1, Math.floor(order.length / cap));
       let taken = 0;
       for (let k = 0; k < order.length && taken < cap; k += stride) {
         const sp = order[k]!;

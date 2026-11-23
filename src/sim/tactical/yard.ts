@@ -48,7 +48,7 @@ let cachedBig: { map: TacticalMap; entries: YardEntry[] } | null = null;
 let cachedSdf: { map: TacticalMap; entries: YardEntry[] } | null = null;
 
 function build(): { map: TacticalMap; entries: YardEntry[] } {
-  const b = createFlatBuilder(0, { mapSeed: 11, land: 'suburb', lootSpots: 100000 });
+  const b = createFlatBuilder(0, { mapSeed: 11, land: 'suburb', lootSpots: 100000, allShelves: true });
   const entries: YardEntry[] = [];
   const defs = BUILDING_DEFS.filter((def) => !bigForYard(def));
   // Where each type stands along which street (both rows break at the same types).
@@ -104,7 +104,7 @@ function build(): { map: TacticalMap; entries: YardEntry[] } {
  * past END_X.
  */
 function buildBig(sdf = false): { map: TacticalMap; entries: YardEntry[] } {
-  const b = createFlatBuilder(0, { mapSeed: sdf ? 13 : 12, land: 'suburb', lootSpots: 100000 });
+  const b = createFlatBuilder(0, { mapSeed: sdf ? 13 : 12, land: 'suburb', lootSpots: 100000, allShelves: true });
   const entries: YardEntry[] = [];
   const defs = BUILDING_DEFS.filter((def) => bigForYard(def) && sdfYard(def) === sdf);
   const rows: BuildingDef[][] = [];
