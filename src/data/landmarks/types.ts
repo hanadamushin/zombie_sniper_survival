@@ -20,4 +20,15 @@ export interface LandmarkSpot {
   poi?: string;
   /** How far (m, in the area) the middle may move to find free, dry, level ground (default 48; tried ×2 and ×3 too). */
   reach?: number;
+  /**
+   * L2: the largest rise (m) of the ground under the lot (default: 6 m for a lot under 100 m, 14 m
+   * for a bigger one). More for a temple on a mountainside: the lot is levelled into a terrace.
+   */
+  level?: number;
+  /**
+   * L2: the share (0..1) of the lot that may be water in the area data — a castle standing over the
+   * remains of its own moat (the water under the lot is filled; the blueprint digs its own moat).
+   * Default 0. Sea and rivers in the share are filled as well, so keep it small.
+   */
+  drain?: number;
 }

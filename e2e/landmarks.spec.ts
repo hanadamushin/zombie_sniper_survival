@@ -154,7 +154,8 @@ test('landmark yard: every landmark from the street and from the air, the budget
     await page.waitForTimeout(1500); // step off onto the deck
     await page.evaluate(() => window.__game!.debug.setInput(null));
     const feet = await page.evaluate(() => window.__game!.state!.player.pos[1]);
-    expect(feet - l.base, l.def).toBeGreaterThan(80);
+    // At the deck (L2: not every deck is a tower's — Yamadera's stage is 22 m up).
+    expect(feet, l.def).toBeGreaterThan(l.vantage![1] - 0.5);
     await page.evaluate(() => {
       const g = window.__game!;
       g.state!.player.pitch = -0.3;
@@ -179,6 +180,14 @@ const CELLS: { name: string; lat: number; lon: number }[] = [
   { name: 'sapporo', lat: 43.0611, lon: 141.3564 },
   { name: 'hakodate', lat: 41.7942, lon: 140.7538 },
   { name: 'otaru', lat: 43.199, lon: 141.001 },
+  // L2 tohoku
+  { name: 'hirosaki', lat: 40.6075, lon: 140.4645 },
+  { name: 'aomori', lat: 40.8302, lon: 140.7385 },
+  { name: 'hiraizumi', lat: 39.0003, lon: 141.1012 },
+  { name: 'sendai', lat: 38.2532, lon: 140.8563 },
+  { name: 'kakunodate', lat: 39.597, lon: 140.5625 },
+  { name: 'yamadera', lat: 38.3127, lon: 140.438 },
+  { name: 'aizu', lat: 37.4877, lon: 139.9298 },
 ];
 
 test('real map: the landmarks at their place, the busiest cell within the budgets, the marks on the strategic map', async ({ page }) => {

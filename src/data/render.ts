@@ -28,6 +28,11 @@ export const PAINT = {
   poplar: 0x3f5f2e,
   windowDark: 0x23282c,
   lampGlass: 0xe8dca0,
+  // L2 (tohoku): cherry blossom, statue bronze, cedar crowns, thatch.
+  sakura: 0xe6b3c3,
+  bronze: 0x4d4b3a,
+  cedar: 0x2a4128,
+  thatch: 0x8a7a55,
 } as const;
 export type PaintName = keyof typeof PAINT;
 

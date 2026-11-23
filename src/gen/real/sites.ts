@@ -797,12 +797,17 @@ const hashOf = (i: number): number => {
  * three times as far, onto dry ground clear of the roads that stay. The footprint is the type's
  * largest. Null when nothing fits (the census and the tests report it).
  */
-export function planLandmark(P: Planner, id: string, x: number, z: number, rot: Rot, reach: number, poi: number): Site | null {
+export function planLandmark(P: Planner, id: string, x: number, z: number, rot: Rot, reach: number, poi: number, opts: { level?: number; drain?: number } = {}): Site | null {
   const def = buildingDef(id);
   const w = def.size.w[1];
   const d = def.size.d[1];
   const big = Math.max(w, d) >= SITES.big;
   const cut = CUTS.landmark!;
+  // L2: a landmark may ask for more slope (`level`, m: a temple on a mountainside, its terrace cut
+  // into the hill) or to stand over a share of water (`drain`: a castle over the remains of its own
+  // moat in the area data; the water under the lot is filled, the blueprint digs its own).
+  const range = opts.level ?? (big ? SITES.levelRange.big : SITES.levelRange.small);
+  const drain = opts.drain ?? 0;
   for (const far of [reach, reach * 2, reach * 3]) {
     const step = far <= 60 ? 4 : 8;
     let best: { r: Rect; score: number } | null = null;
@@ -811,10 +816,11 @@ export function planLandmark(P: Planner, id: string, x: number, z: number, rot: 
         const dist = Math.hypot(dx, dz);
         if (dist > far || (best && dist > best.score)) continue;
         const r = rectOf(x + dx, z + dz, w, d, rot);
-        const c = check(P, r, cut, big, false, true);
+        const c = check(P, r, cut, big, drain > 0, true);
         if (!c) continue;
+        if (drain > 0 && wetTiles(P, r[0], r[1], r[2], r[3]) > ((r[2] - r[0]) * (r[3] - r[1]) * drain) / (TILE * TILE)) continue;
         const [lo, hi] = rangeOf(P.b, r[0], r[1], r[2], r[3], big ? 8 : 4);
-        if (hi - lo > (big ? SITES.levelRange.big : SITES.levelRange.small)) continue;
+        if (hi - lo > range) continue;
         const score = dist + c.cut * 0.3;
         if (!best || score < best.score) best = { r, score };
       }

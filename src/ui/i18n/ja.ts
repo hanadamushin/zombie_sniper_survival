@@ -867,6 +867,15 @@ export const ja = {
   'landmark.goryokaku': '五稜郭',
   'landmark.goryokaku_tower': '五稜郭タワー',
   'landmark.otaru_canal': '小樽運河',
+  // L2 tohoku
+  'landmark.hirosaki_castle': '弘前城 天守',
+  'landmark.aomori_bay_bridge': '青森ベイブリッジ',
+  'landmark.chusonji_konjikido': '中尊寺 金色堂（覆堂）と月見坂',
+  'landmark.date_masamune_statue': '仙台城跡 伊達政宗騎馬像',
+  'landmark.zuihoden': '瑞鳳殿',
+  'landmark.kakunodate_bukeyashiki': '角館 武家屋敷通り',
+  'landmark.yamadera': '山寺（立石寺） 五大堂',
+  'landmark.tsuruga_castle': '会津若松城（鶴ヶ城） 天守',
 } as const;
 
 export type TextKey = keyof typeof ja;
