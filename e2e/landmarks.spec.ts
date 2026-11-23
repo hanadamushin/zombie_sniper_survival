@@ -217,6 +217,21 @@ const CELLS: { name: string; lat: number; lon: number }[] = [
   { name: 'ushiku', lat: 35.9798, lon: 140.2196 },
   { name: 'nikko', lat: 36.758, lon: 139.5988 },
   { name: 'tomioka', lat: 36.2551, lon: 138.8879 },
+  // L4 chubu: Nagoya (19289: the castle, MIRAI TOWER, the twin towers — measured from MIRAI TOWER's
+  // balcony), Atsuta, Matsumoto, Nagano, Shirakawa-gō, Gifu, Kanazawa (16782: the Ishikawa Gate and
+  // Kenroku-en), Niigata, Toyama, Katsuyama, Fujiyoshida, Kunōzan (its point moved into 19637: L4).
+  { name: 'nagoya', lat: 35.18531, lon: 136.89956 },
+  { name: 'atsuta', lat: 35.12796, lon: 136.90858 },
+  { name: 'matsumoto', lat: 36.23861, lon: 137.96889 },
+  { name: 'nagano', lat: 36.66154, lon: 138.18781 },
+  { name: 'shirakawago', lat: 36.2575, lon: 136.9064 },
+  { name: 'gifu', lat: 35.43397, lon: 136.78201 },
+  { name: 'kanazawa', lat: 36.5622, lon: 136.6627 },
+  { name: 'niigata', lat: 37.9268, lon: 139.0571 },
+  { name: 'toyama', lat: 36.6933, lon: 137.2104 },
+  { name: 'katsuyama', lat: 36.0827, lon: 136.5067 },
+  { name: 'fujiyoshida', lat: 35.4757, lon: 138.7958 },
+  { name: 'kunozan', lat: 34.9662, lon: 138.4672 },
 ];
 
 test('real map: the landmarks at their place, the busiest cell within the budgets, the marks on the strategic map', async ({ page }) => {

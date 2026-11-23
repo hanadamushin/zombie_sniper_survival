@@ -148,13 +148,17 @@ const BIG_START_Z = 20;
 /**
  * L1: the landmark yard (`?landmarks=1`, flags.yard === 4): every landmark of every region on flat
  * ground, fronts facing south onto a street, in rows from the north edge (like the big yard), with
- * their moats and canals dug and their firing positions. The tests and the e2e measure it.
+ * their moats and canals dug and their firing positions. The tests and the e2e measure it. L4: the
+ * rows take the deepest lots first, so that they fit in the map (tests/landmarks.test.ts checks it).
  */
 function buildLandmarks(): { map: TacticalMap; entries: YardEntry[] } {
   const b = createFlatBuilder(0, { mapSeed: 14, land: 'urban', lootSpots: 0 });
   const water = new Float32Array(N * N).fill(NaN);
   const entries: YardEntry[] = [];
-  const defs = BUILDING_DEFS.filter(isLandmark);
+  // L4: the deepest lots first (a stable sort: ties keep the catalog's order). In the catalog's order
+  // the rows ran past the map's south edge once 57 landmarks were in (each row is as deep as its
+  // deepest lot); sorted, the same rows end at z ≈ 770.
+  const defs = BUILDING_DEFS.filter(isLandmark).sort((p, q) => q.size.d[1] - p.size.d[1]);
   const gap = 24;
   let x = LM_START;
   let z0 = LM_START;

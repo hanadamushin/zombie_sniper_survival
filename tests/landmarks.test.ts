@@ -65,6 +65,15 @@ describe('the landmark yard (L1)', () => {
     }
   });
 
+  // L4: in the catalog's order the rows of 57 landmarks ran past the map's south edge (Kunōzan and the
+  // Fuji Sengen shrine stood at z 986–1070 of a 1024 m map) and nothing failed.
+  it('keeps every landmark inside the map, 8 m from its edges', () => {
+    for (const e of yardEntries(4)) {
+      const p = map.placements[e.enter]!;
+      expect(p.x0 >= 8 && p.z0 >= 8 && p.x1 <= map.size - 8 && p.z1 <= map.size - 8, `${p.def} at (${p.x0}, ${p.z0})–(${p.x1}, ${p.z1})`).toBe(true);
+    }
+  });
+
   it('lets the player climb each tower ladder to its deck', () => {
     for (const e of yardEntries(4)) {
       const p = map.placements[e.enter]!;

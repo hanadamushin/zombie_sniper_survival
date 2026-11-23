@@ -904,6 +904,22 @@ export const ja = {
   'landmark.ushiku_daibutsu': '牛久大仏',
   'landmark.nikko_yomeimon': '日光東照宮 陽明門',
   'landmark.tomioka_silk_mill': '富岡製糸場 繰糸所と東置繭所',
+  // L4 chubu
+  'landmark.nagoya_castle': '名古屋城 天守と金鯱',
+  'landmark.mirai_tower': '中部電力 MIRAI TOWER（旧名古屋テレビ塔）',
+  'landmark.atsuta_jingu': '熱田神宮',
+  'landmark.nagoya_twin_towers': 'JRセントラルタワーズ（名古屋駅のツインタワー）',
+  'landmark.matsumoto_castle': '松本城',
+  'landmark.zenkoji': '善光寺 本堂と山門',
+  'landmark.shirakawago': '白川郷 荻町の合掌造り集落',
+  'landmark.gifu_castle': '岐阜城',
+  'landmark.kanazawa_ishikawamon': '金沢城 石川門',
+  'landmark.kenrokuen_kotoji': '兼六園 徽軫灯籠',
+  'landmark.toki_messe': '朱鷺メッセ',
+  'landmark.toyama_castle': '富山城',
+  'landmark.fukui_dinosaur_museum': '福井県立恐竜博物館',
+  'landmark.fuji_sengen_jinja': '北口本宮冨士浅間神社 富士山大鳥居',
+  'landmark.kunozan_toshogu': '久能山東照宮',
 } as const;
 
 export type TextKey = keyof typeof ja;

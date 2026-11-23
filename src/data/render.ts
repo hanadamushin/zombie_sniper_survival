@@ -47,6 +47,13 @@ export const PAINT = {
   daibutsu: 0x56655a,
   ushiku: 0x9a9f94,
   mirror: 0x7f97aa,
+  // L4 (chubu): grey roof tiles (瓦), Kanazawa's lead tiles (鉛瓦), maples in late autumn, cypress-bark
+  // roofs (檜皮葺, Zenkō-ji), the silver of the dinosaur museum's dome.
+  kawara: 0x5b5f64,
+  lead: 0xa7b0b2,
+  momiji: 0xb8452a,
+  hiwada: 0x5a4434,
+  dome: 0xd3d7da,
 } as const;
 export type PaintName = keyof typeof PAINT;
 
