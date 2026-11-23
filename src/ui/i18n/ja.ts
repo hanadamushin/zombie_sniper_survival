@@ -890,6 +890,20 @@ export const ja = {
   'landmark.meiji_jingu_otorii': '明治神宮 大鳥居',
   'landmark.nippon_budokan': '日本武道館',
   'landmark.tokyo_dome': '東京ドーム',
+  // L3b kanto (outside Tokyo)
+  'landmark.yokohama_landmark_tower': '横浜ランドマークタワー',
+  'landmark.yokohama_akarenga': '横浜赤レンガ倉庫',
+  'landmark.cosmo_clock': 'コスモクロック21（みなとみらいの大観覧車）',
+  'landmark.yokohama_marine_tower': '横浜マリンタワー',
+  'landmark.kamakura_daibutsu': '高徳院 鎌倉大仏',
+  'landmark.chiba_port_tower': '千葉ポートタワー',
+  'landmark.naritasan': '成田山新勝寺 三重塔と大本堂',
+  'landmark.bay_theme_park': '湾岸のテーマパークの廃墟',
+  'landmark.kawagoe': '川越 時の鐘と蔵造りの町並み',
+  'landmark.saitama_super_arena': 'さいたまスーパーアリーナ',
+  'landmark.ushiku_daibutsu': '牛久大仏',
+  'landmark.nikko_yomeimon': '日光東照宮 陽明門',
+  'landmark.tomioka_silk_mill': '富岡製糸場 繰糸所と東置繭所',
 } as const;
 
 export type TextKey = keyof typeof ja;

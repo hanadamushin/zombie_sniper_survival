@@ -204,6 +204,19 @@ const CELLS: { name: string; lat: number; lon: number }[] = [
   { name: 'tokyo-hongo', lat: 35.71336, lon: 139.76223 },
   { name: 'tokyo-shinjuku', lat: 35.68959, lon: 139.69171 },
   { name: 'tokyo-yoyogi', lat: 35.6731, lon: 139.6989 },
+  // L3b kanto outside Tokyo: Yokohama (18813: Landmark Tower, the Red Brick Warehouses, Cosmo Clock 21,
+  // the Marine Tower — measured from the Marine Tower's deck), Kamakura, Chiba, Narita, Maihama,
+  // Kawagoe, Saitama Shintoshin, Ushiku, Nikkō, Tomioka.
+  { name: 'yokohama', lat: 35.45472, lon: 139.63139 },
+  { name: 'kamakura', lat: 35.31667, lon: 139.53583 },
+  { name: 'chiba', lat: 35.6025, lon: 140.0952 },
+  { name: 'narita', lat: 35.7856, lon: 140.3184 },
+  { name: 'maihama', lat: 35.6329, lon: 139.8804 },
+  { name: 'kawagoe', lat: 35.9192, lon: 139.4828 },
+  { name: 'saitama', lat: 35.8949, lon: 139.6311 },
+  { name: 'ushiku', lat: 35.9798, lon: 140.2196 },
+  { name: 'nikko', lat: 36.758, lon: 139.5988 },
+  { name: 'tomioka', lat: 36.2551, lon: 138.8879 },
 ];
 
 test('real map: the landmarks at their place, the busiest cell within the budgets, the marks on the strategic map', async ({ page }) => {

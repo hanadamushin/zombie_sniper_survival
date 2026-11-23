@@ -26,4 +26,26 @@ export const LANDMARKS_KANTO: readonly LandmarkSpot[] = [
   // Cell 18479 (Yoyogi): the great torii in the shrine's forest, the approach from the south.
   { id: 'landmark.meiji_jingu_otorii', lat: 35.6731, lon: 139.6989, rot: 0 },
   // --- L3b (the other prefectures of Kanto) below ---
+  // Kanagawa. Cell 18813 (Minato Mirai, Shinkō, Yamashita): the tower first, then the warehouses,
+  // the wheel between them, the Marine Tower by Yamashita Park.
+  { id: 'landmark.yokohama_landmark_tower', lat: 35.45472, lon: 139.63139, rot: 1, drain: 0.25 },
+  { id: 'landmark.yokohama_akarenga', lat: 35.4527, lon: 139.6425, rot: 0, drain: 1 },
+  { id: 'landmark.cosmo_clock', lat: 35.4555, lon: 139.6375, rot: 0, drain: 1 },
+  { id: 'landmark.yokohama_marine_tower', lat: 35.44396, lon: 139.65083, rot: 2 },
+  // Cell 19146 (Hase, Kamakura): the Great Buddha faces south.
+  { id: 'landmark.kamakura_daibutsu', lat: 35.31667, lon: 139.53583, rot: 0, poi: '高徳院', level: 10 },
+  // Chiba: the port tower in its park (cell 18483), the pagoda before Naritasan's great hall (18151),
+  // the nameless theme park ruin on the Maihama shore (18481).
+  { id: 'landmark.chiba_port_tower', lat: 35.6025, lon: 140.0952, rot: 0 },
+  { id: 'landmark.naritasan', lat: 35.7856, lon: 140.3184, rot: 0, poi: '新勝寺' },
+  { id: 'landmark.bay_theme_park', lat: 35.6329, lon: 139.8804, rot: 0, drain: 1 },
+  // Saitama: Kawagoe's storehouse street and the Bell of Time (17976), the arena by Saitama-Shintoshin
+  // station (17978, its glass front east to the station).
+  { id: 'landmark.kawagoe', lat: 35.9192, lon: 139.4828, rot: 0 },
+  { id: 'landmark.saitama_super_arena', lat: 35.8949, lon: 139.6311, rot: 1 },
+  // Ibaraki: Ushiku Daibutsu (17816). Tochigi: the Yōmeimon of Nikkō Tōshō-gū (16474). Gunma: the
+  // Tomioka Silk Mill, its warehouse arch facing the gate (east) (17303).
+  { id: 'landmark.ushiku_daibutsu', lat: 35.9798, lon: 140.2196, rot: 0 },
+  { id: 'landmark.nikko_yomeimon', lat: 36.758, lon: 139.5988, rot: 0, poi: '東照宮', level: 12 },
+  { id: 'landmark.tomioka_silk_mill', lat: 36.2551, lon: 138.8879, rot: 1 },
 ];

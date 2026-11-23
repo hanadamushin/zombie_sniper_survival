@@ -42,6 +42,11 @@ export const PAINT = {
   hinoki: 0x857463,
   granite: 0xc9c5bb,
   grayGreen: 0x7d8a84,
+  // L3b (Kanto outside Tokyo): the Great Buddha of Kamakura's grey-green bronze, Ushiku Daibutsu's pale
+  // bronze, the half-mirror glass of Chiba Port Tower.
+  daibutsu: 0x56655a,
+  ushiku: 0x9a9f94,
+  mirror: 0x7f97aa,
 } as const;
 export type PaintName = keyof typeof PAINT;
 

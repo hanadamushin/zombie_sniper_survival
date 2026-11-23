@@ -115,3 +115,68 @@ export function ginkgo(L: Lm, x: number, z: number, h: number): void {
   L.column(x, z, h * 0.27, h * 0.22, h * 0.62, 'paint', { paint: 'ginkgo', taper: 0.75, solid: false });
   L.column(x, z, h * 0.21, h * 0.6, h, 'paint', { paint: 'ginkgo', taper: 0.12, solid: false });
 }
+
+// ---- L3b (the rest of Kanto) ----
+
+/**
+ * A straight line in the upright plane z0..z1 from (ax, ay) to (bx, by) (a wheel's rim and spokes, an
+ * arm): parts cannot tilt, so it is a staircase of unturned boxes `thick` thick, a step about every
+ * `step` m of the shorter of its two runs. A line close to level or upright is a single box.
+ */
+export function xyLine(L: Lm, ax: number, ay: number, bx: number, by: number, z0: number, z1: number, thick: number, paint: PaintName, o: { step?: number; solid?: boolean } = {}): void {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const n = Math.max(1, Math.ceil(Math.min(Math.abs(dx), Math.abs(dy)) / (o.step ?? thick * 1.5)));
+  const h = thick / 2;
+  for (let i = 0; i < n; i++) {
+    const [x0, x1] = [ax + (dx * i) / n, ax + (dx * (i + 1)) / n];
+    const [y0, y1] = [ay + (dy * i) / n, ay + (dy * (i + 1)) / n];
+    L.box(Math.min(x0, x1) - h, Math.max(0, Math.min(y0, y1) - h), z0, Math.max(x0, x1) + h, Math.max(y0, y1) + h, z1, 'paint', { paint, solid: o.solid ?? false });
+  }
+}
+
+export interface WheelStyle {
+  rim: PaintName;
+  spoke: PaintName;
+  /** Gondola colours, used in turn. */
+  cars: readonly PaintName[];
+  spokes: number;
+  cars_n: number;
+  /** Rim chords (a polygon of this many sides). */
+  sides: number;
+  /** Radius of the hub's disc (m). */
+  hub: number;
+  hubPaint: PaintName;
+}
+
+/**
+ * A big wheel (観覧車) facing ±z: its rim a polygon of chords, spokes from the hub, the gondolas hanging
+ * under the rim, the hub's disc. Centre (cx, cy, cz), radius r, the rim `depth` deep. Drawn only (the
+ * legs that carry it are the caller's, and solid).
+ */
+export function wheel(L: Lm, cx: number, cy: number, cz: number, r: number, depth: number, s: WheelStyle): void {
+  const [z0, z1] = [cz - depth / 2, cz + depth / 2];
+  for (let i = 0; i < s.sides; i++) {
+    const a = (i / s.sides) * Math.PI * 2;
+    const b = ((i + 1) / s.sides) * Math.PI * 2;
+    xyLine(L, cx + Math.cos(a) * r, cy + Math.sin(a) * r, cx + Math.cos(b) * r, cy + Math.sin(b) * r, z0, z1, 1.3, s.rim, { step: 1.4 });
+  }
+  for (let i = 0; i < s.spokes; i++) {
+    const a = (i / s.spokes) * Math.PI * 2;
+    const [c, n] = [Math.cos(a), Math.sin(a)];
+    xyLine(L, cx + c * s.hub, cy + n * s.hub, cx + c * (r - 0.6), cy + n * (r - 0.6), cz - 0.3, cz + 0.3, 0.5, s.spoke, { step: 1.3 });
+  }
+  for (let i = 0; i < s.cars_n; i++) {
+    const a = ((i + 0.5) / s.cars_n) * Math.PI * 2;
+    const [x, y] = [cx + Math.cos(a) * r, cy + Math.sin(a) * r];
+    L.box(x - 1.2, y - 3.6, cz - 1.2, x + 1.2, y - 1, cz + 1.2, 'paint', { paint: s.cars[i % s.cars.length]!, solid: false });
+  }
+  // The hub: a disc of level slabs (a circle in the upright plane), a little proud of the rim.
+  const k = 5;
+  for (let i = 0; i < k; i++) {
+    const t0 = -1 + (2 * i) / k;
+    const t1 = -1 + (2 * (i + 1)) / k;
+    const half = s.hub * Math.sqrt(1 - ((t0 + t1) / 2) ** 2);
+    L.box(cx - half, cy + t0 * s.hub, z0 - 0.4, cx + half, cy + t1 * s.hub, z1 + 0.4, 'paint', { paint: s.hubPaint, solid: false });
+  }
+}
