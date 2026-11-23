@@ -41,7 +41,9 @@ async function walk(page: Page, pts: [number, number, number][]): Promise<boolea
 async function settle(page: Page, ms = 1200): Promise<void> {
   // Let the renderer see the new camera position first (two frames), or `pending` is still the old view's.
   await page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
-  await page.waitForFunction(() => window.__game!.debug.renderInfo().pending === 0, null, { timeout: 60_000 });
+  // 07d-3: every town building is enterable now; going up one building a frame at the software
+  // renderer's few frames a second takes a minute or two in the middle of a city.
+  await page.waitForFunction(() => window.__game!.debug.renderInfo().pending === 0, null, { timeout: 240_000 });
   await page.waitForTimeout(ms);
 }
 
@@ -194,7 +196,7 @@ test('yard: a zombie follows the player in through the door and up the stairs; o
 });
 
 test('city: far buildings are boxes, closer ones show their outside, the nearest their inside; switching stays light; budget on the ground, the roof and indoors', async ({ page }) => {
-  test.setTimeout(420_000);
+  test.setTimeout(1_200_000);
   const errors = trackErrors(page);
   await page.goto('/?seed=12&scenario=0&res=fixed');
   await page.getByTestId('new-game').click();

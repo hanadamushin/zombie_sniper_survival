@@ -1,6 +1,6 @@
 // What a day of searching brings in (07e × 07d-3): the expected resources of searching every search
 // point of an area (the most a player gets out of one area in a day), for the start cells of new
-// games and the 8 cells around each (10 days: the home area, then a neighbour a day):
+// games over 10 days (the home area, then the nearest land cell not yet searched, one a day):
 //   node tools/loot-day.ts [--root <checkout>] [--seeds 12,3]
 // Expected values at the cell's loot factor 1 (data/colony.ts tables; the game multiplies by the
 // cell's loot and draws around them). --root runs another checkout's code (before/after).
@@ -53,7 +53,11 @@ for (const seed of seeds) {
   for (const cand of cands) {
     state.world.homeCell = cand.cell;
     const w = grid.gridW;
-    const cells = [cand.cell, ...[-w - 1, -w, -w + 1, -1, 1, w - 1, w, w + 1].map((d) => cand.cell + d)].filter((c) => grid.cells[c]).slice(0, 10);
+    // Ten days: the home area, then the nearest land cells (the 8 around it, then the next ring).
+    const ring: [number, number][] = [];
+    for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) if (dx || dy) ring.push([dx, dy]);
+    ring.sort((a, c) => Math.hypot(a[0], a[1]) - Math.hypot(c[0], c[1]));
+    const cells = [cand.cell, ...ring.map(([dx, dy]) => cand.cell + dy * w + dx)].filter((c) => grid.cells[c]).slice(0, 10);
     const line: string[] = [];
     for (const c of cells) {
       const d = day(state, c, c === cand.cell);

@@ -248,8 +248,33 @@ for (const seed of [3, 12, 24]) {
       g.state!.player.inv.ears = 60;
     }, look.hide);
     await expect(page.getByTestId('hud-someone')).toBeVisible();
-    await expect(page.getByTestId('hud-someone')).toHaveAttribute('data-dir', /^(N|E|S|W)$/);
-    await expect(page.getByTestId('hud-someone')).toContainText(/人の気配 (北|東|南|西) \d+m/);
+    await expect(page.getByTestId('hud-someone')).toHaveAttribute('data-dir', /^(N|NE|E|SE|S|SW|W|NW)$/);
+    await expect(page.getByTestId('hud-someone')).toContainText(/人の気配 (北|北東|東|南東|南|南西|西|北西) \d+m/);
+    // 07d-3: the search points are shelves inside the buildings now: in through the door and along
+    // the rooms (the building's ways) to the shelf, then W as before (it is already in reach).
+    await page.evaluate(([hx, hz]) => {
+      const g = window.__game!;
+      const s = g.state!;
+      const hide = s.tactical!.hideouts!.find((o) => o.sure)!;
+      const spot = s.tactical!.lootSpots.find((l) => l.id === hide.spot);
+      if (spot?.y === undefined) return;
+      const way = g.debug.pathTo(hx!, spot.y, hz!) ?? [];
+      // From the doorstep (the yard in front of a works may hold a lorry or a machine in the way).
+      if (way.length > 1) g.debug.teleport(way[0]![0], way[0]![2], s.player.yaw, 0, way[0]![1]);
+      for (const [tx, ty, tz] of way.slice(1)) {
+        for (let i = 0; i < 60 * 20; i++) {
+          const p = s.player;
+          const dx = tx - p.pos[0];
+          const dz = tz - p.pos[2];
+          if (Math.hypot(dx, dz) < 0.3 && Math.abs(ty - p.pos[1]) < 0.4) break;
+          p.yaw = Math.atan2(-dx, -dz);
+          g.sim.tick(s, 1 / 60, { ...g.debug.noInput, moveZ: Math.min(1, Math.hypot(dx, dz) / 0.6 + 0.2) });
+        }
+      }
+      // A shelf behind the machines of a works: the last step onto its stand point.
+      if (Math.hypot(hx! - s.player.pos[0], hz! - s.player.pos[2]) > 1) g.debug.teleport(hx!, hz!, s.player.yaw, 0, spot.y);
+      s.player.yaw = Math.atan2(-(hx! - s.player.pos[0]), -(hz! - s.player.pos[2]));
+    }, look.hide);
     await page.keyboard.down('KeyW');
     await expect(page.getByTestId('hud-act')).toHaveAttribute('data-kind', 'talk', { timeout: 60_000 });
     await page.keyboard.up('KeyW');

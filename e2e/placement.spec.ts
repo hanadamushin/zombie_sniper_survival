@@ -54,6 +54,10 @@ async function enter(page: Page, cell: number): Promise<number> {
     const info = window.__game!.debug.realInfo();
     return info !== null && info.cell === c && info.real;
   }, cell, { timeout: 60_000 });
+  // The zombies of the area are about (and come for the player standing still): not in the way here.
+  await page.evaluate(() => {
+    window.__game!.state!.player.hp = 1e9;
+  });
   return Date.now() - t0;
 }
 
@@ -76,12 +80,14 @@ async function overlook(page: Page, b: { x0: number; z0: number; x1: number; z1:
     const cx = (bb.x0 + bb.x1) / 2;
     const cz = (bb.z0 + bb.z1) / 2;
     const size = Math.max(bb.x1 - bb.x0, bb.z1 - bb.z0);
-    // In front of it, at a distance that shows the whole site, a little above the roofs around.
+    // In front of it, at a distance that shows the whole site, well above the roofs around (the game
+    // is paused for the picture, so nobody falls).
+    g.dispatch({ type: 'setSpeed', speed: 0 });
     const [fx, fz] = [[0, 1], [1, 0], [0, -1], [-1, 0]][bb.rot] as [number, number];
-    const d = Math.min(380, size * 0.9 + 40);
-    const x = Math.min(1010, Math.max(14, cx + fx * d + fz * d * 0.35));
-    const z = Math.min(1010, Math.max(14, cz + fz * d - fx * d * 0.35));
-    const y = bb.base + Math.max(25, size * 0.28);
+    const d = Math.min(420, size * 0.8 + 50);
+    const x = Math.min(1010, Math.max(14, cx + fx * d + fz * d * 0.3));
+    const z = Math.min(1010, Math.max(14, cz + fz * d - fx * d * 0.3));
+    const y = bb.base + Math.max(70, size * 0.45);
     const yaw = Math.atan2(-(cx - x), -(cz - z));
     const pitch = -Math.atan2(y - bb.base, Math.hypot(cx - x, cz - z)) * 0.8;
     g.debug.teleport(x, z, yaw, pitch, y);
@@ -162,11 +168,16 @@ test('07d-3: the start area and the facilities of the real map look the part', a
   // The start area: the home base in the middle, the village around.
   await page.evaluate(() => {
     const g = window.__game!;
-    g.debug.teleport(512, 640, 0, -0.32, 60);
+    g.state!.player.hp = 1e9;
+    g.dispatch({ type: 'setSpeed', speed: 0 });
+    const map = g.map!;
+    const ground = map.height[Math.round(760 / map.tile) * map.n + Math.round(512 / map.tile)]!;
+    g.debug.teleport(512, 760, 0, -0.3, ground + 70);
     g.debug.setClock(10);
   });
   await settle(page);
   await page.screenshot({ path: 'test-results/placement-start.png' });
+  await page.evaluate(() => window.__game!.dispatch({ type: 'setSpeed', speed: 1 }));
   const only = process.env.PLACES?.split(',');
   const found: string[] = [];
   for (const s of SHOTS.filter((q) => !only || only.includes(q.name))) {
@@ -178,6 +189,7 @@ test('07d-3: the start area and the facilities of the real map look the part', a
     await overlook(page, b);
     await settle(page);
     await page.screenshot({ path: `test-results/placement-${s.name}.png` });
+    await page.evaluate(() => window.__game!.dispatch({ type: 'setSpeed', speed: 1 }));
   }
   console.log(`[placement shots]\n${found.join('\n')}`);
   expect(errors).toEqual([]);

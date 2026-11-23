@@ -367,7 +367,10 @@ test('colony: meet someone, hire, assign jobs, days pass — food and materials 
     const g = window.__game!;
     const s = g.state!;
     const hide = s.tactical!.hideouts![0]!;
-    g.debug.teleport(hide.pos[0] + 1, hide.pos[1] + 1, 0, 0);
+    // 07d-3: a search point is a shelf inside a building now: stand on its floor (or by the camp in the open).
+    const spot = s.tactical!.lootSpots.find((l) => l.id === hide.spot);
+    if (spot?.y !== undefined) g.debug.teleport(hide.pos[0], hide.pos[1], 0, 0, spot.y);
+    else g.debug.teleport(hide.pos[0] + 1, hide.pos[1] + 1, 0, 0);
     return s.world.cells.H[s.player.cell]!;
   });
   await expect(page.getByTestId('hud-act')).toHaveAttribute('data-kind', 'talk');

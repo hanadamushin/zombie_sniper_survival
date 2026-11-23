@@ -115,7 +115,10 @@ test('first steps: the hints lead from walking to the first fence', async ({ pag
   await page.evaluate(() => {
     const g = window.__game!;
     const h = g.state!.tactical!.hideouts!.find((x) => !x.met)!;
-    g.debug.teleport(h.pos[0] + 1.5, h.pos[1] + 1.5);
+    // 07d-3: at a shelf inside a building, stand on its floor; a camp in the open, beside it.
+    const spot = g.state!.tactical!.lootSpots.find((l) => l.id === h.spot);
+    if (spot?.y !== undefined) g.debug.teleport(h.pos[0], h.pos[1], 0, 0, spot.y);
+    else g.debug.teleport(h.pos[0] + 1.5, h.pos[1] + 1.5);
   });
   await page.keyboard.press('KeyE');
   await page.waitForFunction(() => window.__game!.state!.colony.candidates.length > 0, null, { timeout: 20_000 });
