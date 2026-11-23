@@ -137,16 +137,16 @@ test('real map: the Hokkaido landmarks stand at their place, their roofs are fir
       const pl = map.placements.find((q) => q.def === def);
       if (!pl) return null;
       const v = map.vantages.find((q) => q.pos[0] >= pl.x0 && q.pos[0] <= pl.x1 && q.pos[2] >= pl.z0 && q.pos[2] <= pl.z1);
-      return { x0: pl.x0, z0: pl.z0, x1: pl.x1, z1: pl.z1, roof: v?.pos[1] ?? null, ground: pl.base };
+      return { x0: pl.x0, z0: pl.z0, x1: pl.x1, z1: pl.z1, roof: v?.pos[1] ?? null, vx: v?.pos[0] ?? 0, vz: v?.pos[2] ?? 0, ground: pl.base };
     }, id);
     expect(lm, name).not.toBeNull();
     expect(lm!.roof! - lm!.ground, name).toBeGreaterThan(80);
-    // From the roof (by the parapet) looking over the town; then from the street looking up at it.
+    // From the roof (L1: at its firing position, the deck's edge) looking over the town; then from the street looking up at it.
     await page.evaluate(([x, z, y]) => {
       const g = window.__game!;
       g.debug.teleport(x!, z!, Math.PI, -0.25, y!);
       g.debug.setClock(10);
-    }, [(lm!.x0 + lm!.x1) / 2 + 6, lm!.z1 - 1.5, lm!.roof! + 0.05] as const);
+    }, [lm!.vx, lm!.vz, lm!.roof! + 0.05] as const);
     await settle(page);
     await page.screenshot({ path: `test-results/realmap-hk-${name}-roof.png` });
     await page.evaluate(([x, z]) => window.__game!.debug.teleport(x!, z!, 0, 0.75), [(lm!.x0 + lm!.x1) / 2, lm!.z1 + 70] as const);

@@ -144,7 +144,7 @@ export function areaWaiting(state: GameState, grid: StaticGrid | null): boolean 
 function ensureRange(state: GameState): TacticalArea {
   const known = state.tactical ? areas.get(state.tactical) : undefined;
   if (known) return known;
-  const map = state.flags.yard ? yardMap(state.flags.yard === 2 || state.flags.yard === 3 ? state.flags.yard : 1) : rangeMap();
+  const map = state.flags.yard ? yardMap(state.flags.yard === 2 || state.flags.yard === 3 || state.flags.yard === 4 ? state.flags.yard : 1) : rangeMap();
   const fresh = !state.tactical;
   state.tactical ??= { cell: state.player.cell, mapSeed: map.params.mapSeed, zombies: [], corpses: [], bullets: [], reserve: 0, wind: [0, 0], lootSpots: state.flags.yard ? map.lootSpots.map((s) => spotState(s, false)) : [] };
   const area: TacticalArea = { map, dynamic: createSpatialHash() };

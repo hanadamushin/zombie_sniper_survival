@@ -21,7 +21,7 @@
 import { chance, rand, randInt, randRange, type RngState } from '../../core/rng.ts';
 import type { Land } from '../../core/types.ts';
 import { COAST, FORECOURT, LOTS } from '../../data/placement.ts';
-import { REAL_AREA, REAL_LANDMARKS } from '../../data/realmap.ts';
+import { REAL_AREA } from '../../data/realmap.ts';
 import { TACTICAL } from '../../data/tactical.ts';
 import { buildingDef } from '../buildings/catalog/index.ts';
 import { blueprintOf, envelopeOf, generateBlueprint, toWorld, type Rot } from '../buildings/index.ts';
@@ -29,12 +29,13 @@ import {
   addEnterable, addRoad, addTower, forTiles, hAt, heightRange, homeDist, inHomeZone, N, occupy, rectFree, rngOf, SIZE,
   TILE, TILES, tileIndex, type Builder,
 } from '../builder.ts';
-import { enterableIn, farmstead } from '../lands.ts';
+import { farmstead } from '../lands.ts';
 import { noise2, smoothstep } from '../noise.ts';
 import { districtOf, newTally, pickType, tallyAdd, type TypeTally } from '../placement.ts';
 import { GROUND, type Building, type GenParams, type MapPoi } from '../types.ts';
 import { DUR_N, ELEV_N, LINE, LINE_TUNNEL, LU, LU_N, POI, POP_N, type RealArea } from './format.ts';
-import { createPlanner, cutLine, levelSites, planSites, reserve, type Site } from './sites.ts';
+import { applyLandmark, landmarksIn } from './landmarks.ts';
+import { createPlanner, cutLine, levelSites, planLandmark, planSites, reserve, type Site } from './sites.ts';
 
 const R = REAL_AREA;
 const T = TACTICAL;
@@ -889,32 +890,6 @@ export function realForest(real: RealArea): (x: number, z: number) => number {
   return (x, z) => shareAt(real, (c) => c === LU.forest, x, z) + 0.35 * shareAt(real, (c) => c === LU.waste, x, z);
 }
 
-/**
- * A landmark centred on (x, z), front to the south — or on the nearest free and flat enough spot within
- * 48 m (rings of 8 points every 4 m), since the shrunk point often falls on a road.
- */
-function landmark(b: Builder, id: string, x: number, z: number): Building | null {
-  const def = buildingDef(id);
-  const w = def.size.w[1];
-  const d = def.size.d[1];
-  for (let r = 0; r <= 48; r += 4) {
-    for (let k = 0; k < (r === 0 ? 1 : 8); k++) {
-      const cx = x + Math.cos((k / 8) * Math.PI * 2) * r;
-      const cz = z + Math.sin((k / 8) * Math.PI * 2) * r;
-      const [x0, z0, x1, z1] = [cx - w / 2, cz - d / 2, cx + w / 2, cz + d / 2];
-      if (inHomeZone(b, x0, z0, x1, z1) || !rectFree(b, x0 - 2, z0 - 2, x1 + 2, z1 + 2, 12)) continue;
-      const [lo, hi] = heightRange(b, x0, z0, x1, z1);
-      if (hi - lo > R.facilityMaxSlope) continue;
-      const bd = enterableIn(b, id, x0, z0, x1, z1, 0);
-      if (!bd) continue;
-      // The roof's front strip by the parapet (the stair house stands over the middle; front = south).
-      b.vantages.push({ pos: [cx, bd.base + envelopeOf(def).eaves, bd.z1 - 1], kind: 'roof' });
-      return bd;
-    }
-  }
-  return null;
-}
-
 export function layoutReal(b: Builder, real: RealArea, terrain: (x: number, z: number) => number): { water: Float32Array; pois: MapPoi[]; sites: Site[] } {
   const water = waterAndGround(b, real, terrain);
   const pois: MapPoi[] = real.pois.map((p) => ({ kind: p.kind, grade: p.grade, x: p.x, z: p.z, name: p.name }));
@@ -922,12 +897,23 @@ export function layoutReal(b: Builder, real: RealArea, terrain: (x: number, z: n
   // one-per-area facilities at their point), then the ground under them is levelled and the roads
   // are laid — the minor ones stop at a site's fence.
   const P = createPlanner(b, real, rngOf(b, 'real.sites'));
-  for (const p of pois) {
-    // The landmarks and lookout towers keep their spot (R1, R9: the towers were placed for the sight lines).
-    const id = REAL_LANDMARKS[p.name];
-    if (id) reserve(P, p.x, p.z, Math.max(buildingDef(id).size.w[1], buildingDef(id).size.d[1]) / 2 + 2);
-    else if (p.kind === POI.tower) reserve(P, p.x, p.z, 5);
+  // L1: the landmarks of the table (src/data/landmarks/) whose real point is in this cell, first: a site
+  // each, so that the facilities, the town and the minor roads keep out. A point of the data with the
+  // landmark's `poi` name is where it stands (and is no lookout tower).
+  const taken = new Set<number>();
+  for (const m of landmarksIn(real.cell)) {
+    let poi = m.spot.poi ? pois.findIndex((p) => p.name === m.spot.poi) : -1;
+    if (poi < 0) {
+      poi = pois.length;
+      pois.push({ kind: POI.landmark, grade: 0, x: m.x, z: m.z, name: m.spot.id });
+    }
+    taken.add(poi);
+    planLandmark(P, m.spot.id, pois[poi]!.x, pois[poi]!.z, m.spot.rot, m.spot.reach ?? 48, poi);
   }
+  // R1, R9: the lookout towers keep their spot (they were placed for the sight lines).
+  pois.forEach((p, i) => {
+    if (p.kind === POI.tower && !taken.has(i)) reserve(P, p.x, p.z, 5);
+  });
   const ctx = townCtx(b, real);
   const around = b.params.world?.around ?? [];
   const nearCity = b.params.land !== 'urban' && around.some((c, k) => k !== 4 && c?.land === 'urban');
@@ -935,13 +921,12 @@ export function layoutReal(b: Builder, real: RealArea, terrain: (x: number, z: n
   levelSites(b, P.sites, water);
   realRoads(b, real, water, P.sites);
   buildSites(b, P.sites, pois, ctx);
-  // R1: landmarks (REAL_LANDMARKS) at their real point; the deck / roof is a firing position.
-  for (const p of pois) {
-    const id = REAL_LANDMARKS[p.name];
-    if (id) p.building = landmark(b, id, p.x, p.z)?.id;
-    // R1: other towers (an override's `addPois` of POI.tower): a lookout tower, a firing position.
-    else if (p.kind === POI.tower) p.building = addTower(b, p.x, p.z, p.grade > 0 ? p.grade : T.vantage.towerHeight)?.id;
-  }
+  // L1: a landmark's moat / canal / lawn and its firing positions (its blueprint's ground and vantages).
+  for (const s of P.sites) if (s.what === 'landmark') applyLandmark(b, b.buildings[pois[s.poi]!.building!]!, water);
+  // R1: other towers (an override's `addPois` of POI.tower): a lookout tower, a firing position.
+  pois.forEach((p, i) => {
+    if (p.kind === POI.tower && !taken.has(i)) p.building = addTower(b, p.x, p.z, p.grade > 0 ? p.grade : T.vantage.towerHeight)?.id;
+  });
   realTowns(b, real, ctx);
   roofVantages(b);
   realFields(b, real);

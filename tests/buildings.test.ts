@@ -148,6 +148,35 @@ describe('every building type in the catalog (07d)', () => {
         }
       });
 
+      // L1: a landmark is seen from outside only — the outside's checks instead of the rooms' (docs/realmap_guide.md §7).
+      if (def.exteriorOnly) {
+        it('is an outside only: shell parts, no rooms, its collision where something is drawn, its ground and firing positions on the lot', () => {
+          for (const [w, d] of sizes(def)) {
+            const bp = generateBlueprint(def, w, d, 4);
+            expect(bp.parts.every((p) => p.layer === 'shell'), `${def.id}: an interior part`).toBe(true);
+            expect(bp.rooms.length + bp.search.length + bp.links.length).toBe(0);
+            expect(bp.openings.some((o) => o.kind === 'door' && o.state === 'open'), `${def.id}: an open door`).toBe(false);
+            const drawn = bp.parts.filter((p) => !p.hidden);
+            const cols = localColliders(bp);
+            expect(cols.length).toBeGreaterThan(0);
+            for (const c of cols) {
+              // Every collision box overlaps a drawn part (turned parts by their turned extent).
+              const hit = drawn.some((p) => {
+                const r = p.yaw ? Math.hypot(p.x1 - p.x0, p.z1 - p.z0) / 2 : 0;
+                const [cx, cz] = [(p.x0 + p.x1) / 2, (p.z0 + p.z1) / 2];
+                const [x0, x1, z0, z1] = p.yaw ? [cx - r, cx + r, cz - r, cz + r] : [p.x0, p.x1, p.z0, p.z1];
+                return c.x0 < x1 + 0.05 && c.x1 > x0 - 0.05 && c.z0 < z1 + 0.05 && c.z1 > z0 - 0.05 && c.y0 < p.y1 + 0.05 && c.y1 > p.y0 - 0.05;
+              });
+              expect(hit, `${def.id}: a collision box at (${c.x0.toFixed(1)}, ${c.y0.toFixed(1)}, ${c.z0.toFixed(1)}) with nothing drawn there`).toBe(true);
+            }
+            for (const g of bp.ground ?? []) for (const [x, z] of g.poly) expect(x >= -1e-6 && x <= w + 1e-6 && z >= -1e-6 && z <= d + 1e-6, `${def.id}: ground outside the lot`).toBe(true);
+            for (const v of bp.vantages ?? []) expect(v[0] > 0 && v[0] < w && v[2] > 0 && v[2] < d && v[1] <= env.top).toBe(true);
+            for (const l of bp.ladders) expect(l.x0 >= -1e-6 && l.x1 <= w + 1e-6 && l.z0 >= -1e-6 && l.z1 <= d + 1e-6, `${def.id}: a ladder off the lot`).toBe(true);
+          }
+        });
+        return;
+      }
+
       it('reaches every room that is not locked from outside, and every search point is somewhere to stand', () => {
         for (const [w, d] of sizes(def)) {
           for (const seed of [1, 2, 3, 4]) {

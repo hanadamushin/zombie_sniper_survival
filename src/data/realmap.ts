@@ -134,17 +134,6 @@ export const REAL_AREA = {
   } satisfies Record<string, { w: number; d: number; h: [number, number]; kind: 'shop' | 'office' | 'apartment'; yard: number }>,
 } as const;
 
-/**
- * R1..R8: landmark buildings (src/gen/buildings/defs/landmark/<region>/) placed by gen/real/layout.ts
- * at the real point whose name is the key (an annotation or an `addPois` of the region's overrides;
- * centred on the point, front to the south). One line per landmark, each region its own lines.
- */
-export const REAL_LANDMARKS: Record<string, string> = {
-  // hokkaido (R1)
-  さっぽろテレビ塔: 'landmark.sapporo_tv_tower',
-  五稜郭タワー: 'landmark.goryokaku_tower',
-};
-
 /** R0: thresholds of the automatic inspection of real areas (tools/real/check.ts, tests/realmap.test.ts). */
 export const REAL_CHECK = {
   /** Share of the dry land that is walkable (nav tiles). */

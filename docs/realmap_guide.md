@@ -25,6 +25,7 @@ src/gen/real/format.ts                区域ファイルの形（読み書き）
 src/gen/real/layout.ts                区域の生成（地形・水・道路・町並み・施設）
 src/data/realmap.ts                   すべての数値（高さの縮め方、町の格、施設の大きさ、点検のしきい値）
 src/gen/buildings/catalog/landmark_<地方>.ts / defs/landmark/<地方>/   名所の建物（7 節）
+src/data/landmarks/<地方>.ts           名所の置き場所の表（7 節）
 ```
 
 地方とセル: 都道府県から決まる（`tools/real/lib/regions.ts`）。hokkaido / tohoku / kanto / chubu / kinki / chugoku / shikoku / kyushu（沖縄は kyushu）。
@@ -142,13 +143,61 @@ export const OVERRIDES: RegionOverrides = {
 
 数値そのもの（高さの縮め方・町の格のしきい値・施設の大きさ）は `src/data/realmap.ts` にあり **全国共通**。変えたいときは取りまとめ役に相談（PROGRESS.md に理由を書く）。
 
-## 7. 名所の建物（任意・3 つまで）
+## 7. 名所（L1〜L8。仕組みは L1 が作った）
 
-- 設計図は 07d の形（`docs/buildings_guide.md`）。カテゴリ `landmark`、id `landmark.<名前>`（例 `landmark.matsuyama_castle`）
-- ファイル: `src/gen/buildings/defs/landmark/<地方>/<名前>.ts`、登録は `src/gen/buildings/catalog/landmark_<地方>.ts` の配列（index.ts は R0 が登録済み。触らない）
-- 三角形の上限は `ARCH.limits.landmark`（外観 6000・内部 3000。いちばん高いビルと同じ）。中に入れなくてよい（外観だけ）。登れる展望台があれば射点（`roof` の段）にしてよい
-- 置き場所: 実在の位置を縮めた点。R0 の生成は名所を置かないので、`src/gen/real/layout.ts` の `layoutReal` の施設の順番の前に 1 行足す必要がある（共通部分なので最小限に。例: POI の名前が「松山城」なら `enterableIn(b, 'landmark.matsuyama_castle', …)`）。重なる町並みは自動で避ける
-- カタログの自動テスト（`tests/buildings.test.ts`）が全種類に走る。`npm run buildings:preview` で平面図
+各地の主要な観光名所を **外観だけ** の建物として、実在の位置を縮めた所に建てる。**作業は 3 か所（＋名前）だけ**で、区域の生成・描画・戦略地図のコードは触らない。
+
+| やること | ファイル |
+|---|---|
+| 形（設計図）を書く | `src/gen/buildings/defs/landmark/<地方>/<名前>.ts`（`landmarkDef`、下の例） |
+| カタログに登録 | `src/gen/buildings/catalog/landmark_<地方>.ts` の配列に 1 行 |
+| 置き場所の表に 1 行 | `src/data/landmarks/<地方>.ts`（id・緯度経度・向き・任意で `poi` / `reach`） |
+| 名前 | `src/ui/i18n/ja.ts` の末尾（L の節）に `'landmark.<名前>': '正式名称'`（キーは設計図の id） |
+
+```ts
+// src/data/landmarks/kanto.ts
+export const LANDMARKS_KANTO: readonly LandmarkSpot[] = [
+  { id: 'landmark.tokyo_tower', lat: 35.6586, lon: 139.7454, rot: 0 },          // rot: 正面（設計図の z = d 側）の向き 0 南 1 東 2 北 3 西
+  { id: 'landmark.tokyo_station', lat: 35.6812, lon: 139.7671, rot: 1, reach: 80 },
+];
+```
+
+### 仕組み（何が自動で起きるか）
+- **置き場所**: `src/gen/real/landmarks.ts` が緯度経度 → セル → 区域の点（1/10 に縮めた位置）にする（格子は `LANDMARK_GRID`、grid.json と同じ）。区域の生成（`layout.ts`）は **施設より先に** 名所を「敷地」（07d-3 の site）として計画する（`sites.ts` の `planLandmark`）: 点から `reach`（既定 48m、だめなら 2 倍・3 倍）以内で、**国道・高速・鉄道・川と海にかからず**、高低差の小さい所。県道・広い道・細い道（`CUTS.landmark`）は敷地の柵で止まり、町並み・施設・物見櫓は敷地を避ける。敷地は均される（高さの基準は区域の地形）。表の `poi` に区域データの点の名前（注記か手直しの `addPois`）を書くと、その点に建つ（その点に物見櫓は建たない）
+- 区域データに名前の無い名所も緯度経度だけで置ける。表の順に置くので、**近くに並ぶもの（札幌の 3 つなど）は大事な方を先に**
+- **外観だけ**（`BuildingDef.exteriorOnly`）: 部屋・探索ポイント・開いた扉なし（`landmarkDef` が付ける）。描画は霧の先（`RENDER.enterables.landmarkFar` 900m）まで外観で、遠景の箱にしない。三角形の予算で遠景に落とされない。屋内のゾンビも湧かない（`BALANCE` の `indoor.weights` で 0）
+- **地面**（`L.ground`）: 堀・運河の水面（敷地の地面から掘る）、芝生、舗装、砂利。多角形は敷地の中（設計図の座標）。区域でも試験用の地図でも同じ関数（`applyLandmark`）が当てはめる
+- **射点**（`L.vantage`）: 展望台・天守の上など。外から登る道として `L.ladder`（外のはしご。中を通る場合は床と屋根に穴を開けて筒で囲う。テレビ塔・五稜郭タワーが例）
+- **戦略地図**: 表から自動で、名所のあるセルに金色の菱形と名称（拡大時）、凡例「名所」、セル情報に「名所: …」
+- **試験用の地図** `?landmarks=1`（`debug.openYard(4)`）: 全名所が平らな地面に並ぶ（水面・射点つき）。e2e `e2e/landmarks.spec.ts` が 1 つずつ地上 200m と上空から撮り、3 指標を測り、はしごを登る。`LANDMARKS=tokyo_tower,…` で自分のものだけ。実際の区域の地点は同じ spec の `CELLS` に足す
+
+### 設計図の書き方（`src/gen/buildings/defs/landmark/common.ts`）
+```ts
+export const LANDMARK_X = landmarkDef({ variant: 'x', size: { w: [40, 40], d: [30, 30] }, eaves: 12, top: 30, build(L) {
+  L.box(0, 0, 0, L.w, 12, L.d, 'paint', { paint: 'white' });                 // 箱。paint は data/render.ts の PAINT の名前
+  L.shape('gable', -0.5, 12, -0.5, L.w + 0.5, 18, L.d + 0.5, 'paint', { paint: 'roofRed', axis: 'z' });
+  L.column(20, 15, 3, 12, 30, 'paint', { paint: 'copper', taper: 0.3 });     // 12 角柱（taper 0 で円錐、>1 で上が広がる）
+  L.bar(ax, az, bx, bz, y0, y1, 1.2, 'paint', { paint: 'stone' });           // 2 点を結ぶ斜めの壁・梁（yaw）
+  L.ring(cx, cz, r, y0, y1, 0.2, 16, ...);                                     // 多角形の筒（手すり・円筒の壁）
+  L.windows('x', L.d, 1, 2, L.w - 2, 10, 3, 5.5, 1.4, { broken: 0.4 });       // 面に窓（割れた窓は黒）
+  L.ladder(x, z, nx, nz, 0, 30); L.vantage(x, 30, z);                          // 登る道と射点
+  L.ground('water', [[0, 0], [10, 0], [10, 5]], 2.4, 0.9);                     // 堀
+  L.car(…); L.tent(…); L.sandbags(…); L.crates(…); L.fallenSign(…); L.scorch(…) // 崩壊後 90 日（1〜2 点）
+} });
+```
+- 部品の約束は 07d（`docs/buildings_guide.md`）のまま。すべて外観（`shell`）。当たり判定は部品から自動（`solid: false` は飾り、木の葉・細い手すり・模様に）。**新しく足した形**: `Part.yaw`（垂直軸まわりの回転。当たり判定は長い辺に沿った小さな箱の列）と `cyl`（12 角柱、`taper`。当たり判定は内接する四角）
+- 色: 材質 `paint` の名前つきの色（`PAINT`: 白・黒・朱・インターナショナルオレンジ・赤レンガ・銅緑・金・石…）。足すときは `PAINT` の **末尾に追記**（順番で色が決まる）
+- 三角形: 外観 6,000 まで（`ARCH.limits.landmark`）。大きな塔・城は `landmarkDef({ shell: 8000 })` と PROGRESS.md に理由。箱 12・屋根 8・`cyl` 44
+- カタログの自動検査は名所には外観の検査だけ（決定性・三角形・生成時間・敷地に収まる・当たり判定の箱が描いた部品と重なる・地面と射点が敷地の中）。`tests/landmarks.test.ts` が表（設計図・名前・全名所が表にある）、試験用の地図（はしごを登って射点に着く）、実際の区域（データのある地方の全名所が建ち、敷地に他の建物が無い）を検査する
+- **扱いの注意**（発注者の決め事）: テーマパークは名前・ロゴ・キャラクター・特定のアトラクションを使わない一般的な形に。慰霊・追悼の施設と政治的な議論のある施設は作らない。原爆ドームは作るが、崩壊後の演出・射点・登れる足場を付けず、周り 60m にゾンビを初期配置しない（L6。必要な仕組みは L6 が足す）
+
+### こつ（形・三角形の節約）
+- 遠目の輪郭と色が勝負。細部（窓 1 枚ずつの枠）より、比率・屋根の色・塔の形。窓は壁を切らずに薄い板を貼る（`L.windows`、1 枚 12 三角形）
+- 大きな敷地（城郭・公園）は主役＋数点。五稜郭は実寸だと区域の半分になるので星形を約 1/4 で描き、堀と石垣と奉行所だけにした（設計図の頭に理由を書く）
+- 格子の塔（テレビ塔）は脚を高さ方向に段の箱で寄せ、水平の輪を数段。斜材は yaw で平面上の斜めしか作れないので、面の中央に縦材を足すと格子に見える
+- 円・円錐は `L.column`（`cyl`）1 部品。星形・菱形は四角を yaw で 45° 回す
+- 木の葉（樹冠）は `solid: false`。幹だけ当たる
+- 区域で置けなかった名所はテストが落とす。`reach` を広げるか、`rot` を変える（細長い敷地は道路の向きに合わせると入りやすい）
 
 ## 8. 性能
 
@@ -171,7 +220,7 @@ export const OVERRIDES: RegionOverrides = {
 - R1: 手引き 4 節の「`addPois` に塔（POI 20）」は R0 では何も建たなかった。`layoutReal` が建てるようにした（`grade` > 0 で見張り台の高さ m）。起伏のある森では 12m では梢に隠れるので 20m を勧める
 - R1: 取りまとめの見通しの 2 つの決まりは `node tools/real/sightlines.ts <地方>` で点検、`--suggest` で物見櫓の場所の案（手直しのファイルに足して作り直し、2〜3 回で収束）
 - R1: 大都市の中心が一面の舗装になるとき（実在の 13m 以上の市道が 100m ごと → 区域で 10m ごと）は地方全体の `dropWideRoadsAbove`（人/km²。北海道は 4,000）。陸で接する地方どうしは同じ値に
-- R1: 名所は `src/data/realmap.ts` の `REAL_LANDMARKS` に「名前: 種類」を 1 行と、手直しの `addPois` に同じ名前の点（`layoutReal` は変えなくてよい）。縮めた点は道路に落ちやすいが、48m 以内の空いた所に自動で建つ。展望塔は `defs/landmark/hokkaido/obs_tower.ts` の `obsTower` を使い回せる
+- R1: ~~名所は `REAL_LANDMARKS` …~~ → L1 で 7 節の表（`src/data/landmarks/<地方>.ts`）に移した。`addPois` は不要（緯度経度で置ける）
 - R1: 自衛隊の注記は「町のタイル」の外（山の中の駐屯地・レーダーサイト）だと入らない。概略の緯度経度の周りの z14 タイルの `label` を `自衛隊` で探すと正確な位置が出る。方面総監部・師団・旅団の司令部の注記は駐屯地と重複、演習場は建物のない訓練場（北海道では外した）
 
 - R2: **索道（ロープウェイ・スキーリフト）** はベクトルタイル z13 の鉄道の `rtCode1` が `40206…`（蔵王・猪苗代・岩手高原・八甲田で確認。`40201` JR・`40202` 私鉄・`40203` 地下鉄・`40205` 臨港・専用線）。R0 は斜面をまっすぐ登る線路として描いていたので `region.ts` で入れないようにした。スキー場のある地方は作り直してから照合する

@@ -320,7 +320,7 @@ export const BALANCE = {
       perBuilding: [1, 4] as [number, number],
       buildingsPerStep: 3,
       playerClear: 40,
-      weights: [['public.hospital', 4], ['transport.', 4], ['base.j', 4], ['military.', 2.5], ['public.', 1.6], ['shop.', 1.2], ['office.', 1]] as [string, number][],
+      weights: [['landmark.', 0], ['public.hospital', 4], ['transport.', 4], ['base.j', 4], ['military.', 2.5], ['public.', 1.6], ['shop.', 1.2], ['office.', 1]] as [string, number][],
       rooms: { ward: 2.5, train: 2, platform: 1.5, lobby: 1.5, barracks: 1.5, hall: 0.8, stairs: 0, roof: 0.3, toilet: 0.4, closet: 0.2, bath: 0.4 } as Record<string, number>,
     },
     /** LOD: beyond these distances a zombie is updated every 2nd / 4th step (with a longer dt). */

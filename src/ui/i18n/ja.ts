@@ -853,6 +853,20 @@ export const ja = {
   'defeat.noRetry': '再開できるオートセーブがない',
   'title.tagline': '一発で仕留め、歩いて耳を拾い、その耳で国を建てる。',
   'title.version': '開発版',
+
+  // --- L1: landmarks (名所) — the shared texts; each region appends its names below (key = the building type's id) ---
+  'world.legend.landmark': '名所',
+  'world.landmarks': '名所: {names}',
+  'world.landmarks.more': '{name} ほか{n}',
+  // L1 hokkaido
+  'landmark.sapporo_tv_tower': 'さっぽろテレビ塔',
+  'landmark.sapporo_clock_tower': '札幌市時計台',
+  'landmark.hokkaido_akarenga': '北海道庁旧本庁舎（赤れんが庁舎）',
+  'landmark.hokudai_clark': '北海道大学 クラーク像',
+  'landmark.hokudai_poplar': '北海道大学 ポプラ並木',
+  'landmark.goryokaku': '五稜郭',
+  'landmark.goryokaku_tower': '五稜郭タワー',
+  'landmark.otaru_canal': '小樽運河',
 } as const;
 
 export type TextKey = keyof typeof ja;

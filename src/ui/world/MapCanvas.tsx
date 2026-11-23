@@ -32,6 +32,8 @@ interface Props {
   focus: MapFocus;
   /** Draw place names. */
   labels?: boolean;
+  /** L1: landmarks (名所): a gold diamond in the cell, the name beside it when zoomed in. */
+  landmarks?: { cell: CellId; name: string }[];
   onHover?(cell: CellId | null): void;
   onPick?(cell: CellId | null): void;
   testId?: string;
@@ -51,6 +53,8 @@ let SUPPLY_GLYPH = '';
 export function setSupplyGlyph(glyph: string): void {
   SUPPLY_GLYPH = glyph;
 }
+/** L1: the landmark diamond. */
+export const LANDMARK_COLOR = '#e8c25a';
 export const MARKER_COLOR: Record<MapMarker['kind'], string> = { player: '#ffffff', home: '#c9a24a', target: '#7fd4ff', candidate: '#ffffff', source: '#ff5a4a', outpost: '#8fd48a', cache: '#8fb4ff' };
 
 export function MapCanvas(props: Props) {
@@ -100,7 +104,7 @@ export function MapCanvas(props: Props) {
       canvas.height = Math.round(h * dpr);
       if (appliedFocus.current !== null && latest.current.focus.cell === undefined) applyFocus(w, h); // keep "fit" fitted on resize
     }
-    const { grid, paint, markers, path, focus, labels } = latest.current;
+    const { grid, paint, markers, path, focus, labels, landmarks } = latest.current;
     if (appliedFocus.current !== focus.key) {
       appliedFocus.current = focus.key;
       applyFocus(w, h);
@@ -179,6 +183,34 @@ export function MapCanvas(props: Props) {
         if (x < -40 || y < -10 || x > w + 10 || y > h + 10) continue;
         ctx.strokeText(p.name, x + scale / 2 + 3, y);
         ctx.fillText(p.name, x + scale / 2 + 3, y);
+      }
+    }
+
+    // L1: landmarks — a diamond at the cell's upper right, the name when zoomed in (and room for it).
+    if (landmarks && landmarks.length > 0) {
+      const rd = Math.max(3, Math.min(6, scale * 0.3));
+      ctx.font = '11px system-ui, sans-serif';
+      ctx.textBaseline = 'middle';
+      for (const l of landmarks) {
+        const x = cx(l.cell) + scale * 0.25;
+        const y = cy(l.cell) - scale * 0.25;
+        if (x < -20 || y < -20 || x > w + 20 || y > h + 20) continue;
+        ctx.fillStyle = LANDMARK_COLOR;
+        ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(x, y - rd);
+        ctx.lineTo(x + rd, y);
+        ctx.lineTo(x, y + rd);
+        ctx.lineTo(x - rd, y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        if (scale >= 12) {
+          ctx.lineWidth = 3;
+          ctx.strokeText(l.name, x + rd + 3, y);
+          ctx.fillText(l.name, x + rd + 3, y);
+        }
       }
     }
 
