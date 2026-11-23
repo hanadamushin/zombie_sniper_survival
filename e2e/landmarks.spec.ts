@@ -235,7 +235,9 @@ const CELLS: { name: string; lat: number; lon: number }[] = [
 ];
 
 test('real map: the landmarks at their place, the busiest cell within the budgets, the marks on the strategic map', async ({ page }) => {
-  test.setTimeout(1_500_000);
+  // L4: 21 of the 25 minutes went with 12 cells of its own and the other regions' 26 cells visited and
+  // passed over; 40 minutes leaves room for L5–L8.
+  test.setTimeout(2_400_000);
   const errors = trackErrors(page);
   await page.goto('/?seed=12&scenario=0');
   await startNewGame(page);
