@@ -148,6 +148,11 @@ export const BALANCE = {
      * the armouries it opens) up to `lootPerKeyBuilding`.
      */
     lootPerBuilding: 4,
+    /**
+     * L6: round a place of remembrance (a memorial landmark, the Atomic Bomb Dome): no zombie of the
+     * first lot or indoors, no search point and no ammunition cache within this many m of its lot.
+     */
+    memorialClear: 60,
     lootPerKeyBuilding: 14,
     start: {
       lands: ['rural', 'forest'],

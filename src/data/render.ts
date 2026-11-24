@@ -54,6 +54,13 @@ export const PAINT = {
   momiji: 0xb8452a,
   hiwada: 0x5a4434,
   dome: 0xd3d7da,
+  // L6 (chugoku): the straw of Izumo's great ropes (しめ縄), the weathered brick and plaster of the
+  // Atomic Bomb Dome's walls, the rusted steel of its dome frame.
+  straw: 0xc8b57a,
+  ruinBrick: 0x9a8a76,
+  rust: 0x4a3e36,
+  // L6: a mown lawn (the hill of Kōraku-en), lighter than the ground's grass.
+  lawn: 0x7d9a4c,
 } as const;
 export type PaintName = keyof typeof PAINT;
 

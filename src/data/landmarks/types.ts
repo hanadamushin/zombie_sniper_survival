@@ -38,4 +38,12 @@ export interface LandmarkSpot {
    * expressways are avenues on the ground in an area (no decks). Railways are never cut. Default false.
    */
   cutRoads?: boolean;
+  /**
+   * L6: a place of remembrance (the Atomic Bomb Dome; docs/realmap_guide.md §7). Shown as it stands
+   * today and left alone: its blueprint may add no props of the fall (cars, tents, sandbags, crates,
+   * fallen signs, scorch, broken panes), no ladder and no firing position (common.ts refuses them);
+   * no zombie of the first lot or indoors stands within BALANCE.world.memorialClear of its lot (the
+   * ones that come chasing may pass), and no search point or ammunition cache lies there.
+   */
+  memorial?: boolean;
 }

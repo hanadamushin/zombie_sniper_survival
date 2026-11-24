@@ -23,6 +23,7 @@ import { ensureFarVantages } from './vantage.ts';
 import type { RealArea } from './real/format.ts';
 import { smoothstep } from './noise.ts';
 import { detailOf } from './buildings/index.ts';
+import { memorialNear } from './real/landmarks.ts';
 import { GROUND, type Brush, type GenParams, type LootSpot, type Solid, type StaticHash, type TacticalMap } from './types.ts';
 
 export * from './types.ts';
@@ -103,8 +104,10 @@ function placeLootSpots(b: Builder): LootSpot[] {
     const j = randInt(rng, 0, i);
     [pool[i], pool[j]] = [pool[j]!, pool[i]!];
   }
+  // L6: nothing to search round a place of remembrance.
+  const quiet = memorialNear(b.placements, BALANCE.world.memorialClear);
   const blocked = (x: number, z: number): boolean =>
-    x < 3 || z < 3 || x > SIZE - 3 || z > SIZE - 3 || b.solids.some((s) => x > s.x0 - 0.5 && x < s.x1 + 0.5 && z > s.z0 - 0.5 && z < s.z1 + 0.5);
+    x < 3 || z < 3 || x > SIZE - 3 || z > SIZE - 3 || (quiet?.(x, z) ?? false) || b.solids.some((s) => x > s.x0 - 0.5 && x < s.x1 + 0.5 && z > s.z0 - 0.5 && z < s.z1 + 0.5);
   const spots: LootSpot[] = [];
   for (const bd of pool) {
     if (spots.length >= b.params.lootSpots) break;
@@ -114,6 +117,7 @@ function placeLootSpots(b: Builder): LootSpot[] {
       // 07d-2f: the key first (the armories it opens are searched too, once it is found).
       const keyed = det.search.some((s) => s.key);
       const open = det.search.filter((sp) => {
+        if (quiet?.(sp.wpos[0], sp.wpos[2])) return false;
         const room = det.bp.rooms[sp.room];
         return !(room?.locked && !room.key);
       });
@@ -158,8 +162,9 @@ function placeCaches(b: Builder, loot: LootSpot[]): { pos: [number, number]; amm
   const rng = rngOf(b, 'caches.place');
   const C = BALANCE.world.caches;
   const used = new Set(loot.map((l) => l.building));
+  const quiet = memorialNear(b.placements, BALANCE.world.memorialClear);
   const blocked = (x: number, z: number): boolean =>
-    x < 8 || z < 8 || x > SIZE - 8 || z > SIZE - 8 || (b.params.isHome && homeDist(x, z) < C.homeClear) ||
+    x < 8 || z < 8 || x > SIZE - 8 || z > SIZE - 8 || (b.params.isHome && homeDist(x, z) < C.homeClear) || (quiet?.(x, z) ?? false) ||
     b.solids.some((s) => x > s.x0 - 0.8 && x < s.x1 + 0.8 && z > s.z0 - 0.8 && z < s.z1 + 0.8);
   const spots: [number, number][] = [];
   const pool = b.buildings.filter((bd) => bd.kind !== 'tower' && !used.has(bd.id));

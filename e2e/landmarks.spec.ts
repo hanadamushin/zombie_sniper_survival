@@ -1,9 +1,10 @@
-// L1: the landmarks (名所). (1) The landmark yard (`?landmarks=1`): every landmark of every region on
-// flat ground — each one from the street 200 m off and from the air, the three budgets over the whole
+// L1: the landmarks (名所). (1) The landmark yards (L6: one per region, `?landmarks=<region>`): every
+// landmark of the region on flat ground — each one from the street 200 m off and from the air, the three budgets over the whole
 // yard (draw calls, triangles, sim + draw submission), climbing the tower ladders to their decks.
 // (2) The real areas: the landmarks at their real (shrunk) place, the cell with the most of them
 // measured, the strategic map's landmark marks. Screenshots: test-results/landmark-*.png.
-// `LANDMARKS=id,id` limits both to some landmarks (the L2–L8 sessions: their own).
+// `LANDMARKS=id,id` limits both to some landmarks (the L2–L8 sessions: their own); L6:
+// `LANDMARK_YARDS=chugoku,…` the yards visited (default: every region).
 
 import { expect, test, type Page } from '@playwright/test';
 
@@ -121,57 +122,65 @@ async function portraits(page: Page, prefix: string, l: Lm, dist = 200): Promise
   await shoot(page, `${prefix}-${name}-air`, ax, az, yaw, down, h);
 }
 
-test('landmark yard: every landmark from the street and from the air, the budgets, the tower decks', async ({ page }) => {
-  test.setTimeout(1_200_000);
-  const errors = trackErrors(page);
-  await page.goto('/?landmarks=1');
-  await page.waitForFunction(() => window.__game?.map != null, null, { timeout: 60_000 });
-  await settle(page);
-  const all = await landmarksOf(page);
-  expect(all.length).toBeGreaterThan(0);
-  // The budgets: over the whole yard from its north-west corner (every landmark's outside drawn), and from the middle.
-  const rows: string[] = [];
-  for (const [label, x, z, yaw] of [['corner', 22, 22, -Math.PI * 0.75], ['middle', 512, 300, Math.PI]] as const) {
-    await page.evaluate(([px, pz, yw]) => window.__game!.debug.teleport(px!, pz!, yw!, -0.05), [x, z, yaw] as const);
-    await settle(page);
-    const m = await measure(page);
-    const st = await page.evaluate(() => window.__game!.debug.enterableStages());
-    rows.push(`${label}: ${m.calls} calls, ${(m.triangles / 1e4).toFixed(1)}万 tris, sim ${m.tick.toFixed(2)} + draw ${m.draw.toFixed(2)} ms, stages far ${st.far} / out ${st.mid} / in ${st.near}`);
-    expect(m.calls).toBeLessThan(150);
-    expect(m.triangles).toBeLessThan(500_000);
-    expect(m.tick + m.draw).toBeLessThan(4);
-  }
-  console.log(`[landmark yard]\n${rows.join('\n')}`);
-  for (const l of all.filter((q) => wanted(q.def))) await portraits(page, 'landmark-yard', l);
+const REGIONS = ['hokkaido', 'tohoku', 'kanto', 'chubu', 'kinki', 'chugoku', 'shikoku', 'kyushu'];
+const YARDS = (process.env.LANDMARK_YARDS ?? '').split(',').filter(Boolean);
 
-  // The tower decks: climb the ladder from its foot (look up, walk into it) and stand on the deck.
-  for (const l of all.filter((q) => q.vantage && wanted(q.def))) {
-    const ladder = await page.evaluate((def) => {
-      const map = window.__game!.map!;
-      const i = map.placements.findIndex((p) => p.def === def);
-      const det = window.__game!.debug.enterable(i)!;
-      const lad = det.ladders[0]!;
-      return { x: (lad.x0 + lad.x1) / 2, z: (lad.z0 + lad.z1) / 2, nx: lad.nx, nz: lad.nz, y1: lad.y1 };
-    }, l.def);
-    // Stand 0.8 m out from the ladder, facing it, and climb (forward with the view up).
-    await page.evaluate((q) => {
-      const g = window.__game!;
-      g.debug.teleport(q.x - q.nx * 0.5, q.z - q.nz * 0.5, Math.atan2(-q.nx, -q.nz), 0.6);
-      g.debug.setInput({ moveZ: 1 });
-    }, ladder);
-    await page.waitForFunction((y1) => window.__game!.state!.player.pos[1] > y1 - 0.1, ladder.y1, { timeout: 240_000 });
-    await page.waitForTimeout(1500); // step off onto the deck
-    await page.evaluate(() => window.__game!.debug.setInput(null));
-    const feet = await page.evaluate(() => window.__game!.state!.player.pos[1]);
-    // At the deck (L2: not every deck is a tower's — Yamadera's stage is 22 m up).
-    expect(feet, l.def).toBeGreaterThan(l.vantage![1] - 0.5);
-    await page.evaluate(() => {
-      const g = window.__game!;
-      g.state!.player.pitch = -0.3;
-    });
-    await settle(page, 600);
-    await page.screenshot({ path: `test-results/landmark-yard-${l.def.replace('landmark.', '')}-deck.png` });
+test('landmark yards: every landmark from the street and from the air, the budgets, the tower decks', async ({ page }) => {
+  test.setTimeout(3_000_000);
+  const errors = trackErrors(page);
+  let seen = 0;
+  for (const region of REGIONS.filter((r) => YARDS.length === 0 || YARDS.includes(r))) {
+    await page.goto(`/?landmarks=${region}`);
+    await page.waitForFunction(() => window.__game?.map != null, null, { timeout: 60_000 });
+    await settle(page);
+    const all = await landmarksOf(page);
+    if (!all.some((q) => wanted(q.def))) continue; // a region with no landmarks (yet), or none asked for
+    seen += all.length;
+    // The budgets: over the whole yard from its north-west corner (every landmark's outside drawn), and from the middle.
+    const rows: string[] = [];
+    for (const [label, x, z, yaw] of [['corner', 22, 22, -Math.PI * 0.75], ['middle', 512, 300, Math.PI]] as const) {
+      await page.evaluate(([px, pz, yw]) => window.__game!.debug.teleport(px!, pz!, yw!, -0.05), [x, z, yaw] as const);
+      await settle(page);
+      const m = await measure(page);
+      const st = await page.evaluate(() => window.__game!.debug.enterableStages());
+      rows.push(`${region} ${label}: ${m.calls} calls, ${(m.triangles / 1e4).toFixed(1)}万 tris, sim ${m.tick.toFixed(2)} + draw ${m.draw.toFixed(2)} ms, stages far ${st.far} / out ${st.mid} / in ${st.near}`);
+      expect(m.calls).toBeLessThan(150);
+      expect(m.triangles).toBeLessThan(500_000);
+      expect(m.tick + m.draw).toBeLessThan(4);
+    }
+    console.log(`[landmark yard]\n${rows.join('\n')}`);
+    for (const l of all.filter((q) => wanted(q.def))) await portraits(page, 'landmark-yard', l);
+
+    // The tower decks: climb the ladder from its foot (look up, walk into it) and stand on the deck.
+    for (const l of all.filter((q) => q.vantage && wanted(q.def))) {
+      const ladder = await page.evaluate((def) => {
+        const map = window.__game!.map!;
+        const i = map.placements.findIndex((p) => p.def === def);
+        const det = window.__game!.debug.enterable(i)!;
+        const lad = det.ladders[0]!;
+        return { x: (lad.x0 + lad.x1) / 2, z: (lad.z0 + lad.z1) / 2, nx: lad.nx, nz: lad.nz, y1: lad.y1 };
+      }, l.def);
+      // Stand 0.8 m out from the ladder, facing it, and climb (forward with the view up).
+      await page.evaluate((q) => {
+        const g = window.__game!;
+        g.debug.teleport(q.x - q.nx * 0.5, q.z - q.nz * 0.5, Math.atan2(-q.nx, -q.nz), 0.6);
+        g.debug.setInput({ moveZ: 1 });
+      }, ladder);
+      await page.waitForFunction((y1) => window.__game!.state!.player.pos[1] > y1 - 0.1, ladder.y1, { timeout: 240_000 });
+      await page.waitForTimeout(1500); // step off onto the deck
+      await page.evaluate(() => window.__game!.debug.setInput(null));
+      const feet = await page.evaluate(() => window.__game!.state!.player.pos[1]);
+      // At the deck (L2: not every deck is a tower's — Yamadera's stage is 22 m up).
+      expect(feet, l.def).toBeGreaterThan(l.vantage![1] - 0.5);
+      await page.evaluate(() => {
+        const g = window.__game!;
+        g.state!.player.pitch = -0.3;
+      });
+      await settle(page, 600);
+      await page.screenshot({ path: `test-results/landmark-yard-${l.def.replace('landmark.', '')}-deck.png` });
+    }
   }
+  expect(seen).toBeGreaterThan(0);
   expect(errors).toEqual([]);
 });
 
@@ -248,6 +257,17 @@ const CELLS: { name: string; lat: number; lon: number }[] = [
   { name: 'hikone', lat: 35.27645, lon: 136.25172 },
   { name: 'wakayama', lat: 34.22743, lon: 135.17124 },
   { name: 'nachi', lat: 33.66828, lon: 135.88979 },
+  // L6 chugoku: Hiroshima (20752: the Atomic Bomb Dome and the castle), Miyajima, Okayama (20264: the
+  // castle and Kōraku-en), Izumo, Matsue, Iwakuni, Yamaguchi, Tottori (18597: Jinpū-kaku and the dune
+  // centre — measured from the dune centre's roof terrace).
+  { name: 'hiroshima', lat: 34.39548, lon: 132.45357 },
+  { name: 'miyajima', lat: 34.29632, lon: 132.31803 },
+  { name: 'okayama', lat: 34.66506, lon: 133.93597 },
+  { name: 'izumo', lat: 35.4019, lon: 132.6855 },
+  { name: 'matsue', lat: 35.47507, lon: 133.05069 },
+  { name: 'iwakuni', lat: 34.16772, lon: 132.17847 },
+  { name: 'yamaguchi', lat: 34.19029, lon: 131.47268 },
+  { name: 'tottori', lat: 35.5362, lon: 134.2338 },
 ];
 // L5: `LANDMARK_CELLS=name,name` visits only those places (each place of another region costs about
 // half a minute of loading before it is passed over).

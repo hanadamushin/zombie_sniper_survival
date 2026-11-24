@@ -10,6 +10,7 @@ import { BUILDING_DEFS, type BuildingDef } from '../../gen/buildings/index.ts';
 import { addEnterable, createFlatBuilder, N } from '../../gen/builder.ts';
 import { finishMap, type TacticalMap } from '../../gen/index.ts';
 import { applyLandmark } from '../../gen/real/landmarks.ts';
+import { LANDMARK_REGIONS } from '../../data/landmarks/index.ts';
 
 /** The street between the two rows (z) and where the first building starts (x). */
 export const YARD = { street: 520, startX: 120, gap: 14, streetHalf: 9 } as const;
@@ -146,19 +147,22 @@ const BIG_START_X = 30;
 const BIG_START_Z = 20;
 
 /**
- * L1: the landmark yard (`?landmarks=1`, flags.yard === 4): every landmark of every region on flat
+ * L1: the landmark yard (`?landmarks=<region>`, flags.yard === 4; L6: one per region): its landmarks on flat
  * ground, fronts facing south onto a street, in rows from the north edge (like the big yard), with
  * their moats and canals dug and their firing positions. The tests and the e2e measure it. L4: the
  * rows take the deepest lots first, so that they fit in the map (tests/landmarks.test.ts checks it).
  */
-function buildLandmarks(): { map: TacticalMap; entries: YardEntry[] } {
+function buildLandmarks(region: number): { map: TacticalMap; entries: YardEntry[] } {
   const b = createFlatBuilder(0, { mapSeed: 14, land: 'urban', lootSpots: 0 });
   const water = new Float32Array(N * N).fill(NaN);
   const entries: YardEntry[] = [];
+  // L6: one yard per region (LANDMARK_REGIONS: `?landmarks=<name>`, flags.landmarks = its index). With
+  // the chugoku landmarks all of them no longer fitted in one map (L5: 78 of them reached z ≈ 886).
+  const ids = new Set((LANDMARK_REGIONS[region]?.spots ?? []).map((s) => s.id));
   // L4: the deepest lots first (a stable sort: ties keep the catalog's order). In the catalog's order
   // the rows ran past the map's south edge once 57 landmarks were in (each row is as deep as its
   // deepest lot); sorted, the same rows end at z ≈ 770.
-  const defs = BUILDING_DEFS.filter(isLandmark).sort((p, q) => q.size.d[1] - p.size.d[1]);
+  const defs = BUILDING_DEFS.filter((d) => isLandmark(d) && ids.has(d.id)).sort((p, q) => q.size.d[1] - p.size.d[1]);
   // L5: 16 m between lots (24 before): with the 21 kinki landmarks (78 in all) the rows ran past the
   // south edge again; at 16 they end at z ≈ 886. L6–L8 will need more room (PROGRESS.md L5).
   const gap = 16;
@@ -188,18 +192,28 @@ function buildLandmarks(): { map: TacticalMap; entries: YardEntry[] } {
   return { map, entries };
 }
 const LM_START = 30;
-let cachedLandmarks: { map: TacticalMap; entries: YardEntry[] } | null = null;
+const cachedLandmarks = new Map<number, { map: TacticalMap; entries: YardEntry[] }>();
 
-function yardOf(kind: YardKind): { map: TacticalMap; entries: YardEntry[] } {
+/** L6: the index of a region's landmark yard by its name (LANDMARK_REGIONS), or -1. */
+export function landmarkYardOf(name: string): number {
+  return LANDMARK_REGIONS.findIndex((r) => r.name === name);
+}
+
+function yardOf(kind: YardKind, region: number): { map: TacticalMap; entries: YardEntry[] } {
   const n = yardNo(kind);
-  if (n === 4) return (cachedLandmarks ??= buildLandmarks());
+  if (n === 4) {
+    let y = cachedLandmarks.get(region);
+    if (!y) cachedLandmarks.set(region, (y = buildLandmarks(region)));
+    return y;
+  }
   return n === 3 ? (cachedSdf ??= buildBig(true)) : n === 2 ? (cachedBig ??= buildBig()) : (cached ??= build());
 }
 
-export function yardMap(big: YardKind = false): TacticalMap {
-  return yardOf(big).map;
+/** The yard's map. `region` picks the landmark yard (kind 4) of LANDMARK_REGIONS[region] (L6). */
+export function yardMap(big: YardKind = false, region = 0): TacticalMap {
+  return yardOf(big, region).map;
 }
 
-export function yardEntries(big: YardKind = false): YardEntry[] {
-  return yardOf(big).entries;
+export function yardEntries(big: YardKind = false, region = 0): YardEntry[] {
+  return yardOf(big, region).entries;
 }

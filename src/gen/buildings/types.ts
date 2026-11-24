@@ -257,6 +257,11 @@ export interface BuildingDef {
    * and the catalog test checks the outside only (docs/realmap_guide.md §7).
    */
   exteriorOnly?: boolean;
+  /**
+   * L6: a place of remembrance (the landmark table's `memorial`, src/data/landmarks/types.ts): no props
+   * of the fall, no ladder, no firing position; no zombies placed and nothing to search round it.
+   */
+  memorial?: boolean;
   generate(rng: RngState, params: GenerateParams): BuildingBlueprint;
 }
 

@@ -25,6 +25,7 @@ import { detailOf } from './gen/buildings/index.ts';
 import { createSim } from './sim/index.ts';
 import { areaOf, areaPending, clearParked, ensureArea, mapOf } from './sim/tactical/area.ts';
 import { addZombie } from './sim/tactical/zombies.ts';
+import { landmarkYardOf } from './sim/tactical/yard.ts';
 import type { InputFrame, JobId, ResourceId, ZombieKind } from './core/types.ts';
 import { arrivalPos, generateSurvivor } from './sim/colony/survivors.ts';
 import { supportAt } from './sim/tactical/collision.ts';
@@ -127,13 +128,14 @@ let suspended: GameState | null = null;
  * Firing range (04; reachable from the title and the pause menu since 07b): no world, no saves.
  * `?range=1` opens it at boot. A running game is put aside (and autosaved), not ended.
  */
-function openRange(yard: boolean | 2 | 3 | 4 = false): void {
+function openRange(yard: boolean | 2 | 3 | 4 = false, region = 0): void {
   if (state && !state.flags.range) {
     void saveSlot(AUTO_SLOT);
     suspended = state;
   }
   const next = createInitialState(1, 1);
   next.flags.range = true;
+  if (yard === 4) next.flags.landmarks = region; // L6: the landmark yard of LANDMARK_REGIONS[region]
   if (yard) next.flags.yard = yard; // 07d-2e: 2 = the big yard (stations of the big cities, airports); 07d-2f: 3 = the big Self-Defense Force sites
   if (suspended) next.flags.rangeReturn = true;
   pending = null;
@@ -327,7 +329,9 @@ requestAnimationFrame(frame);
   if (params.get('yard') === '1') openRange(true);
   if (params.get('yard') === '2') openRange(2);
   if (params.get('yard') === '3') openRange(3);
-  if (params.get('landmarks') === '1') openRange(4); // L1: the landmark yard
+  // L1: the landmark yard. L6: one per region (`?landmarks=chugoku`); `1` is the first (hokkaido).
+  const lm = params.get('landmarks');
+  if (lm) openRange(4, Math.max(0, landmarkYardOf(lm)));
 }
 
 // Debug / e2e handle (read-only use; mutate through dispatch). `debug` bypasses the rules on
@@ -349,8 +353,8 @@ interface DebugApi {
   setInput(input: Partial<InputFrame> | null): void;
   /** Open the firing range (flat map, targets at 100..600 m). `noSway` holds the rifle perfectly still. */
   openRange(noSway?: boolean): void;
-  /** 07d: open the building yard (every enterable building type on flat ground; flags.range + flags.yard). 07d-2e: `big` opens the yard of the types too big for it (flags.yard = 2); 07d-2f: 3 the yard of the big Self-Defense Force sites. L1: 4 the landmark yard (`?landmarks=1`). */
-  openYard(big?: boolean | 3 | 4): void;
+  /** 07d: open the building yard (every enterable building type on flat ground; flags.range + flags.yard). 07d-2e: `big` opens the yard of the types too big for it (flags.yard = 2); 07d-2f: 3 the yard of the big Self-Defense Force sites. L1: 4 the landmark yard (`?landmarks=1`). L6: of the region `region` (hokkaido … kyushu; `?landmarks=<region>`). */
+  openYard(big?: boolean | 3 | 4, region?: string): void;
   /** 07d: the enterable buildings of the current map: placement, world rooms and nav links (generated on demand). */
   enterables(): { i: number; def: string; x0: number; z0: number; x1: number; z1: number; base: number; rot: number }[];
   enterable(i: number): ReturnType<typeof detailOf> | null;
@@ -461,8 +465,8 @@ window.__game = {
       openRange();
       if (state && noSway) state.flags.noSway = true;
     },
-    openYard(big = false) {
-      openRange(big === 4 ? 4 : big === 3 ? 3 : big ? 2 : true);
+    openYard(big = false, region = 'hokkaido') {
+      openRange(big === 4 ? 4 : big === 3 ? 3 : big ? 2 : true, Math.max(0, landmarkYardOf(region)));
     },
     enterables() {
       const map = state ? mapOf(state) : null;

@@ -26,6 +26,7 @@ import type { TacticalArea } from './area.ts';
 import { heightAt, isWalkable, pushOut, segmentHitsStatic, sightBlocked, supportAt, type Vec3 } from './collision.ts';
 import { indoorStep, whereIs } from './indoor.ts';
 import { detailOf } from '../../gen/buildings/index.ts';
+import { memorialNear } from '../../gen/real/landmarks.ts';
 import { TACTICAL } from '../../data/tactical.ts';
 import { GROUND } from '../../gen/index.ts';
 import { hurtPlayer, isDead } from './health.ts';
@@ -954,6 +955,8 @@ function spawn(state: GameState, area: TacticalArea, grid: StaticGrid, dt: numbe
     const indoor = map.placements.length > 0 ? Math.round(target * (Z.indoor.share[map.params.land] ?? 0)) : 0;
     t.indoorLeft = indoor;
     const outdoor = target - indoor;
+    // L6: none of the first lot within memorialClear of a place of remembrance (chasers may pass).
+    const quiet = memorialNear(map.placements, BALANCE.world.memorialClear);
     for (let guard = 0; alive < outdoor && guard < 400; guard++) {
       const anchor = pickAnchor(state, map, rng);
       if (!anchor) break;
@@ -967,7 +970,7 @@ function spawn(state: GameState, area: TacticalArea, grid: StaticGrid, dt: numbe
           z = anchor[1] + randRange(rng, -Z.clusterSpread, Z.clusterSpread);
           if (walkableAt(map, x, z) && hasCover(map, x, z)) break;
         }
-        if (!walkableAt(map, x, z)) continue;
+        if (!walkableAt(map, x, z) || quiet?.(x, z)) continue;
         const zb = addZombie(state, area, pickKind(rng, info.kinds), x, z, rand(rng) * Math.PI * 2);
         if (!zb) break;
         zb.t = rand(rng) * Z.wanderPause[1];
@@ -1016,6 +1019,7 @@ function spawnIndoor(state: GameState, area: TacticalArea, rng: RngState, kinds:
   const I = Z.indoor;
   let total = 0;
   for (const pl of map.placements) total += indoorWeight(pl.def);
+  const quiet = memorialNear(map.placements, BALANCE.world.memorialClear);
   for (let k = 0; k < I.buildingsPerStep && (t.indoorLeft ?? 0) > 0; k++) {
     if (total <= 0) {
       t.indoorLeft = 0;
@@ -1032,6 +1036,11 @@ function spawnIndoor(state: GameState, area: TacticalArea, rng: RngState, kinds:
     }
     const cx = (pick.x0 + pick.x1) / 2;
     const cz = (pick.z0 + pick.z1) / 2;
+    // L6: nobody waits indoors next to a place of remembrance.
+    if (quiet?.(cx, cz)) {
+      t.indoorLeft = Math.max(0, (t.indoorLeft ?? 0) - 1);
+      continue;
+    }
     if (Math.hypot(cx - p.pos[0], cz - p.pos[2]) < I.playerClear + Math.max(pick.x1 - pick.x0, pick.z1 - pick.z0) / 2) continue;
     if (map.params.isHome && Math.hypot(cx - map.size / 2, cz - map.size / 2) < Z.homeKeepOut) continue;
     const det = detailOf(pick);
@@ -1058,6 +1067,7 @@ function spawnIndoor(state: GameState, area: TacticalArea, rng: RngState, kinds:
       if (t.zombies.length >= Z.max) continue;
       const x = randRange(rng, room.wx0 + 0.6, room.wx1 - 0.6);
       const z = randRange(rng, room.wz0 + 0.6, room.wz1 - 0.6);
+      if (quiet?.(x, z)) continue;
       const zb = makeZombie(state, pickKind(rng, kinds), x, room.wy, z, rand(rng) * Math.PI * 2);
       zb.pace = 0.85 + 0.3 * rand(stream(state, 'tactical.zombie'));
       zb.inside = map.placements.indexOf(pick);

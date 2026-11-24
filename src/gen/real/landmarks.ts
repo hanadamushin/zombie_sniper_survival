@@ -6,7 +6,7 @@
 // strategic map (ui/world) all read it.
 
 import { LANDMARKS, LANDMARK_GRID, type LandmarkSpot } from '../../data/landmarks/index.ts';
-import { blueprintOf, toWorld, type BuildingPlacement, type GroundFeature } from '../buildings/index.ts';
+import { blueprintOf, buildingDef, hasBuildingDef, toWorld, type BuildingPlacement, type GroundFeature } from '../buildings/index.ts';
 import { forTiles, N, SIZE, TILE, type Builder } from '../builder.ts';
 import { GROUND, type Building } from '../types.ts';
 
@@ -102,4 +102,15 @@ function applyGround(b: Builder, place: BuildingPlacement, g: GroundFeature, wat
       b.occupied[t] = 1;
     } else b.ground[t] = KIND[g.kind];
   });
+}
+
+/**
+ * L6: the lots of the places of remembrance in a map (BuildingDef.memorial: the Atomic Bomb Dome),
+ * as a test of whether (x, z) lies within `clear` m of one (BALANCE.world.memorialClear: no zombie
+ * placed, no search point, no cache there). Null when the map has none (the common case).
+ */
+export function memorialNear(placements: readonly BuildingPlacement[], clear: number): ((x: number, z: number) => boolean) | null {
+  const lots = placements.filter((p) => p.def.startsWith('landmark.') && hasBuildingDef(p.def) && buildingDef(p.def).memorial);
+  if (lots.length === 0) return null;
+  return (x, z) => lots.some((p) => Math.hypot(Math.max(p.x0 - x, 0, x - p.x1), Math.max(p.z0 - z, 0, z - p.z1)) <= clear);
 }

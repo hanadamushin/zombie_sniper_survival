@@ -16,6 +16,7 @@
 // from the highest ground under the lot. Parts may hang 0.6 m over the lot; solid ones stay inside.
 // `paint` picks a named colour (data/render.ts PAINT) of the material `paint`.
 
+import { isMemorialLandmark } from '../../../../data/landmarks/index.ts';
 import { PAINT, type PaintName } from '../../../../data/render.ts';
 import type { BuildingKind } from '../../../types.ts';
 import { createKit, type Kit } from '../../kit.ts';
@@ -92,6 +93,12 @@ export interface LandmarkSpec {
   kind?: BuildingKind;
   /** Triangle limit above ARCH.limits.landmark (a big tower or castle: up to 8,000, say why in PROGRESS.md). */
   shell?: number;
+  /**
+   * L6: a place of remembrance (the Atomic Bomb Dome). Default: what the landmark table says
+   * (`memorial`, src/data/landmarks/types.ts). The props of the fall, ladders and firing positions
+   * throw (a mistake in the blueprint, caught by the catalog test); window panes are never broken.
+   */
+  memorial?: boolean;
   build(L: Lm): void;
 }
 
@@ -111,16 +118,21 @@ export function landmarkDef(spec: LandmarkSpec): BuildingDef {
     lootable: false,
     exteriorOnly: true,
     generate(rng, params) {
-      const L = lm(createKit(def, params, rng));
+      const L = lm(createKit(def, params, rng), def.memorial === true);
       spec.build(L);
       return L.finish();
     },
   };
   if (spec.shell) def.limits = { shell: spec.shell, interior: 0 };
+  if (spec.memorial ?? isMemorialLandmark(def.id)) def.memorial = true;
   return def;
 }
 
-function lm(k: Kit): Lm {
+function lm(k: Kit, memorial = false): Lm {
+  /** L6: what a place of remembrance may not have. */
+  const refuse = (what: string): void => {
+    if (memorial) throw new Error(`${k.def.id}: a memorial landmark has no ${what} (docs/realmap_guide.md §7)`);
+  };
   const ladders: BuildingBlueprint['ladders'] = [];
   const vantages: [number, number, number][] = [];
   const ground: GroundFeature[] = [];
@@ -173,13 +185,14 @@ function lm(k: Kit): Lm {
       const c0 = out > 0 ? at : at - t;
       for (let i = 0; i < n; i++) {
         const u = u0 + ((u1 - u0) * (i + 0.5)) / n;
-        const broken = (o.broken ?? 0) > 0 && k.rand() < o.broken!;
+        const broken = !memorial && (o.broken ?? 0) > 0 && k.rand() < o.broken!;
         const col: PaintName = broken ? 'black' : o.paint ?? 'windowDark';
         if (face === 'x') box(u - width / 2, y0, c0, u + width / 2, y1, c0 + t, 'paint', { paint: col, solid: false });
         else box(c0, y0, u - width / 2, c0 + t, y1, u + width / 2, 'paint', { paint: col, solid: false });
       }
     },
     ladder(x, z, nx, nz, y0, y1) {
+      refuse('ladder');
       const half = 0.45;
       ladders.push({ x0: x - half, z0: z - half, x1: x + half, z1: z + half, y0, y1: y1 + 0.02, nx, nz });
       // Two rails on the wall side and a rung every 1.5 m (from afar: a thin double line).
@@ -191,6 +204,7 @@ function lm(k: Kit): Lm {
       for (let y = y0 + 0.4; y < y1; y += 1.5) box(wx - Math.abs(tx) * 0.25 - 0.03, y, wz - Math.abs(tz) * 0.25 - 0.03, wx + Math.abs(tx) * 0.25 + 0.03, y + 0.05, wz + Math.abs(tz) * 0.25 + 0.03, 'steel', { solid: false });
     },
     vantage(x, y, z) {
+      refuse('firing position');
       vantages.push([x, y, z]);
     },
     ground(kind, poly, depth, drop) {
@@ -200,6 +214,7 @@ function lm(k: Kit): Lm {
       ground.push(g);
     },
     car(x, z, along, o = {}) {
+      refuse('abandoned car');
       const [hl, hw] = [2.2, 0.85];
       const [ex, ez] = along === 'x' ? [hl, hw] : [hw, hl];
       const body: PaintName = o.burnt ? 'charcoal' : o.paint ?? (['silver', 'white', 'navy', 'red', 'gray'] as const)[Math.floor(k.rand() * 5)]!;
@@ -208,14 +223,17 @@ function lm(k: Kit): Lm {
       box(x - cx, 0.95, z - cz, x + cx, 1.45, z + cz, 'paint', { paint: o.burnt ? 'black' : 'windowDark' });
     },
     tent(x, z, along, len = 6) {
+      refuse('relief tent');
       const [ex, ez] = along === 'x' ? [len / 2, 2.2] : [2.2, len / 2];
       box(x - ex, 0, z - ez, x + ex, 1.4, z + ez, 'paint', { paint: 'offWhite' });
       shape('gable', x - ex, 1.4, z - ez, x + ex, 2.5, z + ez, 'paint', { paint: 'white', axis: along, solid: false });
     },
     sandbags(ax, az, bx, bz, h = 0.9) {
+      refuse('sandbags');
       bar(ax, az, bx, bz, 0, h, 0.7, 'fabric', { tint: 0.95 });
     },
     crates(x, z, n = 3) {
+      refuse('relief crates');
       for (let i = 0; i < n; i++) {
         const ox = (i % 2) * 1.3;
         const oy = Math.floor(i / 2) * 0.9;
@@ -223,11 +241,13 @@ function lm(k: Kit): Lm {
       }
     },
     fallenSign(x, z, along) {
+      refuse('fallen sign');
       const [ex, ez] = along === 'x' ? [1.4, 0.9] : [0.9, 1.4];
       box(x - ex, 0, z - ez, x + ex, 0.12, z + ez, 'paint', { paint: 'navy', solid: false });
       box(x - 0.06, 0, z - 0.06, x + 0.06, 0.5, z + 0.06, 'steel', { solid: false });
     },
     scorch(x0, y0, z0, x1, y1, z1) {
+      refuse('scorch mark');
       box(x0, y0, z0, x1, y1, z1, 'paint', { paint: 'black', solid: false });
     },
     finish() {
