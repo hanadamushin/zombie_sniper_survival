@@ -6,7 +6,8 @@
 //
 // The real falls are about 400 m from the pagoda; here the cliff stands at the back of the lot (the
 // mountain as one dark block, its forest on top, the water a white strip with the spray and the pool
-// at its foot). The front (local z = d, the pagoda) faces south.
+// at its foot). The drop is 96 m, not 133 m: the shrunk area's mountains round the temple rise only
+// about 30 m above it, and a 140 m cliff stood over them like a tower (PROGRESS.md L5). The front (local z = d, the pagoda) faces south.
 
 import type { PaintName } from '../../../../../data/render.ts';
 import { landmarkDef, type Lm } from '../common.ts';
@@ -18,7 +19,7 @@ const W = 64;
 const D = 100;
 /** The cliff: its face (z), the fall's lip, the water's x range. */
 const FACE = 12;
-const LIP = 140;
+const LIP = 96;
 const FX0 = 29;
 const FX1 = 35;
 const RED: PaintName = 'intlOrange';
@@ -27,7 +28,7 @@ export const LANDMARK_NACHI_SEIGANTOJI = landmarkDef({
   variant: 'nachi_seigantoji',
   size: { w: [W, W], d: [D, D] },
   eaves: LIP,
-  top: 152,
+  top: 106,
   kind: 'house',
   build,
 });
@@ -39,17 +40,17 @@ function build(L: Lm): void {
 
   // The mountain: forested flanks rising steeply towards the back (ramps of the cedar forest), the dark
   // rock face between them behind the fall, the forest over its top.
-  L.shape('wedge', 0, 0, 0, 23, 122, 36, 'paint', { paint: 'cedar', slope: 'z-' });
-  L.shape('wedge', 41, 0, 0, W, 108, 34, 'paint', { paint: 'cedar', slope: 'z-' });
-  L.box(0, 0, 0, 16, 134, 8, 'paint', { paint: 'cedar' });
-  L.box(48, 0, 0, W, 118, 8, 'paint', { paint: 'cedar' });
-  L.box(21, 0, 0, 43, 70, FACE, 'paint', { paint: 'charcoal' });
-  L.box(22, 70, 0, 42, LIP, FACE - 1.5, 'paint', { paint: 'slateBlue' });
-  L.box(16, LIP, 0, 48, 146, FACE - 1, 'paint', { paint: 'cedar', solid: false });
-  for (const [x, h] of [[8, 142], [20, 150], [44, 150], [56, 126]] as const) L.column(x, 5, 4, h - 10, h, 'paint', { paint: 'cedar', taper: 0.2, solid: false });
+  L.shape('wedge', 0, 0, 0, 23, 84, 38, 'paint', { paint: 'cedar', slope: 'z-' });
+  L.shape('wedge', 41, 0, 0, W, 76, 36, 'paint', { paint: 'cedar', slope: 'z-' });
+  L.box(0, 0, 0, 16, 92, 8, 'paint', { paint: 'cedar' });
+  L.box(48, 0, 0, W, 84, 8, 'paint', { paint: 'cedar' });
+  L.box(21, 0, 0, 43, 46, FACE, 'paint', { paint: 'charcoal' });
+  L.box(22, 46, 0, 42, LIP, FACE - 1.5, 'paint', { paint: 'slateBlue' });
+  L.box(16, LIP, 0, 48, 101, FACE - 1, 'paint', { paint: 'cedar', solid: false });
+  for (const [x, h] of [[8, 98], [20, 106], [44, 105], [56, 92]] as const) L.column(x, 5, 4, h - 10, h, 'paint', { paint: 'cedar', taper: 0.2, solid: false });
   // The water: the white column from the lip, spreading a little lower down; the spray at its foot.
-  L.box(FX0, 70, FACE - 1.4, FX1, LIP + 0.5, FACE - 1.2, 'paint', { paint: 'white', solid: false });
-  L.box(FX0 - 1, 0, FACE, FX1 + 1, 70, FACE + 0.3, 'paint', { paint: 'white', solid: false });
+  L.box(FX0, 46, FACE - 1.4, FX1, LIP + 0.5, FACE - 1.2, 'paint', { paint: 'white', solid: false });
+  L.box(FX0 - 1, 0, FACE, FX1 + 1, 46, FACE + 0.3, 'paint', { paint: 'white', solid: false });
   L.box(FX0 + 1, LIP - 1, FACE - 5, FX1 - 1, LIP + 0.5, FACE - 1.4, 'paint', { paint: 'skyBlue', solid: false });
   L.column(32, FACE + 3, 6, -0.8, 5, 'paint', { paint: 'white', taper: 0.5, solid: false });
   // Rocks round the pool, the sacred rope's posts at the viewing place.
