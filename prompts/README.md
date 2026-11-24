@@ -61,6 +61,7 @@
 | L6 | [L6_landmarks_chugoku.md](L6_landmarks_chugoku.md) | 中国 |
 | L7 | [L7_landmarks_shikoku.md](L7_landmarks_shikoku.md) | 四国 |
 | L8 | [L8_landmarks_kyushu.md](L8_landmarks_kyushu.md) | 九州・沖縄 |
+| L9 | [L9_landmark_bridges.md](L9_landmark_bridges.md) | 橋の名所を端から端まで（実物どおりの主塔・アーチの数で区域の橋と置き換え） |
 
 ## 07d・07e の進め方
 
