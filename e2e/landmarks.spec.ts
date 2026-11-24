@@ -232,18 +232,37 @@ const CELLS: { name: string; lat: number; lon: number }[] = [
   { name: 'katsuyama', lat: 36.0827, lon: 136.5067 },
   { name: 'fujiyoshida', lat: 35.4757, lon: 138.7958 },
   { name: 'kunozan', lat: 34.9662, lon: 138.4672 },
+  // L5 kinki: Osaka (20279: the castle, Abeno Harukas, Tsūtenkaku — measured from Tsūtenkaku's deck),
+  // Suita, Umeda, the bay, Kyōto (19613: six — measured from the roof of the Kyōto Tower building),
+  // Himeji, Kōbe, the Akashi strait, Nara (20282: Kōfuku-ji and Tōdai-ji), Ise, Hikone, Wakayama, Nachi.
+  { name: 'osaka', lat: 34.65249, lon: 135.50632 },
+  { name: 'suita', lat: 34.80937, lon: 135.53233 },
+  { name: 'umeda', lat: 34.70532, lon: 135.49057 },
+  { name: 'osaka-bay', lat: 34.66563, lon: 135.43234 },
+  { name: 'kyoto', lat: 34.98756, lon: 135.75936 },
+  { name: 'himeji', lat: 34.83944, lon: 134.69389 },
+  { name: 'kobe', lat: 34.68263, lon: 135.18661 },
+  { name: 'akashi', lat: 34.6223, lon: 135.0294 },
+  { name: 'nara', lat: 34.68895, lon: 135.83984 },
+  { name: 'ise', lat: 34.45537, lon: 136.72527 },
+  { name: 'hikone', lat: 35.27645, lon: 136.25172 },
+  { name: 'wakayama', lat: 34.22743, lon: 135.17124 },
+  { name: 'nachi', lat: 33.66828, lon: 135.88979 },
 ];
+// L5: `LANDMARK_CELLS=name,name` visits only those places (each place of another region costs about
+// half a minute of loading before it is passed over).
+const CELLS_ONLY = (process.env.LANDMARK_CELLS ?? '').split(',').filter(Boolean);
 
 test('real map: the landmarks at their place, the busiest cell within the budgets, the marks on the strategic map', async ({ page }) => {
   // L4: 21 of the 25 minutes went with 12 cells of its own and the other regions' 26 cells visited and
-  // passed over; 40 minutes leaves room for L5–L8.
-  test.setTimeout(2_400_000);
+  // passed over; 40 minutes leaves room for L5–L8. L5: 51 places with the 13 of kinki — 60 minutes.
+  test.setTimeout(3_600_000);
   const errors = trackErrors(page);
   await page.goto('/?seed=12&scenario=0');
   await startNewGame(page);
   await heal(page);
   const rows: string[] = [];
-  for (const c of CELLS) {
+  for (const c of CELLS.filter((q) => CELLS_ONLY.length === 0 || CELLS_ONLY.includes(q.name))) {
     const cell = await page.evaluate(([la, lo]) => window.__game!.debug.gotoLatLon(la!, lo!), [c.lat, c.lon]);
     await page.waitForFunction((id) => {
       const info = window.__game!.debug.realInfo();

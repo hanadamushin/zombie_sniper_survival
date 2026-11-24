@@ -159,7 +159,9 @@ function buildLandmarks(): { map: TacticalMap; entries: YardEntry[] } {
   // the rows ran past the map's south edge once 57 landmarks were in (each row is as deep as its
   // deepest lot); sorted, the same rows end at z ≈ 770.
   const defs = BUILDING_DEFS.filter(isLandmark).sort((p, q) => q.size.d[1] - p.size.d[1]);
-  const gap = 24;
+  // L5: 16 m between lots (24 before): with the 21 kinki landmarks (78 in all) the rows ran past the
+  // south edge again; at 16 they end at z ≈ 886. L6–L8 will need more room (PROGRESS.md L5).
+  const gap = 16;
   let x = LM_START;
   let z0 = LM_START;
   let deep = 0;

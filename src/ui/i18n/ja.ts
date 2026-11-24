@@ -920,6 +920,28 @@ export const ja = {
   'landmark.fukui_dinosaur_museum': '福井県立恐竜博物館',
   'landmark.fuji_sengen_jinja': '北口本宮冨士浅間神社 富士山大鳥居',
   'landmark.kunozan_toshogu': '久能山東照宮',
+  // L5 kinki
+  'landmark.osaka_castle': '大阪城 天守閣',
+  'landmark.tsutenkaku': '通天閣',
+  'landmark.abeno_harukas': 'あべのハルカス',
+  'landmark.tower_of_the_sun': '太陽の塔',
+  'landmark.umeda_sky_building': '梅田スカイビル',
+  'landmark.osaka_bay_theme_park': '大阪湾岸のテーマパークの廃墟',
+  'landmark.kiyomizudera': '清水寺 本堂（清水の舞台）',
+  'landmark.kinkakuji': '鹿苑寺 金閣',
+  'landmark.kyoto_tower': '京都タワー',
+  'landmark.fushimi_inari': '伏見稲荷大社 千本鳥居',
+  'landmark.toji_pagoda': '東寺 五重塔',
+  'landmark.kyodai_clock_tower': '京都大学 百周年時計台記念館',
+  'landmark.himeji_castle': '姫路城',
+  'landmark.kobe_port_tower': '神戸ポートタワー',
+  'landmark.akashi_kaikyo_bridge': '明石海峡大橋 主塔',
+  'landmark.todaiji_daibutsuden': '東大寺 大仏殿',
+  'landmark.kofukuji_pagoda': '興福寺 五重塔',
+  'landmark.ise_ujibashi': '伊勢神宮 内宮 宇治橋',
+  'landmark.hikone_castle': '彦根城',
+  'landmark.wakayama_castle': '和歌山城',
+  'landmark.nachi_seigantoji': '那智山青岸渡寺 三重塔と那智の滝',
 } as const;
 
 export type TextKey = keyof typeof ja;
