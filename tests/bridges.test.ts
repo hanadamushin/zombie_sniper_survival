@@ -7,13 +7,14 @@ import { existsSync } from 'node:fs';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createInitialState, emptyInputFrame } from '../src/core/types.ts';
 import { BALANCE } from '../src/data/balance.ts';
-import { LANDMARKS } from '../src/data/landmarks/index.ts';
-import { bridgeDesign, bridgeLayout, pathFrame } from '../src/gen/buildings/defs/landmark/bridge.ts';
+import { LANDMARKS, LANDMARK_GRID } from '../src/data/landmarks/index.ts';
+import { bridgeDesign, bridgeLayout, carryOf, pathFrame } from '../src/gen/buildings/defs/landmark/bridge.ts';
+import { ORDINARY_BRIDGES } from '../src/data/bridges/ordinary.ts';
 import { blueprintOf, buildingDef, triangleCount } from '../src/gen/buildings/index.ts';
 import { bridgesIn, realInCell } from '../src/gen/real/bridges.ts';
 import { realToArea } from '../src/gen/real/landmarks.ts';
 import type { TacticalMap } from '../src/gen/types.ts';
-import { heightAt, supportAt, waterDepthAt } from '../src/sim/tactical/collision.ts';
+import { heightAt, segmentHitsStatic, supportAt, waterDepthAt } from '../src/sim/tactical/collision.ts';
 import { placePlayer, updatePlayer } from '../src/sim/tactical/player.ts';
 import { yardEntries, yardMap } from '../src/sim/tactical/yard.ts';
 import { LANDMARK_REGIONS } from '../src/data/landmarks/index.ts';
@@ -56,6 +57,45 @@ describe('the bridge landmarks of the table (L9)', () => {
     expect(count('landmark.aomori_bay_bridge')).toBe(3);
     expect(count('landmark.kintaikyo')).toBe(5);
     expect(bridgeDesign('landmark.kintaikyo')!.arches!.which).toEqual([1, 2, 3]);
+    // L10: the Seto-Ōhashi's six (suspension 3 · cable-stayed 2 · a truss of three spans) and the
+    // Shimanami Kaidō's Kurushima (three suspension bridges: six towers), Tatara and Innoshima.
+    const main = (id: string): string => bridgeDesign(id)!.main;
+    for (const id of ['shimotsui_seto_bridge', 'kita_bisan_seto_bridge', 'minami_bisan_seto_bridge', 'kurushima_kaikyo_bridge_1', 'kurushima_kaikyo_bridge_2', 'kurushima_kaikyo_bridge_3', 'innoshima_bridge']) {
+      expect(main(`landmark.${id}`), id).toBe('suspension');
+      expect(count(`landmark.${id}`), id).toBe(3);
+    }
+    for (const id of ['hitsuishijima_bridge', 'iwakurojima_bridge', 'tatara_bridge']) {
+      expect(main(`landmark.${id}`), id).toBe('stayed');
+      expect(count(`landmark.${id}`), id).toBe(3);
+    }
+    expect(main('landmark.yoshima_bridge')).toBe('girder');
+    expect(bridgeDesign('landmark.yoshima_bridge')!.spans).toEqual([175, 245, 165]);
+    expect(bridgeDesign('landmark.minami_bisan_seto_bridge')!.spans[1]).toBe(1100);
+    // The three Kurushima bridges meet end to end (the same point, the same height).
+    const k = [1, 2, 3].map((n) => LANDMARKS.find((q) => q.id === `landmark.kurushima_kaikyo_bridge_${n}`)!.bridge!);
+    for (let n = 0; n < 2; n++) {
+      expect(k[n]!.path[k[n]!.path.length - 1]).toEqual(k[n + 1]!.path[0]);
+      expect(k[n]!.ends[1]).toBe(k[n + 1]!.ends[0]);
+    }
+  });
+});
+
+describe('the ordinary bridges of the table (L10)', () => {
+  it('cross the real areas: lines of two points or more on dry land at both ends, decks over the water, a type for road and railway', () => {
+    expect(ORDINARY_BRIDGES.length).toBeGreaterThan(1000);
+    for (const [i, r] of ORDINARY_BRIDGES.entries()) {
+      expect(r.p.length % 2, `row ${i}`).toBe(0);
+      expect(r.p.length, `row ${i}`).toBeGreaterThanOrEqual(4);
+      expect([0, 1], `row ${i}`).toContain(r.k);
+      expect(r.w, `row ${i}`).toBeGreaterThan(4);
+      expect(r.c, `row ${i}`).toBeGreaterThanOrEqual(r.w / 2);
+      // Both ends at or above the water (the ground of the banks), the deck never steeper than the walkers' step.
+      expect(Math.min(r.e[0], r.e[1]), `row ${i}`).toBeGreaterThanOrEqual(r.l);
+      const D = bridgeDesign(r.k === 1 ? 'landmark.ordinary_bridge_rail' : 'landmark.ordinary_bridge_road')!;
+      const f = pathFrame(Array.from({ length: r.p.length / 2 }, (_, k) => [r.p[2 * k]!, r.p[2 * k + 1]!] as [number, number]));
+      const lay = bridgeLayout(D, f.length, [r.e[0], r.e[1]], r.l);
+      for (let x = 0; x + 0.5 <= f.length; x += 0.5) expect(Math.abs(lay.deck(x + 0.5) - lay.deck(x)), `row ${i} at ${x}`).toBeLessThan(0.1);
+    }
   });
 });
 
@@ -82,21 +122,41 @@ const haveCell = (c: number): boolean => existsSync(new URL(`../public/data/area
 if (regions.some((r) => existsSync(new URL(`../public/data/areas/${r}/index.json`, import.meta.url)))) loadRealIndexes(grid);
 afterAll(() => clearRealAreas());
 
-/** Every cell a bridge's line runs through (around its middle's cell). */
+/** Every cell (with an area) a bridge's line runs through (around its middle's cell). `id`: a landmark's type or an ordinary bridge's key. */
 function cellsOf(id: string): number[] {
-  const s = BRIDGES.find((q) => q.id === id)!;
-  const mid = realToArea(s.lat, s.lon).cell;
+  const s = BRIDGES.find((q) => q.id === id);
+  const mid = s ? realToArea(s.lat, s.lon).cell : ordinaryCell(Number(id.split('.')[1]));
   const out: number[] = [];
   for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
     const c = mid + dy * grid.gridW + dx;
-    if (haveCell(c) && bridgesIn(c).some((b) => b.id === id)) out.push(c);
+    if (haveCell(c) && bridgesIn(c).some((b) => b.key === id && b.to > b.from)) out.push(c);
   }
   return out;
 }
 
+/** L10: the cell of an ordinary bridge's middle point. */
+function ordinaryCell(i: number): number {
+  const r = ORDINARY_BRIDGES[i]!;
+  const k = Math.floor(r.p.length / 4) * 2;
+  return Math.floor(r.p[k + 1]! / 1024) * grid.gridW + Math.floor(r.p[k]! / 1024);
+}
+/** L10: the ordinary bridge (its key) whose line passes nearest a real point. */
+function ordinaryNear(lat: number, lon: number): string {
+  const [X, Z] = [(((lon - LANDMARK_GRID.lon0) * LANDMARK_GRID.kmPerLon) / LANDMARK_GRID.cellKm) * 1024, (((LANDMARK_GRID.latTop - lat) * LANDMARK_GRID.kmPerLat) / LANDMARK_GRID.cellKm) * 1024];
+  let best = -1;
+  let bd = Infinity;
+  ORDINARY_BRIDGES.forEach((r, i) => {
+    for (let k = 0; k < r.p.length; k += 2) {
+      const d = Math.hypot(r.p[k]! - X, r.p[k + 1]! - Z);
+      if (d < bd) [bd, best] = [d, i];
+    }
+  });
+  return `ordinary.${best}`;
+}
+
 /** Walk the player along the deck from `from` to `to` (m along the line), `lane` m off its middle. */
 function walk(map: TacticalMap, id: string, cell: number, from: number, to: number, lane: number): { reached: number; wet: number; low: number } {
-  const br = bridgesIn(cell).find((b) => b.id === id)!;
+  const br = bridgesIn(cell).find((b) => b.key === id)!;
   const pl = createInitialState(1, 1).player;
   const dir = to > from ? 1 : -1;
   const a = br.f.at(from);
@@ -122,22 +182,27 @@ function walk(map: TacticalMap, id: string, cell: number, from: number, to: numb
   return { reached: s, wet, low };
 }
 
-const LANES: Record<string, number> = { 'landmark.aomori_bay_bridge': 5, 'landmark.rainbow_bridge': 5, 'landmark.akashi_kaikyo_bridge': 4, 'landmark.kintaikyo': 0, 'landmark.onaruto_bridge': 4, 'landmark.kanmon_bridge': 4 };
+const LANES: Record<string, number> = { 'landmark.aomori_bay_bridge': 5, 'landmark.rainbow_bridge': 5, 'landmark.akashi_kaikyo_bridge': 4, 'landmark.kintaikyo': 0, 'landmark.onaruto_bridge': 4, 'landmark.kanmon_bridge': 4, 'landmark.shimotsui_seto_bridge': 5 };
 
-describe.each(BRIDGES.map((s) => s.id))('%s in its real areas (L9)', (id) => {
+// L10: ordinary bridges over the great rivers (Tone, Kiso, Yodo, Chikugo: roads and a railway) and the
+// first one in the table that runs over a cell's edge between two areas.
+const edgeRow = ORDINARY_BRIDGES.findIndex((_, i) => cellsOf(`ordinary.${i}`).length >= 2);
+const ORDINARY = [ordinaryNear(35.88975, 140.05453), ordinaryNear(35.10484, 136.71272), ordinaryNear(34.71385, 135.4871), ordinaryNear(33.32648, 130.4988), `ordinary.${edgeRow}`];
+
+describe.each([...BRIDGES.map((s) => s.id), ...ORDINARY])('%s in its real areas (L9, L10)', (id) => {
   const cells = cellsOf(id);
   it.skipIf(cells.length === 0)('stands from bank to bank, its deck walked both ways, the dead let through, no embankment or building on it', { timeout: 600_000 }, () => {
     const maps = new Map(cells.map((c) => [c, mapFor(grid, c)]));
     // Every stretch of the line is built by one area (the stretches meet exactly).
-    const stretches = cells.map((c) => bridgesIn(c).find((b) => b.id === id)!).map((b) => [b.from, b.to] as const).sort((p, q) => p[0] - q[0]);
+    const stretches = cells.map((c) => bridgesIn(c).find((b) => b.key === id)!).map((b) => [b.from, b.to] as const).sort((p, q) => p[0] - q[0]);
     expect(stretches[0]![0]).toBe(0);
     for (let k = 1; k < stretches.length; k++) expect(stretches[k]![0]).toBeCloseTo(stretches[k - 1]![1], 6);
-    const full = bridgesIn(cells[0]!).find((b) => b.id === id)!;
+    const full = bridgesIn(cells[0]!).find((b) => b.key === id)!;
     expect(stretches[stretches.length - 1]![1]).toBeCloseTo(full.f.length, 6);
     for (const c of cells) {
       const map = maps.get(c)!;
-      const br = bridgesIn(c).find((b) => b.id === id)!;
-      const p = map.placements.find((q) => q.def === id);
+      const br = bridgesIn(c).find((b) => b.key === id)!;
+      const p = map.placements.find((q) => q.def === br.id && q.span && Math.abs(q.span.from - br.from) < 1e-6 && Math.abs(q.span.path[0]![0] + q.x0 - br.path[0]![0]) < 1e-6);
       expect(p, `${id} in ${c}`).toBeDefined();
       expect(p!.span!.from).toBeCloseTo(br.from, 6);
       // No road or railway runs along the deck any more (its embankment is gone).
@@ -152,6 +217,25 @@ describe.each(BRIDGES.map((s) => s.id))('%s in its real areas (L9)', (id) => {
           const t = br.f.at(q.s);
           expect(Math.abs(((bx - ax) * t.tx + (bz - az) * t.tz) / len), `${id} in ${c}: a road along the deck at s ${q.s.toFixed(1)}`).toBeLessThan(0.8);
         }
+      }
+      // L10: over the water the ground is not raised under the deck — the water stays, bullets and
+      // eyes pass under the slab (from bank side to bank side, 0.8 m over the water, between the piers).
+      if (carryOf(br.design) !== 'ground') {
+        let open = 0;
+        let under = 0;
+        for (const [a, b] of p!.span!.land ?? []) {
+          for (let s = a + 3; s < b - 3; s += 1) {
+            const q = br.f.at(s);
+            if (!(q.x > 2 && q.z > 2 && q.x < map.size - 2 && q.z < map.size - 2)) continue;
+            if (waterDepthAt(map, q.x, q.z) < 0.5) continue;
+            under++;
+            expect(heightAt(map, q.x, q.z), `${id} in ${c}: ground raised under the deck at s ${s}`).toBeLessThan(br.lay.water);
+            const y = br.lay.water + 0.8;
+            const o = br.hw + 6;
+            if (!segmentHitsStatic(map, [q.x - q.nx * o, y, q.z - q.nz * o], [q.x + q.nx * o, y, q.z + q.nz * o])) open++;
+          }
+        }
+        if (under > 0) expect(open, `${id} in ${c}: no open line under the deck`).toBeGreaterThan(0);
       }
       // Nothing is built on the deck.
       for (const b of map.buildings) {

@@ -17,13 +17,15 @@ import { ja } from '../src/ui/i18n/ja.ts';
 import { mapFor } from '../tools/real/check.ts';
 import { gameState, loadGrid, loadRealIndexes } from '../tools/real/lib/game.ts';
 import { landmarkDef } from '../src/gen/buildings/defs/landmark/common.ts';
+import { ORDINARY_BRIDGE_IDS } from '../src/gen/buildings/defs/landmark/ordinary_bridge.ts';
 import { generateBlueprint } from '../src/gen/buildings/index.ts';
 import { beginAt } from '../src/sim/world/start.ts';
 import { mapOf } from '../src/sim/tactical/area.ts';
 import { createSim } from '../src/sim/index.ts';
 
 const DT = BALANCE.time.fixedStep;
-const landmarkDefs = BUILDING_DEFS.filter((d) => d.category === 'landmark');
+// L10: the ordinary bridges are of the landmark category (drawn as landmarks) but in no table.
+const landmarkDefs = BUILDING_DEFS.filter((d) => d.category === 'landmark' && !ORDINARY_BRIDGE_IDS.has(d.id));
 
 describe('the landmark table (L1)', () => {
   it('uses the strategic map grid', () => {
@@ -137,6 +139,8 @@ describe.skipIf(cells.length === 0)('the landmarks in the real areas (L1)', () =
         expect(Math.hypot(cx - anchor.x, cz - anchor.z), m.spot.id).toBeLessThanOrEqual(3 * (m.spot.reach ?? 48) * Math.SQRT2 + 1);
         for (const b of map.buildings) {
           if (b.id === p!.building) continue;
+          // L10: an ordinary bridge is a line (its box is the line's); tests/bridges.test.ts checks it.
+          if (b.enter !== undefined && map.placements[b.enter]?.span) continue;
           const overlap = Math.min(b.x1, p!.x1) - Math.max(b.x0, p!.x0) > 0.5 && Math.min(b.z1, p!.z1) - Math.max(b.z0, p!.z0) > 0.5;
           expect(overlap, `${m.spot.id}: building ${b.id} in its lot`).toBe(false);
         }

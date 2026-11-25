@@ -985,6 +985,18 @@ export const ja = {
   // L10: the ordinary bridges (no name on the strategic map; the building type's name).
   'landmark.ordinary_bridge_road': '橋（道路）',
   'landmark.ordinary_bridge_rail': '橋（鉄道）',
+  // L10: the Seto-Ōhashi and the Shimanami Kaidō.
+  'landmark.shimotsui_seto_bridge': '下津井瀬戸大橋',
+  'landmark.hitsuishijima_bridge': '櫃石島橋',
+  'landmark.iwakurojima_bridge': '岩黒島橋',
+  'landmark.yoshima_bridge': '与島橋',
+  'landmark.kita_bisan_seto_bridge': '北備讃瀬戸大橋',
+  'landmark.minami_bisan_seto_bridge': '南備讃瀬戸大橋',
+  'landmark.kurushima_kaikyo_bridge_1': '来島海峡第一大橋',
+  'landmark.kurushima_kaikyo_bridge_2': '来島海峡第二大橋',
+  'landmark.kurushima_kaikyo_bridge_3': '来島海峡第三大橋',
+  'landmark.tatara_bridge': '多々羅大橋',
+  'landmark.innoshima_bridge': '因島大橋',
 } as const;
 
 export type TextKey = keyof typeof ja;

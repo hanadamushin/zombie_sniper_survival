@@ -94,7 +94,28 @@ function inside(path: [number, number][]): [number, number] | null {
   return to > from ? [from, to] : null;
 }
 
-/** L10: the ordinary bridges' rows by the cells their line runs through (built on first use). */
+/**
+ * L10: how far outside an area's square a bridge's line may pass and still change the ground on the
+ * square's edge (its band, the 3 + 14 m eased beyond its ends): such a bridge is taken by both areas
+ * (the one without any of its line shapes only its ground — `from` > `to`: no placement), so that the
+ * two raise the same ground on their common edge.
+ */
+const NEAR = 40;
+function nearSquare(path: [number, number][], r: number): boolean {
+  for (let i = 0; i + 1 < path.length; i++) {
+    const [ax, az] = path[i]!;
+    const [bx, bz] = path[i + 1]!;
+    const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / 2));
+    for (let j = 0; j <= n; j++) {
+      const x = ax + ((bx - ax) * j) / n;
+      const z = az + ((bz - az) * j) / n;
+      if (x > -r && z > -r && x < SIZE + r && z < SIZE + r) return true;
+    }
+  }
+  return false;
+}
+
+/** L10: the ordinary bridges' rows by the cells their line runs through or near (built on first use). */
 let byCell: Map<number, number[]> | null = null;
 function ordinaryRows(cell: number): number[] {
   if (!byCell) {
@@ -105,7 +126,12 @@ function ordinaryRows(cell: number): number[] {
       for (let k = 0; k + 3 < r.p.length; k += 2) {
         const [ax, az, bx, bz] = [r.p[k]!, r.p[k + 1]!, r.p[k + 2]!, r.p[k + 3]!];
         const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / 4));
-        for (let j = 0; j <= n; j++) cells.add(Math.floor((az + ((bz - az) * j) / n) / SIZE) * W + Math.floor((ax + ((bx - ax) * j) / n) / SIZE));
+        // Also the cells within NEAR of the line (its ground reaches over their edge).
+        for (let j = 0; j <= n; j++) {
+          const x = ax + ((bx - ax) * j) / n;
+          const z = az + ((bz - az) * j) / n;
+          for (const dx of [-NEAR, 0, NEAR]) for (const dz of [-NEAR, 0, NEAR]) cells.add(Math.floor((z + dz) / SIZE) * W + Math.floor((x + dx) / SIZE));
+        }
       }
       for (const c of cells) {
         const l = byCell!.get(c);
@@ -124,7 +150,7 @@ function ordinaryAt(cell: number, i: number, r: OrdinaryBridgeRow): BridgeAt | n
   const oz = Math.floor(cell / W) * SIZE;
   const path: [number, number][] = [];
   for (let k = 0; k + 1 < r.p.length; k += 2) path.push([r.p[k]! - ox, r.p[k + 1]! - oz]);
-  const st = inside(path);
+  const st = inside(path) ?? (nearSquare(path, NEAR) ? ([Infinity, -Infinity] as [number, number]) : null);
   if (!st) return null;
   const def = r.k === LINE_KIND_RAIL ? ORDINARY_BRIDGE_RAIL : ORDINARY_BRIDGE_ROAD;
   const deck = { width: r.w, rails: r.r ? [...r.r] : r.k === LINE_KIND_RAIL ? undefined : [] };
@@ -146,7 +172,7 @@ export function bridgesIn(cell: number, isHome = false): BridgeAt[] {
     const design = bridgeDesign(spot.id);
     if (!design) continue;
     const path = spot.bridge.path.map(([lat, lon]) => realInCell(cell, lat, lon));
-    const st = inside(path);
+    const st = inside(path) ?? (nearSquare(path, NEAR) ? ([Infinity, -Infinity] as [number, number]) : null);
     if (!st) continue;
     const f = pathFrame(path);
     const ends: [number, number] = [spot.bridge.ends[0], spot.bridge.ends[1]];
@@ -257,7 +283,8 @@ function insideDeck(b: BridgeAt, x: number, z: number, dx: number, dz: number): 
  */
 export function layBridges(b: Builder, bridges: readonly BridgeAt[], water: Float32Array): void {
   for (const br of bridges) {
-    connectEnds(b, br);
+    if (!(br.to > br.from)) continue; // only near the square: its ground (finishBridges), nothing else
+    connectEnds(b, br, water);
     keepClear(b, br);
     place(b, br, water);
   }
@@ -289,11 +316,19 @@ function keepClear(b: Builder, br: BridgeAt): void {
   }
 }
 
+/** L10: the water's surface at the nearest height vertex of a point is there (an end of a bridge over the water). */
+function wetAt(p: { x: number; z: number }, water: Float32Array): boolean {
+  const ix = Math.round(p.x / TILE);
+  const iz = Math.round(p.z / TILE);
+  return ix >= 0 && iz >= 0 && ix < N && iz < N && Number.isFinite(water[iz * N + ix]!);
+}
+
 /** A short road from each end of the bridge inside the area to the nearest road, when none meets it. */
-function connectEnds(b: Builder, br: BridgeAt): void {
+function connectEnds(b: Builder, br: BridgeAt, water: Float32Array): void {
   for (const s of [0, br.f.length]) {
     if (s < br.from - 0.5 || s > br.to + 0.5) continue;
     const p = br.f.at(s);
+    if (wetAt(p, water)) continue; // L10: an end over the water meets the next bridge of a row
     if (p.x < 8 || p.z < 8 || p.x > SIZE - 8 || p.z > SIZE - 8) continue;
     let best: [number, number] | null = null;
     let bd = Infinity;
@@ -336,6 +371,8 @@ function raiseDeck(b: Builder, br: BridgeAt, water: Float32Array, decks: Uint8Ar
   const BLEND = 14;
   const ends = br.ends;
   const carry = carryOf(br.design);
+  // (An end outside the square counts as dry: both areas must ease the same ground.)
+  const endWet = [0, br.f.length].map((s) => wetAt(br.f.at(s), water));
   for (let iz = iz0; iz <= iz1; iz++) {
     for (let ix = ix0; ix <= ix1; ix++) {
       const x = ix * TILE;
@@ -363,8 +400,10 @@ function raiseDeck(b: Builder, br: BridgeAt, water: Float32Array, decks: Uint8Ar
         }
         continue;
       }
-      // Beyond an end: the ground eases to the deck's end over BLEND m (where the road comes in).
+      // Beyond an end: the ground eases to the deck's end over BLEND m (where the road comes in) —
+      // not where the end is over the water (L10: the next bridge of a row goes on from there).
       for (const [k, s] of [[0, 0], [1, br.f.length]] as const) {
+        if (endWet[k]) continue;
         const p = br.f.at(s);
         const dir = k === 0 ? -1 : 1;
         const u = ((x - p.x) * p.tx + (z - p.z) * p.tz) * dir;
@@ -383,7 +422,8 @@ function raiseDeck(b: Builder, br: BridgeAt, water: Float32Array, decks: Uint8Ar
   for (let ty = Math.max(0, iz0 - 1); ty < Math.min(TILES, iz1 + 1); ty++) {
     for (let tx = Math.max(0, ix0 - 1); tx < Math.min(TILES, ix1 + 1); tx++) {
       const a = across(br, (tx + 0.5) * TILE, (ty + 0.5) * TILE);
-      if (a && Math.abs(a.off) <= Math.max(br.hw - 1.2, 2.1) && a.s > 1 && a.s < br.f.length - 1) walkMask[ty * TILES + tx] = 1;
+      // (Up to an end over the water: the next bridge of a row goes on from there.)
+      if (a && Math.abs(a.off) <= Math.max(br.hw - 1.2, 2.1) && a.s > (endWet[0] ? -1 : 1) && a.s < br.f.length - (endWet[1] ? -1 : 1)) walkMask[ty * TILES + tx] = 1;
     }
   }
   for (let ty = iz0; ty < iz1; ty++) {

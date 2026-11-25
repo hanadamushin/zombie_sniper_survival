@@ -7,6 +7,9 @@ import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { BUILDING_DEFS } from '../src/gen/buildings/index.ts';
 import { censusCell, typesHash } from '../tools/real/census.ts';
+import { LANDMARKS } from '../src/data/landmarks/index.ts';
+import { realToArea } from '../src/gen/real/landmarks.ts';
+import { loadGrid } from '../tools/real/lib/game.ts';
 
 interface Census {
   seed: number;
@@ -18,6 +21,15 @@ const FILE = new URL('./data/census.json', import.meta.url);
 const census: Census = JSON.parse(readFileSync(FILE, 'utf8'));
 /** The colony's own buildings (06: placed by the player's base, not by the area generator). */
 const colonyOnly = (id: string): boolean => id.startsWith('base.') && !id.startsWith('base.j');
+/**
+ * L10: bridge landmarks whose whole line lies in sea cells of the strategic map (no area: the middle
+ * of the Seto-Ōhashi). They stand on the strategic map and in the landmark yard only.
+ */
+const grid = loadGrid();
+const seaOnly = (id: string): boolean => {
+  const s = LANDMARKS.find((q) => q.id === id);
+  return Boolean(s?.bridge?.path.every(([lat, lon]) => !grid.cells[realToArea(lat, lon).cell]));
+};
 /** Sendai, Tokyo, Shin-Chitose, a village, Yokosuka, Utsunomiya, Kure, Misawa. */
 const SAMPLES = [13647, 18480, 5304, 22758, 19147, 16811, 21087, 9142];
 
@@ -29,7 +41,7 @@ describe('07d-3 census of the buildings of all real areas', () => {
   });
 
   it('every building type of the catalog stands in at least one area', () => {
-    const missing = BUILDING_DEFS.filter((d) => !colonyOnly(d.id) && !(census.types[d.id]! > 0)).map((d) => d.id);
+    const missing = BUILDING_DEFS.filter((d) => !colonyOnly(d.id) && !seaOnly(d.id) && !(census.types[d.id]! > 0)).map((d) => d.id);
     expect(missing).toEqual([]);
   });
 

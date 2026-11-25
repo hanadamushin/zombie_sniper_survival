@@ -89,7 +89,7 @@ export interface BridgeDesign {
   /** Suspension: the main cables' lowest point above the deck's top; hanger spacing; anchorage block. */
   cable?: { sag: number; hangers: number; paint: PaintName; thick: number; anchorage: { length: number; height: number; paint: PaintName } };
   /** Stays: per side of each tower, fan from `top` share of the tower down; one plane in the middle or two at the edges. */
-  stays?: { n: number; plane: 'one' | 'two'; paint: PaintName; from: number };
+  stays?: { n: number; plane: 'one' | 'two'; paint: PaintName; from: number; /** L10: height of each step of a stay's staircase (default 0.9 m; more for tall towers, fewer triangles). */ step?: number };
   /** Piers under the approach spans every `every` m (and at the main structure's ends). */
   piers: { every: number; paint: PaintName; columns: number; size: number };
   /** Arch kind: which spans are arches (the rest are level beams on piers), the arches' timber. */
@@ -419,7 +419,8 @@ function buildBridge(L: Lm, D0: BridgeDesign): void {
     if (D.main === 'girder') for (let s = P.every; s < lay.length - 2; s += P.every) stops.push(s);
     for (const s of stops) if (mine(s)) pierAt(s, P.size, P.paint);
   }
-  if (D.main === 'stayed' || D.main === 'girder') for (const s of [m0, m1]) if (mine(s) && s > 1 && s < lay.length - 1) pierAt(s, P.size, P.paint);
+  // (L10: a girder bridge of several spans — the Yoshima truss — stands on a pier at every span's end.)
+  if (D.main === 'stayed' || D.main === 'girder') for (const s of D.main === 'girder' ? lay.bounds : [m0, m1]) if (mine(s) && s > 1 && s < lay.length - 1) pierAt(s, P.size, P.paint);
 
   // --- the main structure ---
   if (D.main === 'suspension') suspension(L, D, B, mine);
@@ -621,7 +622,7 @@ function stayed(L: Lm, D: BridgeDesign, B: BridgeFrame, mine: (s: number) => boo
           const pt = f.at(ts);
           const pd = f.at(sd);
           const yd = lay.deck(sd) + 0.8;
-          line3(L, [pt.x + pt.nx * off, yTop, pt.z + pt.nz * off], [pd.x + pd.nx * off, yd, pd.z + pd.nz * off], Math.max(2, Math.ceil((yTop - yd) / 0.9)), 0.25, S.paint);
+          line3(L, [pt.x + pt.nx * off, yTop, pt.z + pt.nz * off], [pd.x + pd.nx * off, yd, pd.z + pd.nz * off], Math.max(2, Math.ceil((yTop - yd) / (S.step ?? 0.9))), 0.25, S.paint);
         }
       }
     }

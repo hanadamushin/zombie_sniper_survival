@@ -1,7 +1,7 @@
 // L10: the ordinary bridges of the real areas (docs/realmap_guide.md §7, L10):
 //   node tools/real/bridges.ts [--count] [--cells id,id]
-// Reads every area file (public/data/areas/), joins the bridge stretches of the roads and railways
-// (LINE_BRIDGE) across the cells' edges, and keeps those that cross water at least
+// Reads every area file (public/data/areas/), joins the bridge stretches of the roads (LINE_BRIDGE)
+// and the railways (all of them: their bridges are often unmarked) across the cells' edges, and keeps those that cross water at least
 // REAL_BRIDGES.minWater wide (the narrowest chord of the water through the crossing's middle). Each
 // becomes a girder bridge from bank to bank: its line in latitude / longitude, the ground's height at
 // both ends and the water's surface — written to src/data/bridges/ordinary.ts, which the area
@@ -118,7 +118,10 @@ function collect(cells: number[]): Piece[] {
     const ox = (cell % W) * SIZE;
     const oz = Math.floor(cell / W) * SIZE;
     for (const line of a.lines) {
-      if (!(line.flags & LINE_BRIDGE) || line.flags & LINE_TUNNEL || line.kind === LINE.river) continue;
+      // A road's bridge stretches; a railway whole (its bridges are often not marked at zoom 13 — the
+      // Kiso, the Tone at Toride —, and a railway never crosses 30 m of water on an embankment).
+      const rail = line.kind === LINE.rail || line.kind === LINE.shinkansen;
+      if ((!(line.flags & LINE_BRIDGE) && !rail) || line.flags & LINE_TUNNEL || line.kind === LINE.river) continue;
       const pts: P[] = [];
       for (let k = 0; k < line.pts.length; k += 2) pts.push([line.pts[k]! + ox, line.pts[k + 1]! + oz]);
       if (pts.length >= 2) pieces.push({ kind: line.kind === LINE.shinkansen ? LINE.rail : line.kind, width: line.width, pts });
