@@ -964,6 +964,21 @@ export const ja = {
   'landmark.ryoma_statue': '坂本龍馬像',
   'landmark.iya_kazurabashi': '祖谷のかずら橋',
   'landmark.tokushima_washinomon': '徳島城跡 鷲の門',
+  // L8 kyushu
+  'landmark.fukuoka_tower': '福岡タワー',
+  'landmark.dazaifu_tenmangu': '太宰府天満宮 本殿',
+  'landmark.karatsu_castle': '唐津城',
+  'landmark.yoshinogari': '吉野ヶ里遺跡 北内郭の物見櫓',
+  'landmark.oura_cathedral': '大浦天主堂',
+  'landmark.glover_house': '旧グラバー住宅',
+  'landmark.hashima': '端島（軍艦島）',
+  'landmark.kumamoto_castle': '熊本城',
+  'landmark.beppu_umi_jigoku': '別府温泉 海地獄',
+  'landmark.aoshima_shrine': '青島神社',
+  'landmark.kagoshima_amu_run': '鹿児島中央駅の観覧車（アミュラン）',
+  'landmark.saigo_statue': '西郷隆盛像',
+  'landmark.shuri_castle': '首里城 正殿と守礼門',
+  'landmark.churaumi_aquarium': '沖縄美ら海水族館',
 } as const;
 
 export type TextKey = keyof typeof ja;

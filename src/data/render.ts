@@ -61,6 +61,14 @@ export const PAINT = {
   rust: 0x4a3e36,
   // L6: a mown lawn (the hill of Kōraku-en), lighter than the ground's grass.
   lawn: 0x7d9a4c,
+  // L8 (kyushu): the cobalt of Beppu's Umi Jigoku, its steam, the red tiles (赤瓦) and the lacquer red
+  // of Shuri, the pale Ryūkyū limestone of its walls, the weathered concrete of Hashima.
+  jigoku: 0x3e9fc0,
+  steam: 0xe4e8ea,
+  akagawara: 0xb4553a,
+  shuri: 0x9e2a22,
+  ryukyuStone: 0xcfc4a2,
+  hashima: 0x77736b,
 } as const;
 export type PaintName = keyof typeof PAINT;
 

@@ -286,6 +286,21 @@ const CELLS: { name: string; lat: number; lon: number }[] = [
   { name: 'katsurahama', lat: 33.4978, lon: 133.5738 },
   { name: 'iya', lat: 33.8751, lon: 133.8355 },
   { name: 'tokushima', lat: 34.0741, lon: 134.5538 },
+  // L8 kyushu: Fukuoka, Dazaifu, Karatsu, Yoshinogari (measured from the watchtower), Nagasaki (23735:
+  // Ōura Church and the Glover House), Hashima, Kumamoto, Beppu, Aoshima, Kagoshima (25912: the wheel
+  // and Saigō), Shuri, Motobu.
+  { name: 'fukuoka', lat: 33.5933, lon: 130.3515 },
+  { name: 'dazaifu', lat: 33.5215, lon: 130.5348 },
+  { name: 'karatsu', lat: 33.4565, lon: 129.9780 },
+  { name: 'yoshinogari', lat: 33.3285, lon: 130.3835 },
+  { name: 'nagasaki', lat: 32.7342, lon: 129.8702 },
+  { name: 'hashima', lat: 32.6276, lon: 129.7385 },
+  { name: 'kumamoto', lat: 32.8104, lon: 130.7062 },
+  { name: 'beppu', lat: 33.3165, lon: 131.4678 },
+  { name: 'aoshima', lat: 31.8048, lon: 131.4752 },
+  { name: 'kagoshima', lat: 31.5953, lon: 130.5549 },
+  { name: 'shuri', lat: 26.2174, lon: 127.7182 },
+  { name: 'motobu', lat: 26.6946, lon: 127.8781 },
 ];
 // L5: `LANDMARK_CELLS=name,name` visits only those places (each place of another region costs about
 // half a minute of loading before it is passed over).
