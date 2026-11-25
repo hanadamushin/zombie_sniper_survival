@@ -323,12 +323,18 @@ function wetAt(p: { x: number; z: number }, water: Float32Array): boolean {
   return ix >= 0 && iz >= 0 && ix < N && iz < N && Number.isFinite(water[iz * N + ix]!);
 }
 
+/** L10: every height vertex within 6 m of a point is water (an end of a bridge in open water, not at a shore). */
+function openWater(p: { x: number; z: number }, water: Float32Array): boolean {
+  for (let dz = -6; dz <= 6; dz += 2) for (let dx = -6; dx <= 6; dx += 2) if (!wetAt({ x: p.x + dx, z: p.z + dz }, water)) return false;
+  return true;
+}
+
 /** A short road from each end of the bridge inside the area to the nearest road, when none meets it. */
 function connectEnds(b: Builder, br: BridgeAt, water: Float32Array): void {
   for (const s of [0, br.f.length]) {
     if (s < br.from - 0.5 || s > br.to + 0.5) continue;
     const p = br.f.at(s);
-    if (wetAt(p, water)) continue; // L10: an end over the water meets the next bridge of a row
+    if (openWater(p, water)) continue; // L10: an end in open water meets the next bridge of a row
     if (p.x < 8 || p.z < 8 || p.x > SIZE - 8 || p.z > SIZE - 8) continue;
     let best: [number, number] | null = null;
     let bd = Infinity;
@@ -371,8 +377,10 @@ function raiseDeck(b: Builder, br: BridgeAt, water: Float32Array, decks: Uint8Ar
   const BLEND = 14;
   const ends = br.ends;
   const carry = carryOf(br.design);
-  // (An end outside the square counts as dry: both areas must ease the same ground.)
-  const endWet = [0, br.f.length].map((s) => wetAt(br.f.at(s), water));
+  // An end in open water (every height vertex within 6 m of it wet: the junction of a row of bridges)
+  // is not a shore: no abutment, no eased ground beyond it. (An end outside the square counts as
+  // dry: both areas must ease the same ground.)
+  const endWet = [0, br.f.length].map((s) => openWater(br.f.at(s), water));
   for (let iz = iz0; iz <= iz1; iz++) {
     for (let ix = ix0; ix <= ix1; ix++) {
       const x = ix * TILE;
@@ -389,8 +397,9 @@ function raiseDeck(b: Builder, br: BridgeAt, water: Float32Array, decks: Uint8Ar
           // L10, an ordinary bridge: its ramps on the land are earth, up to the deck.
           b.height[i] = br.lay.deck(a.s);
           raised[(iz - iz0) * W + ix - ix0] = 2;
-        } else if (wet) {
-          // L10: the water and its bed stay under the deck (the bridge's hidden boxes carry it).
+        } else if (wet && !(a.s < 4 && !endWet[0]) && !(a.s > br.f.length - 4 && !endWet[1])) {
+          // L10: the water and its bed stay under the deck (the bridge's hidden boxes carry it) — but
+          // for the abutments at a shore (below).
         } else {
           // The abutments: the last 4 m at each end are the deck's height (the ground meets it flush).
           if (a.s < 4 || a.s > br.f.length - 4) b.height[i] = br.lay.deck(a.s);

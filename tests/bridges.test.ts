@@ -276,3 +276,35 @@ describe.each([...BRIDGES.map((s) => s.id), ...ORDINARY])('%s in its real areas 
     }
   });
 });
+
+// L10: the Kurushima-Kaikyō Bridge, three rows of the table meeting over the water and on Umajima:
+// walked from Ōshima to Imabari in one go (and back), never in the water.
+const KURUSHIMA = [1, 2, 3].map((n) => `landmark.kurushima_kaikyo_bridge_${n}`);
+const kurushimaCell = realToArea(34.12163, 133.00132).cell;
+describe.skipIf(!haveCell(kurushimaCell))('the Kurushima-Kaikyō Bridge from end to end (L10)', () => {
+  it('is walked across its three bridges both ways', { timeout: 300_000 }, () => {
+    const map = mapFor(grid, kurushimaCell);
+    const rows = KURUSHIMA.map((id) => bridgesIn(kurushimaCell).find((b) => b.key === id)!);
+    const pts = [...rows[0]!.path, ...rows[1]!.path.slice(1), ...rows[2]!.path.slice(1)];
+    const f = pathFrame(pts);
+    for (const dir of [1, -1]) {
+      const pl = createInitialState(1, 1).player;
+      const s0 = dir > 0 ? 0 : f.length;
+      const s1 = dir > 0 ? f.length : 0;
+      const a = f.at(s0);
+      placePlayer(pl, map, a.x - a.tx * dir * 4, a.z - a.tz * dir * 4, 0);
+      pl.pos[1] = supportAt(map, pl.pos[0], pl.pos[2], heightAt(map, pl.pos[0], pl.pos[2]) + 0.5);
+      let s = s0;
+      let wet = 0;
+      for (let t = 0; t < 900 / DT && Math.abs(s - s1) > 2; t++) {
+        s = f.project(pl.pos[0], pl.pos[2]).s;
+        const g = f.at(Math.min(f.length, Math.max(0, s + dir * 6)));
+        pl.yaw = Math.atan2(-(g.x + g.nx * 4 - pl.pos[0]), -(g.z + g.nz * 4 - pl.pos[2]));
+        updatePlayer(pl, map, { ...emptyInputFrame(), moveZ: 1 }, DT);
+        if (waterDepthAt(map, pl.pos[0], pl.pos[2], pl.pos[1]) > 0.3) wet++;
+      }
+      expect(Math.abs(s - s1), `towards ${s1.toFixed(0)}: stopped at ${s.toFixed(1)}`).toBeLessThan(2.5);
+      expect(wet).toBe(0);
+    }
+  });
+});

@@ -350,7 +350,10 @@ function choose(all: Planned[], landmarks: P[][]): Planned[] {
     const f = pathLen(c.path);
     const samples: { x: number; z: number; tx: number; tz: number }[] = [];
     for (let u = 0.2; u <= 0.8001; u += 0.05) samples.push(pointAt(c.path, f * u));
-    if (landmarks.some((l) => samples.some((p) => near(l, p.x, p.z).d < 40))) continue;
+    // Nowhere near a bridge landmark (its ramps neither: they would change the ground at its ends).
+    const whole: { x: number; z: number }[] = [];
+    for (let u = 0; u <= 1.0001; u += 0.05) whole.push(pointAt(c.path, f * Math.min(1, u)));
+    if (landmarks.some((l) => whole.some((p) => near(l, p.x, p.z).d < 40))) continue;
     let absorbed = false;
     let crossed = false;
     for (const k of kept) {
@@ -361,8 +364,19 @@ function choose(all: Planned[], landmarks: P[][]): Planned[] {
         const off = hits.reduce((s, h) => s + h.q.off, 0) / hits.length;
         const hw = Math.max(k.width / 2, Math.abs(off) + c.width / 2);
         k.cut = Math.max(k.cut, Math.abs(off) + c.width / 2 + 3);
-        if (hw <= k.width / 2 + B.widenMax) k.width = Math.round(2 * hw * 10) / 10;
-        if (c.kind === LINE_KIND_RAIL) for (const r of c.rails) k.rails.push(Math.round((-off + r) * 10) / 10);
+        // Widened (both sides: the deck stays on its line) only where it overlaps no other kept bridge.
+        const kf = pathLen(k.path);
+        const ks: { x: number; z: number }[] = [];
+        for (let u = 0.1; u <= 0.9001; u += 0.05) ks.push(pointAt(k.path, kf * u));
+        const clear = kept.every((o) => o === k || ks.every((p) => near(o.path, p.x, p.z).d >= hw + o.width / 2 + 0.5));
+        if (hw <= k.width / 2 + B.widenMax && clear) k.width = Math.round(2 * hw * 10) / 10;
+        if (c.kind === LINE_KIND_RAIL) {
+          for (const r of c.rails) {
+            const o = Math.round((-off + r) * 10) / 10;
+            // On the deck, and not on top of a track already there (the same railway drawn twice).
+            if (Math.abs(o) + 1.5 <= k.width / 2 && k.rails.every((q) => Math.abs(q - o) >= 3)) k.rails.push(o);
+          }
+        }
         absorbed = true;
       } else crossed = true;
       break;

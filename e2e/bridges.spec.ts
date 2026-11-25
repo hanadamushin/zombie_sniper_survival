@@ -1,4 +1,5 @@
 // L9: the bridge landmarks laid from bank to bank in their real areas (docs/realmap_guide.md §7, L9).
+// L10: and ordinary bridges over the great rivers, the Seto-Ōhashi and the Shimanami Kaidō.
 // For each bridge: three pictures (the whole bridge from the side, from the air, on its deck), the
 // player walks it from end to end (the game's own simulation, steering along the deck), a zombie
 // set chasing at one end comes across to the player on the deck, and the three budgets on the deck
@@ -23,6 +24,15 @@ const BRIDGES: { id: string; name?: string; lat: number; lon: number; lane: numb
   { id: 'landmark.ordinary_bridge_road', name: 'kiso', lat: 35.10484, lon: 136.71272, lane: 2, side: 1, air: 1 },
   { id: 'landmark.ordinary_bridge_road', name: 'yodo', lat: 34.71385, lon: 135.4871, lane: 3, side: 1, air: 1 },
   { id: 'landmark.ordinary_bridge_rail', name: 'chikugo', lat: 33.32648, lon: 130.4988, lane: 1.9, side: 1, air: 1 },
+  // The cell with the most ordinary bridges (18314, east Tokyo: 16) — the Arakawa.
+  { id: 'landmark.ordinary_bridge_road', name: 'arakawa', lat: 35.73704, lon: 139.82851, lane: 3, side: 1, air: 1 },
+  // L10: the Seto-Ōhashi's bridge with an area, the Kurushima-Kaikyō Bridge's three, Tatara and Innoshima.
+  { id: 'landmark.shimotsui_seto_bridge', lat: 34.4308, lon: 133.80598, lane: 5, side: 1, air: 1 },
+  { id: 'landmark.kurushima_kaikyo_bridge_1', lat: 34.1262, lon: 133.0134, lane: 4, side: 1, air: 1 },
+  { id: 'landmark.kurushima_kaikyo_bridge_2', lat: 34.12163, lon: 133.00132, lane: 4, side: 1, air: 1 },
+  { id: 'landmark.kurushima_kaikyo_bridge_3', lat: 34.1159, lon: 132.98619, lane: 4, side: 1, air: 1 },
+  { id: 'landmark.tatara_bridge', lat: 34.25962, lon: 133.06391, lane: 4, side: 1, air: 1 },
+  { id: 'landmark.innoshima_bridge', lat: 34.35724, lon: 133.18041, lane: 4, side: 1, air: 1 },
 ];
 
 /** A real point in the area of its cell (m from the north-west corner; the strategic grid of src/data/landmarks). */
@@ -53,6 +63,8 @@ async function measure(page: Page): Promise<{ calls: number; triangles: number; 
     const s = g.state!;
     g.renderer.draw(s, 0, 0);
     const info = g.debug.renderInfo();
+    // L10: a few steps first (the first measurement of a run caught the simulation warming up: 6 ms).
+    for (let i = 0; i < 20; i++) g.sim.tick(s, 1 / 60, { ...g.debug.noInput });
     let t0 = performance.now();
     for (let i = 0; i < 60; i++) g.sim.tick(s, 1 / 60, { ...g.debug.noInput });
     const tick = (performance.now() - t0) / 60;
@@ -103,18 +115,31 @@ async function lineOf(page: Page, id: string, near: [number, number]): Promise<L
     // The deck's top: the ground or the bridge's own boxes under each metre of the line's middle.
     const acc = [0];
     for (let i = 1; i < pts.length; i++) acc.push(acc[i - 1]! + Math.hypot(pts[i]![0] - pts[i - 1]![0], pts[i]![1] - pts[i - 1]![1]));
-    const deck: number[] = [];
-    let y = -1e3;
-    for (let s = 0; s <= acc[acc.length - 1]!; s += 1) {
+    const L = acc[acc.length - 1]!;
+    const at = (s: number): [number, number] => {
       let i = 0;
       while (i < pts.length - 2 && acc[i + 1]! < s) i++;
       const u = (s - acc[i]!) / Math.max(1e-6, acc[i + 1]! - acc[i]!);
-      const x = pts[i]![0] + (pts[i + 1]![0] - pts[i]![0]) * u;
-      const z = pts[i]![1] + (pts[i + 1]![1] - pts[i]![1]) * u;
-      // Walked from the first end: what one stands on stepping along (not a strut or a gate overhead).
-      if (y < -900) y = window.__game!.debug.supportAt(x, z, window.__game!.debug.supportAt(x, z, -1e3) + 0.3);
+      return [pts[i]![0] + (pts[i + 1]![0] - pts[i]![0]) * u, pts[i]![1] + (pts[i + 1]![1] - pts[i]![1]) * u];
+    };
+    // Walked from where the line comes into this area: what one stands on stepping along (not a strut
+    // or a gate overhead). L10: a line from the next area comes in over the water: the deck's boxes
+    // there are the highest thing one stands on (from above); from a bank, the ground.
+    const s0 = Math.min(L, Math.ceil(p.span.from));
+    const [x0, z0] = at(s0);
+    const top = window.__game!.debug.supportAt(x0, z0, 1e3);
+    let y = s0 > 0 ? top : window.__game!.debug.supportAt(x0, z0, window.__game!.debug.supportAt(x0, z0, -1e3) + 0.3);
+    const deck: number[] = new Array(Math.floor(L) + 1).fill(y);
+    for (let s = s0; s <= L; s += 1) {
+      const [x, z] = at(s);
       y = window.__game!.debug.supportAt(x, z, y + 0.45);
-      deck.push(y);
+      deck[s] = y;
+    }
+    y = deck[s0]!;
+    for (let s = s0 - 1; s >= 0; s -= 1) {
+      const [x, z] = at(s);
+      y = window.__game!.debug.supportAt(x, z, y + 0.45);
+      deck[s] = y;
     }
     return { pts, from: p.span.from, to: p.span.to, deck, top: p.height };
   }, [id, near[0], near[1]] as const);
@@ -192,8 +217,10 @@ test('the bridge landmarks: whole from bank to bank, walked end to end, the dead
 
     // (2) Walk the stretch of this area both ways (the game's simulation, the player steered along the lane).
     for (const [s0, s1] of [[line.from, line.to], [line.to, line.from]] as const) {
-      const a = Math.min(L - 1, Math.max(1, s0 === 0 || s0 === L ? s0 : s0 + Math.sign(s1 - s0) * 3));
-      const z1 = s1 === 0 || s1 === L ? s1 : s1 - Math.sign(s1 - s0) * 3;
+      // (6 m in from the area's edge where the line goes on into the next area: with the lane's offset the
+      // walker must not step over the edge — the game then moves them into the next area.)
+      const a = Math.min(L - 1, Math.max(1, s0 === 0 || s0 === L ? s0 : s0 + Math.sign(s1 - s0) * 6));
+      const z1 = s1 === 0 || s1 === L ? s1 : s1 - Math.sign(s1 - s0) * 6;
       const start = frame(line, a);
       const dir = Math.sign(z1 - a);
       const sx = start.x + start.nx * b.lane - start.tx * dir * (a === 0 || a === L ? 4 : 0);
@@ -259,10 +286,17 @@ test('the bridge landmarks: whole from bank to bank, walked end to end, the dead
     const pp = frame(line, zs + reach);
     const yp = line.deck[Math.round(zs + reach)]!;
     await page.evaluate(([x, z, y]) => window.__game!.debug.teleport(x!, z!, 0, 0, y!), [pp.x + pp.nx * b.lane, pp.z + pp.nz * b.lane, yp] as const);
-    const chase = await page.evaluate(([zx, zz]) => {
+    const chase = await page.evaluate(([zx, zz, zy]) => {
       const g = window.__game!;
       const s = g.state!;
+      (window as unknown as { trail?: string[] }).trail = [];
+      // L10: the others nearby are put down first (a crowd that gathered by the time of a long run pushed
+      // the chaser off Kintai-kyō's 5 m deck; the way across is what is tested).
+      for (const q of s.tactical!.zombies) if (Math.hypot(q.pos[0] - (zx as number), q.pos[2] - (zz as number)) < 150) q.state = 'down';
       const id = g.debug.placeZombie(zx as number, zz as number, 'walker', true);
+      // L10: on the deck where it starts (over the water the deck is the bridge's boxes, not the ground).
+      const z0 = s.tactical!.zombies.find((q) => q.id === id);
+      if (z0) z0.pos[1] = g.debug.supportAt(zx as number, zz as number, (zy as number) + 0.45);
       let best = Infinity;
       let t = 0;
       for (; t < 60 * 150 && best > 3; t++) {
@@ -282,7 +316,7 @@ test('the bridge landmarks: whole from bank to bank, walked end to end, the dead
       }
       const zb = s.tactical!.zombies.find((q) => q.id === id);
       return { trail: (window as unknown as { trail?: string[] }).trail, best, seconds: t / 60, zombie: zb ? { pos: zb.pos.map((v) => Math.round(v * 10) / 10), state: zb.state } : null, player: s.player.pos.map((v) => Math.round(v * 10) / 10) };
-    }, [zp.x - zp.tx * (zs === 0 ? 4 : 0), zp.z - zp.tz * (zs === 0 ? 4 : 0)] as const);
+    }, [zp.x - zp.tx * (zs === 0 ? 4 : 0), zp.z - zp.tz * (zs === 0 ? 4 : 0), line.deck[Math.round(zs)]!] as const);
     if (chase.best >= 4) console.log(name, 'chase', JSON.stringify(chase), 'start', zp.x, zp.z);
     rows.push(`${name}: the zombie came within ${chase.best.toFixed(1)} m in ${chase.seconds.toFixed(0)} s over ${reach.toFixed(0)} m of the deck`);
     expect(chase.best, `${name}: the zombie did not come across`).toBeLessThan(4);
@@ -302,6 +336,7 @@ test('the bridge landmarks: whole from bank to bank, walked end to end, the dead
       await settle(page);
       const m = await measure(page);
       rows.push(`${name} ${where}: ${m.calls} calls, ${(m.triangles / 1e4).toFixed(1)}万 tris, sim ${m.tick.toFixed(2)} + draw ${m.draw.toFixed(2)} ms`);
+      console.log(rows[rows.length - 1]);
       await page.screenshot({ path: `test-results/bridge-${name}-budget-${where}.png` });
       expect(m.calls, `${name} ${where}`).toBeLessThan(150);
       expect(m.triangles, `${name} ${where}`).toBeLessThan(500_000);

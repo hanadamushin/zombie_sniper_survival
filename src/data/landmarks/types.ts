@@ -51,8 +51,9 @@ export interface LandmarkSpot {
    * bank to bank, as real points (WGS84 [lat, lon]) — the first and the last on dry land where the
    * area's roads meet it. The bridge is not a lot: gen/real/bridges.ts lays it along this line in
    * every area the line crosses, cuts the area's roads and railways that ran on an embankment there,
-   * and raises the ground under the deck so that people and the dead walk over (the water stays under
-   * it). `lat` / `lon` stay the bridge's middle (the strategic map's mark); `rot`, `reach`, `level`,
+   * and carries people and the dead over on the bridge's own hidden boxes (L10: the ground and the
+   * water stay under the deck). L10: a row of bridges (the Kurushima-Kaikyō) meets end to end over
+   * the water: the next one starts at the same point and height. `lat` / `lon` stay the bridge's middle (the strategic map's mark); `rot`, `reach`, `level`,
    * `drain` and `cutRoads` are not used.
    */
   bridge?: {
