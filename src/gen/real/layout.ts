@@ -162,21 +162,30 @@ export function realTerrain(params: GenParams, real: RealArea, synth: ((x: numbe
 // Water and ground classes
 // ---------------------------------------------------------------------------------------------
 
-/** Water surface per height vertex (NaN: dry), and the ground classes of water / beach tiles. */
-function waterAndGround(b: Builder, real: RealArea, terrain: (x: number, z: number) => number): Float32Array {
+/**
+ * Water surface per height vertex (NaN: dry) of a real area before anything is built on it (L10: the
+ * ordinary bridges' table, tools/real/bridges.ts, reads it too).
+ */
+export function realWaterLevels(real: RealArea, isHome: boolean): Float32Array {
   const water = new Float32Array(N * N).fill(NaN);
-  const L = latticeHeights(real, b.params.isHome);
+  const L = latticeHeights(real, isHome);
   for (let iz = 0; iz < N; iz++) {
     for (let ix = 0; ix < N; ix++) {
       const x = ix * TILE;
       const z = iz * TILE;
-      if (b.params.isHome && homeDist(x, z) < T.homeBlendRadius) continue;
+      if (isHome && homeDist(x, z) < T.homeBlendRadius) continue;
       const sea = shareAt(real, (c) => c === LU.sea, x, z);
       const river = shareAt(real, (c) => c === LU.water, x, z);
       if (sea >= 0.5) water[iz * N + ix] = 0;
       else if (river >= 0.45) water[iz * N + ix] = bicubic(L, x, z) - R.riverSurface;
     }
   }
+  return water;
+}
+
+/** Water surface per height vertex (NaN: dry), and the ground classes of water / beach tiles. */
+function waterAndGround(b: Builder, real: RealArea, terrain: (x: number, z: number) => number): Float32Array {
+  const water = realWaterLevels(real, b.params.isHome);
   void terrain;
   for (let ty = 0; ty < TILES; ty++) {
     for (let tx = 0; tx < TILES; tx++) {
@@ -916,7 +925,7 @@ export function layoutReal(b: Builder, real: RealArea, terrain: (x: number, z: n
     planLandmark(P, m.spot.id, pois[poi]!.x, pois[poi]!.z, m.spot.rot, m.spot.reach ?? 48, poi, { level: m.spot.level, drain: m.spot.drain, cutRoads: m.spot.cutRoads });
   }
   // L9: the bridge landmarks whose line runs through this area: no facility under their deck.
-  const bridges = bridgesIn(real.cell);
+  const bridges = bridgesIn(real.cell, b.params.isHome);
   for (const br of bridges) {
     for (let s = br.from; s <= br.to; s += 6) {
       const p = br.f.at(s);

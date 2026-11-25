@@ -149,3 +149,21 @@ export const REAL_CHECK = {
   maxBytes: 80_000,
   maxMs: 900,
 } as const;
+
+/**
+ * L10: the ordinary bridges (tools/real/bridges.ts builds the table, gen/real/bridges.ts lays them):
+ * the bridge stretches of the roads and railways over water at least `minWater` wide (the narrowest
+ * chord of the water through the crossing's middle, area m) become girder bridges on piers instead of
+ * embankments. Water runs along a line closer than `joinGap` are one crossing (a sandbar).
+ */
+export const REAL_BRIDGES = {
+  minWater: 30,
+  joinGap: 16,
+  /** The deck's top over the water (m; its slab is 1 m thick: people and bullets pass under it). */
+  clear: 3,
+  /** The ramps: rise per m from the banks, and the farthest the bridge runs on over the land (m). */
+  slope: 0.1,
+  rampMax: 40,
+  /** A line alongside a wider bridge widens its deck by at most this (m; a railway's tracks go on it). */
+  widenMax: 9,
+} as const;

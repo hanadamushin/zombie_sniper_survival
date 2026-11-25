@@ -75,7 +75,7 @@ function lru<V>(max: () => number): { get(key: string, make: () => V): V; clear(
 }
 
 /** L9: a bridge's span as part of a cache key. */
-const spanKey = (s: BridgeSpan): string => `${s.path.map((q) => `${q[0].toFixed(2)},${q[1].toFixed(2)}`).join(';')}|${s.ends.join(',')}|${s.water}|${s.from}|${s.to}|${(s.land ?? []).map((q) => q.join('-')).join(',')}`;
+const spanKey = (s: BridgeSpan): string => `${s.path.map((q) => `${q[0].toFixed(2)},${q[1].toFixed(2)}`).join(';')}|${s.ends.join(',')}|${s.water}|${s.from}|${s.to}|${(s.land ?? []).map((q) => q.join('-')).join(',')}${s.deck ? `|${s.deck.width}/${(s.deck.rails ?? []).join(',')}` : ''}`;
 
 /** Generate a blueprint (uncached): what the tests and the preview tool call. L9: `span` lays a bridge along its line. */
 export function generateBlueprint(def: BuildingDef, w: number, d: number, seed: number, span?: BridgeSpan): BuildingBlueprint {

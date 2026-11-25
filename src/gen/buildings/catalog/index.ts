@@ -19,6 +19,8 @@ import { LANDMARK_KINKI } from './landmark_kinki.ts';
 import { LANDMARK_CHUGOKU } from './landmark_chugoku.ts';
 import { LANDMARK_SHIKOKU } from './landmark_shikoku.ts';
 import { LANDMARK_KYUSHU } from './landmark_kyushu.ts';
+// L10: the ordinary bridges of the real areas.
+import { LANDMARK_BRIDGES } from './landmark_bridges.ts';
 
 export const CATALOG: Readonly<Record<BuildingCategory, readonly BuildingDef[]>> = {
   house: HOUSE,
@@ -29,7 +31,7 @@ export const CATALOG: Readonly<Record<BuildingCategory, readonly BuildingDef[]>>
   transport: TRANSPORT,
   military: MILITARY,
   base: BASE,
-  landmark: [...LANDMARK_HOKKAIDO, ...LANDMARK_TOHOKU, ...LANDMARK_KANTO, ...LANDMARK_CHUBU, ...LANDMARK_KINKI, ...LANDMARK_CHUGOKU, ...LANDMARK_SHIKOKU, ...LANDMARK_KYUSHU],
+  landmark: [...LANDMARK_HOKKAIDO, ...LANDMARK_TOHOKU, ...LANDMARK_KANTO, ...LANDMARK_CHUBU, ...LANDMARK_KINKI, ...LANDMARK_CHUGOKU, ...LANDMARK_SHIKOKU, ...LANDMARK_KYUSHU, ...LANDMARK_BRIDGES],
 };
 
 export const BUILDING_DEFS: readonly BuildingDef[] = Object.values(CATALOG).flat();

@@ -982,6 +982,9 @@ export const ja = {
   // L9 bridges
   'landmark.kanmon_bridge': '関門橋',
   'landmark.onaruto_bridge': '大鳴門橋',
+  // L10: the ordinary bridges (no name on the strategic map; the building type's name).
+  'landmark.ordinary_bridge_road': '橋（道路）',
+  'landmark.ordinary_bridge_rail': '橋（鉄道）',
 } as const;
 
 export type TextKey = keyof typeof ja;

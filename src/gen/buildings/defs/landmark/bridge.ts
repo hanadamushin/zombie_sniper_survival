@@ -49,11 +49,13 @@ export interface BridgeDesign {
   /** Plan scale of the spans (default 0.1: the area's shrinking). */
   scale?: number;
   /**
-   * In an area, what carries the walkers: 'ground' (default: the area's ground is raised to the deck
-   * over the water) or 'boxes' (hidden steps of the bridge's own over its whole length: a wooden arch
-   * too steep for the 4 m ground lattice to follow — the Kintai Bridge).
+   * In an area, what carries the walkers: 'ground' (the area's ground is raised to the deck over the
+   * water, hidden boxes carry it over the land), 'boxes' (default since L10: hidden boxes of the
+   * bridge's own over its whole length — the ground and the water stay under the deck, so bullets and
+   * eyes pass under it) or 'water' (L10, an ordinary bridge: hidden boxes over the water, its ramps on
+   * the land are earth — the ground is raised to the deck there).
    */
-  carry?: 'ground' | 'boxes';
+  carry?: 'ground' | 'boxes' | 'water';
   /** Fit the main structure to the path, `fit` m short of each end (the scale is then the path's). */
   fit?: number;
   /** Where the main structure starts on the path (m from its start); default: centred. */
@@ -276,8 +278,21 @@ export function bridgeDef(D: BridgeDesign): BuildingDef {
 // Building it
 // ---------------------------------------------------------------------------------------------
 
-function buildBridge(L: Lm, D: BridgeDesign): void {
+/** L10: a design with an area's own deck (an ordinary bridge's width and tracks). */
+export function withDeck(D: BridgeDesign, deck: BridgeSpan['deck']): BridgeDesign {
+  if (!deck) return D;
+  const hw = deck.width / 2;
+  return { ...D, deck: { ...D.deck, width: deck.width, rails: deck.rails ?? D.deck.rails, lines: D.deck.lines?.filter((o) => Math.abs(o) < hw - 1) } };
+}
+
+/** The carry of a design in an area (L10: boxes unless it says otherwise). */
+export function carryOf(D: BridgeDesign): 'ground' | 'boxes' | 'water' {
+  return D.carry ?? 'boxes';
+}
+
+function buildBridge(L: Lm, D0: BridgeDesign): void {
   const area = L.span !== undefined;
+  const D = withDeck(D0, L.span?.deck);
   const span = L.span ?? yardSpan(D, L.w, L.d);
   const f = pathFrame(span.path);
   const lay = bridgeLayout(D, f.length, span.ends, span.water);
@@ -354,7 +369,7 @@ function buildBridge(L: Lm, D: BridgeDesign): void {
 
   // --- over dry land (an area): hidden boxes carry the deck (the ground keeps its height under it) ---
   if (area) {
-    const runs = D.carry === 'boxes' ? [[from, to] as [number, number]] : span.land ?? [];
+    const runs = carryOf(D) === 'boxes' ? [[from, to] as [number, number]] : span.land ?? [];
     for (const [sa, sb] of runs) landDeck(L, f, lay, Math.max(sa, from), Math.min(sb, to), hw - 0.25);
   }
 
@@ -383,9 +398,12 @@ function buildBridge(L: Lm, D: BridgeDesign): void {
 
   // --- piers under the approach spans (and the main structure's ends) ---
   const P = D.piers;
+  // L10: an ordinary bridge's piers stand in the water only (its ramps on the land are earth).
+  const wetRuns = area && carryOf(D) === 'water' ? span.land ?? [] : null;
   const pierAt = (s: number, size: number, paint: PaintName): void => {
     const y = lay.deck(s) - D.deck.thick;
     if (y - lay.water < 0.8) return;
+    if (wetRuns && !wetRuns.some(([a, b]) => s > a + 4 && s < b - 4)) return;
     const p = f.at(s);
     const n = P.columns;
     for (let c = 0; c < n; c++) {

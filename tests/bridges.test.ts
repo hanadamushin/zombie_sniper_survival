@@ -89,19 +89,23 @@ function cellsOf(id: string): number[] {
   const out: number[] = [];
   for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
     const c = mid + dy * grid.gridW + dx;
-    if (haveCell(c) && bridgesIn(c).some((b) => b.spot.id === id)) out.push(c);
+    if (haveCell(c) && bridgesIn(c).some((b) => b.id === id)) out.push(c);
   }
   return out;
 }
 
 /** Walk the player along the deck from `from` to `to` (m along the line), `lane` m off its middle. */
 function walk(map: TacticalMap, id: string, cell: number, from: number, to: number, lane: number): { reached: number; wet: number; low: number } {
-  const br = bridgesIn(cell).find((b) => b.spot.id === id)!;
+  const br = bridgesIn(cell).find((b) => b.id === id)!;
   const pl = createInitialState(1, 1).player;
   const dir = to > from ? 1 : -1;
   const a = br.f.at(from);
-  placePlayer(pl, map, a.x + a.nx * lane - a.tx * dir * 4, a.z + a.nz * lane - a.tz * dir * 4, 0);
-  pl.pos[1] = supportAt(map, pl.pos[0], pl.pos[2], heightAt(map, pl.pos[0], pl.pos[2]) + 0.5);
+  // From 4 m before a real end of the bridge, or 1 m inside the area where the line goes on into the next one.
+  const back = (dir > 0 ? from <= 0.01 : from >= br.f.length - 0.01) ? 4 : -1;
+  placePlayer(pl, map, a.x + a.nx * lane - a.tx * dir * back, a.z + a.nz * lane - a.tz * dir * back, 0);
+  // On the deck where the walk starts (L10: over the water it is the bridge's boxes, not the ground;
+  // a walker coming over from the neighbouring area keeps its height — sim/tactical/area.ts walkAcross).
+  pl.pos[1] = supportAt(map, pl.pos[0], pl.pos[2], Math.max(heightAt(map, pl.pos[0], pl.pos[2]), br.lay.deck(Math.min(br.f.length, Math.max(0, from - dir * back)))) + 0.5);
   let wet = 0;
   let low = 0;
   let s = from;
@@ -125,14 +129,14 @@ describe.each(BRIDGES.map((s) => s.id))('%s in its real areas (L9)', (id) => {
   it.skipIf(cells.length === 0)('stands from bank to bank, its deck walked both ways, the dead let through, no embankment or building on it', { timeout: 600_000 }, () => {
     const maps = new Map(cells.map((c) => [c, mapFor(grid, c)]));
     // Every stretch of the line is built by one area (the stretches meet exactly).
-    const stretches = cells.map((c) => bridgesIn(c).find((b) => b.spot.id === id)!).map((b) => [b.from, b.to] as const).sort((p, q) => p[0] - q[0]);
+    const stretches = cells.map((c) => bridgesIn(c).find((b) => b.id === id)!).map((b) => [b.from, b.to] as const).sort((p, q) => p[0] - q[0]);
     expect(stretches[0]![0]).toBe(0);
     for (let k = 1; k < stretches.length; k++) expect(stretches[k]![0]).toBeCloseTo(stretches[k - 1]![1], 6);
-    const full = bridgesIn(cells[0]!).find((b) => b.spot.id === id)!;
+    const full = bridgesIn(cells[0]!).find((b) => b.id === id)!;
     expect(stretches[stretches.length - 1]![1]).toBeCloseTo(full.f.length, 6);
     for (const c of cells) {
       const map = maps.get(c)!;
-      const br = bridgesIn(c).find((b) => b.spot.id === id)!;
+      const br = bridgesIn(c).find((b) => b.id === id)!;
       const p = map.placements.find((q) => q.def === id);
       expect(p, `${id} in ${c}`).toBeDefined();
       expect(p!.span!.from).toBeCloseTo(br.from, 6);

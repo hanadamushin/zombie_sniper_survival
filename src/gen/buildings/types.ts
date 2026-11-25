@@ -249,11 +249,14 @@ export interface BridgeSpan {
   from: number;
   to: number;
   /**
-   * Stretches of the path (m) over dry land: there the ground keeps its own height (roads and people
-   * pass under the viaduct) and hidden boxes of the bridge carry the deck; over the water the area's
-   * ground is raised under it (gen/real/bridges.ts).
+   * Stretches of the path (m) where hidden boxes of the bridge carry the deck (gen/real/bridges.ts):
+   * over dry land for a bridge landmark (the ground keeps its own height: roads and people pass under
+   * the viaduct); L10: over the water for an ordinary bridge (BridgeDesign.carry 'water': its ramps
+   * on land are earth, the water and the bed stay under the deck).
    */
   land?: [number, number][];
+  /** L10: this bridge's own deck (an ordinary bridge: the width of its road, the tracks it carries). */
+  deck?: { width: number; rails?: number[] };
 }
 
 export interface BuildingDef {

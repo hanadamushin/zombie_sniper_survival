@@ -10,14 +10,27 @@ import { expect, test, type Page } from '@playwright/test';
 const ONLY = (process.env.BRIDGES ?? '').split(',').filter(Boolean);
 
 /** A point on each bridge's line (its middle) and the lane walked (m off the middle; the Aomori towers stand in it). */
-const BRIDGES: { id: string; lat: number; lon: number; lane: number; side: number; air: number }[] = [
+// L10: `name` and the ordinary bridges (several of one building type in an area: the one nearest the point).
+const BRIDGES: { id: string; name?: string; lat: number; lon: number; lane: number; side: number; air: number }[] = [
   { id: 'landmark.rainbow_bridge', lat: 35.63633, lon: 139.76407, lane: 5, side: 1, air: 1 },
   { id: 'landmark.aomori_bay_bridge', lat: 40.8302, lon: 140.7385, lane: 5, side: 1, air: 1 },
   { id: 'landmark.akashi_kaikyo_bridge', lat: 34.61752, lon: 135.0219, lane: 4, side: 1, air: 1 },
   { id: 'landmark.kintaikyo', lat: 34.16493, lon: 132.17668, lane: 0, side: 1, air: 1 },
   { id: 'landmark.onaruto_bridge', lat: 34.2386, lon: 134.65029, lane: 4, side: 1, air: 1 },
   { id: 'landmark.kanmon_bridge', lat: 33.96179, lon: 130.95852, lane: 4, side: 1, air: 1 },
+  // L10: ordinary bridges over the great rivers (rows of src/data/bridges/ordinary.ts).
+  { id: 'landmark.ordinary_bridge_road', name: 'tone', lat: 35.88975, lon: 140.05453, lane: 2, side: 1, air: 1 },
+  { id: 'landmark.ordinary_bridge_road', name: 'kiso', lat: 35.10484, lon: 136.71272, lane: 2, side: 1, air: 1 },
+  { id: 'landmark.ordinary_bridge_road', name: 'yodo', lat: 34.71385, lon: 135.4871, lane: 3, side: 1, air: 1 },
+  { id: 'landmark.ordinary_bridge_rail', name: 'chikugo', lat: 33.32648, lon: 130.4988, lane: 1.9, side: 1, air: 1 },
 ];
+
+/** A real point in the area of its cell (m from the north-west corner; the strategic grid of src/data/landmarks). */
+function areaPoint(lat: number, lon: number): [number, number] {
+  const fy = ((45.6 - lat) * 110.95) / 10;
+  const fx = ((lon - 127.5) * 90.06) / 10;
+  return [(fx - Math.floor(fx)) * 1024, (fy - Math.floor(fy)) * 1024];
+}
 
 function trackErrors(page: Page): string[] {
   const errors: string[] = [];
@@ -69,10 +82,22 @@ async function heal(page: Page): Promise<void> {
 interface Line { pts: [number, number][]; from: number; to: number; deck: number[]; top: number }
 
 /** The bridge's line in the current map (world coordinates), its stretch here, the deck's top every metre. */
-async function lineOf(page: Page, id: string): Promise<Line | null> {
-  return page.evaluate((def) => {
+async function lineOf(page: Page, id: string, near: [number, number]): Promise<Line | null> {
+  return page.evaluate(([def, nx, nz]) => {
     const map = window.__game!.map!;
-    const p = map.placements.find((q) => q.def === def);
+    // The placement of the type whose line passes nearest the point.
+    let p: (typeof map.placements)[number] | undefined;
+    let pd = Infinity;
+    for (const q of map.placements) {
+      if (q.def !== def || !q.span) continue;
+      for (const [x, z] of q.span.path) {
+        const d = Math.hypot(x + q.x0 - (nx as number), z + q.z0 - (nz as number));
+        if (d < pd) {
+          pd = d;
+          p = q;
+        }
+      }
+    }
     if (!p?.span) return null;
     const pts = p.span.path.map(([x, z]) => [x + p.x0, z + p.z0] as [number, number]);
     // The deck's top: the ground or the bridge's own boxes under each metre of the line's middle.
@@ -92,7 +117,7 @@ async function lineOf(page: Page, id: string): Promise<Line | null> {
       deck.push(y);
     }
     return { pts, from: p.span.from, to: p.span.to, deck, top: p.height };
-  }, id);
+  }, [id, near[0], near[1]] as const);
 }
 
 function frame(l: Line, s: number): { x: number; z: number; tx: number; tz: number; nx: number; nz: number } {
@@ -141,14 +166,14 @@ test('the bridge landmarks: whole from bank to bank, walked end to end, the dead
   await page.waitForFunction(() => window.__game?.map != null, null, { timeout: 60_000 });
   await heal(page);
   const rows: string[] = [];
-  for (const b of BRIDGES.filter((q) => ONLY.length === 0 || ONLY.some((o) => q.id.includes(o)))) {
-    const name = b.id.replace('landmark.', '');
+  for (const b of BRIDGES.filter((q) => ONLY.length === 0 || ONLY.some((o) => (q.name ?? q.id).includes(o)))) {
+    const name = b.name ?? b.id.replace('landmark.', '');
     const cell = await page.evaluate(([la, lo]) => window.__game!.debug.gotoLatLon(la!, lo!), [b.lat, b.lon] as const);
     await page.waitForFunction((c) => {
       const info = window.__game!.debug.realInfo();
       return info !== null && info.cell === c && info.real;
     }, cell, { timeout: 60_000 });
-    const l = await lineOf(page, b.id);
+    const l = await lineOf(page, b.id, areaPoint(b.lat, b.lon));
     expect(l, `${name}: not in cell ${cell}`).not.toBeNull();
     const line = l!;
     const L = line.deck.length - 1;
