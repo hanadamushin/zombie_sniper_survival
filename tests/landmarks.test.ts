@@ -6,7 +6,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { createInitialState, emptyInputFrame } from '../src/core/types.ts';
 import { BALANCE } from '../src/data/balance.ts';
 import { LANDMARKS, LANDMARK_GRID, LANDMARK_REGIONS } from '../src/data/landmarks/index.ts';
-import { BUILDING_DEFS, buildingDef, detailOf, hasBuildingDef } from '../src/gen/buildings/index.ts';
+import { BUILDING_DEFS, buildingDef, detailOf, hasBuildingDef, toWorld } from '../src/gen/buildings/index.ts';
 import { landmarksIn, realToArea } from '../src/gen/real/landmarks.ts';
 import { GROUND } from '../src/gen/types.ts';
 import { supportAt } from '../src/sim/tactical/collision.ts';
@@ -218,5 +218,28 @@ describe('a place of remembrance (L6)', () => {
     expect(indoor).toBeGreaterThan(0);
     // Where each stood when it first appeared (one step of a runner at most carried it a little in).
     for (const [id, [x, z]] of first) expect(near(x, z), `zombie ${id} at (${x.toFixed(1)}, ${z.toFixed(1)})`).toBeGreaterThan(BALANCE.world.memorialClear - 0.5);
+  });
+});
+
+// L7: a firing position reached by steps, not a ladder: Kotohira-gū's lookout at the top of its stairway
+// (two flights of 25 stone steps, 0.44 m each, through the great gate). Walk up from the stone torii.
+describe('the stairway of Kotohira-gū (L7)', () => {
+  it('climbs both flights from the foot to the lookout on the top terrace', () => {
+    const region = LANDMARK_REGIONS.findIndex((r) => r.name === 'shikoku');
+    const map = yardMap(4, region);
+    const e = yardEntries(4, region).find((q) => q.def === 'landmark.kotohiragu')!;
+    const p = map.placements[e.enter]!;
+    // The stairway's middle (local x 26), 4 m in front of the first step (local z 89), facing up it.
+    const [x, z] = toWorld(p, 26, 93);
+    const [ux, uz] = toWorld(p, 26, 80);
+    const state = createInitialState(1, 1);
+    const pl = state.player;
+    placePlayer(pl, map, x, z, 0);
+    pl.pos[1] = supportAt(map, pl.pos[0], pl.pos[2], 0.5);
+    pl.yaw = Math.atan2(-(ux - x), -(uz - z));
+    const top = p.base + 22;
+    for (let s = 0; s < 60 / DT && pl.pos[1] < top - 0.05; s++) updatePlayer(pl, map, { ...emptyInputFrame(), moveZ: 1 }, DT);
+    expect(pl.pos[1], 'stuck on the stairway').toBeGreaterThan(top - 0.1);
+    expect(map.vantages.some((v) => Math.abs(v.pos[1] - top) < 0.5 && v.pos[0] >= p.x0 && v.pos[0] <= p.x1 && v.pos[2] >= p.z0 && v.pos[2] <= p.z1)).toBe(true);
   });
 });

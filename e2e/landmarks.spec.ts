@@ -157,9 +157,18 @@ test('landmark yards: every landmark from the street and from the air, the budge
         const map = window.__game!.map!;
         const i = map.placements.findIndex((p) => p.def === def);
         const det = window.__game!.debug.enterable(i)!;
-        const lad = det.ladders[0]!;
-        return { x: (lad.x0 + lad.x1) / 2, z: (lad.z0 + lad.z1) / 2, nx: lad.nx, nz: lad.nz, y1: lad.y1 };
+        const lad = det.ladders[0];
+        return lad ? { x: (lad.x0 + lad.x1) / 2, z: (lad.z0 + lad.z1) / 2, nx: lad.nx, nz: lad.nz, y1: lad.y1 } : null;
       }, l.def);
+      // L7: a deck reached by steps (Kotohira-gū's lookout; the climb is tests/landmarks.test.ts):
+      // stand on it for the picture.
+      if (!ladder) {
+        const [vx, vy, vz] = l.vantage!;
+        await page.evaluate(([x, y, z]) => window.__game!.debug.teleport(x!, z!, Math.PI, -0.3, y! + 0.05), [vx, vy, vz] as const);
+        await settle(page, 600);
+        await page.screenshot({ path: `test-results/landmark-yard-${l.def.replace('landmark.', '')}-deck.png` });
+        continue;
+      }
       // Stand 0.8 m out from the ladder, facing it, and climb (forward with the view up).
       await page.evaluate((q) => {
         const g = window.__game!;
@@ -268,6 +277,15 @@ const CELLS: { name: string; lat: number; lon: number }[] = [
   { name: 'iwakuni', lat: 34.16772, lon: 132.17847 },
   { name: 'yamaguchi', lat: 34.19029, lon: 131.47268 },
   { name: 'tottori', lat: 35.5362, lon: 134.2338 },
+  // L7 shikoku: Matsuyama (21757: the castle and Dōgo Onsen), Kotohira, Takamatsu, Kōchi (22265: the
+  // castle and Harimaya Bridge), Katsurahama, Iya, Tokushima — Kotohira measured from the lookout.
+  { name: 'matsuyama', lat: 33.8457, lon: 132.7655 },
+  { name: 'kotohira', lat: 34.1840, lon: 133.8094 },
+  { name: 'takamatsu', lat: 34.3509, lon: 134.0538 },
+  { name: 'kochi', lat: 33.5600, lon: 133.5240 },
+  { name: 'katsurahama', lat: 33.4978, lon: 133.5738 },
+  { name: 'iya', lat: 33.8751, lon: 133.8355 },
+  { name: 'tokushima', lat: 34.0741, lon: 134.5538 },
 ];
 // L5: `LANDMARK_CELLS=name,name` visits only those places (each place of another region costs about
 // half a minute of loading before it is passed over).

@@ -954,6 +954,16 @@ export const ja = {
   'landmark.rurikoji_pagoda': '瑠璃光寺五重塔',
   'landmark.jinpukaku': '仁風閣',
   'landmark.tottori_sakyu_center': '鳥取砂丘 砂丘センター 見晴らしの丘',
+  // L7 shikoku
+  'landmark.matsuyama_castle': '松山城',
+  'landmark.dogo_onsen_honkan': '道後温泉本館',
+  'landmark.kotohiragu': '金刀比羅宮',
+  'landmark.takamatsu_tsukimi_yagura': '高松城（玉藻城）月見櫓',
+  'landmark.kochi_castle': '高知城',
+  'landmark.harimaya_bridge': 'はりまや橋',
+  'landmark.ryoma_statue': '坂本龍馬像',
+  'landmark.iya_kazurabashi': '祖谷のかずら橋',
+  'landmark.tokushima_washinomon': '徳島城跡 鷲の門',
 } as const;
 
 export type TextKey = keyof typeof ja;
