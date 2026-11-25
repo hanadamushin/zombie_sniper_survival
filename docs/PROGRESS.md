@@ -3657,7 +3657,7 @@ R1〜R8 の途中で共通部分に入った修正を全地方に行き渡らせ
 ### テスト
 - `tests/bridges.test.ts`（新設 9 件: 表と設計・構成の数・試験用の地図の三角形・6 本の区域）、`tests/buildings.test.ts`（カタログの検査に橋 6 種類が自動で入る）、`tests/landmarks.test.ts`（表・名前・試験用の地図）
 - `npm run check` 1,259 件・`npm run build` 通過
-- e2e: `e2e/bridges.spec.ts`（新設）は 6 本すべて通過（8.4 分）。名所の spec と `e2e/realmap*.spec.ts` の結果は下
+- e2e（`pkill -f "vite preview"` の後、本番ビルド）: `e2e/bridges.spec.ts`（新設、8.2 分）・`e2e/landmarks.spec.ts`（`LANDMARKS=` 橋 6 種類、`LANDMARK_YARDS=` 橋のある 6 地方、`LANDMARK_CELLS=none`）・`e2e/realmap.spec.ts`・`realmap_kanto / tohoku / kinki / chugoku / shikoku / kyushu.spec.ts` の **12 件すべて通過**（1.7 時間）。地方の spec の橋のセル: 東京 18480 は 58 ドローコール・38.8 万三角形・sim＋描画 0.30＋2.40ms、明石 20274 は 53・29.3 万・0.32＋0.90ms、関門 21574 は 72〜75・23.0〜29.8 万・1.4〜2.1ms。`realmap_all.spec.ts` と北海道・中部は流していない（橋なし。全件は取りまとめ役）
 
 ### 未完了・既知の問題
 - 宇治橋・はりまや橋・かずら橋は区域の川と向きを合わせていない（上の「外したもの」）
