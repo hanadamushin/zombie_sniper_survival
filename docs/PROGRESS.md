@@ -3377,7 +3377,7 @@ R1〜R8 の途中で共通部分に入った修正を全地方に行き渡らせ
 ### テスト
 - `npm run check` 1174 件・`npm run build` 通過。`tests/landmarks.test.ts`（表・地方ごとの試験用の地図・はしご（砂丘センター）・実際の区域で全名所が建つ・慰霊の 4 件）と `tests/buildings.test.ts`（名所の外観の検査）に中国の 11 種類が自動で入る
 - e2e（`pkill -f "vite preview"` の後）: `e2e/landmarks.spec.ts`（`LANDMARK_YARDS=chugoku`、`LANDMARKS=` で中国の 11 種類、`LANDMARK_CELLS=` で中国の 8 地点。試験用の地図 1.2 分・実際の区域 12.7 分）2 件通過
-- e2e `e2e/realmap*.spec.ts`: （下に追記）
+- e2e `e2e/realmap*.spec.ts` 10 ファイル 13 件を 1 回で流して **全件通過**（2.0 時間）。中国（`realmap_chugoku`）の名所を置いたセルは広島 20752 が 74 ドローコール・35.6 万三角形・sim＋描画 0.22＋1.90ms、岡山 20264 が 67・37.4 万・0.21＋1.20ms。`realmap_all` の中国の最も重い区域（倉敷 20430）は 65・36.0 万・0.19＋1.10ms
 
 ### 未完了・既知の問題
 - 錦帯橋は大まかな形（区域の川と向きが合わない。L9）
