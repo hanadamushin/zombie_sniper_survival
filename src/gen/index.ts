@@ -248,12 +248,16 @@ function buildWalkGrid(b: Builder): Uint8Array {
   // R0: rivers, lakes and the sea are not walked through.
   for (let t = 0; t < TILES * TILES; t++) if (b.ground[t] === GROUND.water) walk[t] = 0;
   for (const s of b.solids) {
+    // L9: a bridge landmark's boxes stop walkers by themselves; its deck tiles are walked (below).
+    if (s.enter !== undefined && b.placements[s.enter]?.span) continue;
     // 07d-3: a big enterable site (a station, a school, a garrison, an airport) is mostly open ground:
     // its buildings stop whatever walks there by their own walls, not the whole footprint.
     if (s.kind === 'building' && !(s.enter !== undefined && Math.max(s.x1 - s.x0, s.z1 - s.z0) > T.openSite)) block(s.x0, s.z0, s.x1, s.z1, 0.6);
     else if (s.kind === 'stair') block(s.x0, s.z0, s.x1, s.z1, 0.2);
     else if (s.kind === 'rock' && s.x1 - s.x0 > 2.4) block(s.x0, s.z0, s.x1, s.z1, 0.3);
   }
+  // L9: along a bridge's deck (where the shore meets the raised ground the slope under it is steep).
+  if (b.deckWalk) for (let t = 0; t < TILES * TILES; t++) if (b.deckWalk[t]) walk[t] = 1;
   return walk;
 }
 
@@ -404,6 +408,7 @@ function generateRealMap(params: GenParams, real: RealArea): TacticalMap {
   const map = finishMap(b, terrain);
   map.water = water;
   map.pois = pois;
+  if (b.decks) map.decks = b.decks;
   return map;
 }
 

@@ -24,10 +24,10 @@ export const LANDMARKS_CHUGOKU: readonly LandmarkSpot[] = [
   // Shimane: Izumo Taisha at the foot of its hills; Matsue Castle on Kameda-yama over its moats.
   { id: 'landmark.izumo_taisha', lat: 35.4019, lon: 132.6855, rot: 0, level: 30, cutRoads: true },
   { id: 'landmark.matsue_castle', lat: 35.47507, lon: 133.05069, rot: 0, drain: 0.3, level: 12 },
-  // Yamaguchi: the Kintai Bridge over the Nishiki River (the river under the lot; L9 makes it the area's
-  // bridge), the pagoda of Rurikō-ji on its hillside. The Tsunoshima Bridge is not built: its cell
+  // Yamaguchi: the Kintai Bridge across the area's Nishiki River (L9: west bank to east bank, the river's
+  // surface 1.4 m), the pagoda of Rurikō-ji on its hillside. The Tsunoshima Bridge is not built: its cell
   // (20738) is not a land cell of the game (PROGRESS.md L6).
-  { id: 'landmark.kintaikyo', lat: 34.16772, lon: 132.17847, rot: 0, drain: 0.6, cutRoads: true },
+  { id: 'landmark.kintaikyo', lat: 34.16493, lon: 132.17668, rot: 0, bridge: { path: [[34.16484, 132.17462], [34.16502, 132.17874]], ends: [3.8, 2], water: 1.4 } },
   { id: 'landmark.rurikoji_pagoda', lat: 34.19029, lon: 131.47268, rot: 0, level: 12 },
   // Tottori (cell 18597): Jinpū-kaku at the foot of the castle hill, 11 m from the cell's south edge: it
   // stands on a terrace cut into the hill (level 30) 45 m north-east; the Dune Centre on the hill south

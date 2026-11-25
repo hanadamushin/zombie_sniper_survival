@@ -935,7 +935,7 @@ export const ja = {
   'landmark.kyodai_clock_tower': '京都大学 百周年時計台記念館',
   'landmark.himeji_castle': '姫路城',
   'landmark.kobe_port_tower': '神戸ポートタワー',
-  'landmark.akashi_kaikyo_bridge': '明石海峡大橋 主塔',
+  'landmark.akashi_kaikyo_bridge': '明石海峡大橋',
   'landmark.todaiji_daibutsuden': '東大寺 大仏殿',
   'landmark.kofukuji_pagoda': '興福寺 五重塔',
   'landmark.ise_ujibashi': '伊勢神宮 内宮 宇治橋',
@@ -979,6 +979,9 @@ export const ja = {
   'landmark.saigo_statue': '西郷隆盛像',
   'landmark.shuri_castle': '首里城 正殿と守礼門',
   'landmark.churaumi_aquarium': '沖縄美ら海水族館',
+  // L9 bridges
+  'landmark.kanmon_bridge': '関門橋',
+  'landmark.onaruto_bridge': '大鳴門橋',
 } as const;
 
 export type TextKey = keyof typeof ja;

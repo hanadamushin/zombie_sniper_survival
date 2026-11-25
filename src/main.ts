@@ -346,6 +346,8 @@ interface DebugApi {
   realInfo(): { cell: number; real: boolean; pois: { kind: number; name: string; x: number; z: number }[]; loadMs: number[] } | null;
   /** Put the player at (x, z) on the ground (or at height y) and look along yaw / pitch (radians). */
   teleport(x: number, z: number, yaw?: number, pitch?: number, y?: number): void;
+  /** L9: the height someone with feet at feetY stands on at (x, z) in the current map (ground, a bridge's deck, a floor). */
+  supportAt(x: number, z: number, feetY: number): number;
   setClock(hour: number): void;
   /** Last frame's draw calls / triangles, cumulative main-thread ms and frame count, how long the last world build took, and neighbour parts still to build (07c). */
   renderInfo(): { calls: number; triangles: number; cpuMs: number; frames: number; buildMs: number; pending: number };
@@ -442,6 +444,10 @@ window.__game = {
       state.player.cell = cell;
       state.tactical = null;
       return cell;
+    },
+    supportAt(x, z, feetY) {
+      const map = state ? mapOf(state) : null;
+      return map ? supportAt(map, x, z, feetY) : 0;
     },
     teleport(x, z, yaw, pitch, y) {
       const map = state ? mapOf(state) : null;

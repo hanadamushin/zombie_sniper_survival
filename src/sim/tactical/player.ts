@@ -76,7 +76,7 @@ export function updatePlayer(player: PlayerState, map: TacticalMap, input: Input
   else if (player.stamina >= P.sprintMinStamina) player.winded = false;
   const sprinting = input.sprint && player.stance === 'stand' && mz > 0 && grounded && !onLadder && !player.winded;
   let speed = moveSpeed(player.stance, sprinting);
-  if (map.water && waterDepthAt(map, pos[0], pos[2]) > 0.25) speed *= P.wadeFactor; // R0: wading
+  if (map.water && waterDepthAt(map, pos[0], pos[2], supportBefore) > 0.25) speed *= P.wadeFactor; // R0: wading
   if (onLadder) {
     speed = Math.min(speed, P.walk) * 0.5;
     // Hanging on the ladder, forward / back only climbs; stepping off works at the top and the bottom.
@@ -118,9 +118,9 @@ export function updatePlayer(player: PlayerState, map: TacticalMap, input: Input
   xz[1] = Math.min(hiZ, Math.max(loZ, pos[2] + vel[2] * dt));
   // R0: wading is fine, deep water (rivers, the sea) is not entered — each axis is tried alone.
   if (map.water) {
-    const here = waterDepthAt(map, pos[0], pos[2]);
+    const here = waterDepthAt(map, pos[0], pos[2], supportBefore);
     const deep = (x: number, z: number): boolean => {
-      const d = waterDepthAt(map, x, z);
+      const d = waterDepthAt(map, x, z, supportAt(map, x, z, pos[1]));
       return d > P.wadeMax && d > here + 0.01;
     };
     if (deep(xz[0], xz[1])) {

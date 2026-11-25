@@ -17,7 +17,7 @@ import type { Ladder, Solid } from '../types.ts';
 import { buildingDef } from './catalog/index.ts';
 import { localColliders } from './colliders.ts';
 import { dirToWorld, rectToWorld, toWorld, worldSize } from './place.ts';
-import type { BuildingBlueprint, BuildingDef, BuildingPlacement, NavLink, Room, Rot, SearchPoint } from './types.ts';
+import type { BridgeSpan, BuildingBlueprint, BuildingDef, BuildingPlacement, NavLink, Room, Rot, SearchPoint } from './types.ts';
 
 export * from './types.ts';
 export { BUILDING_DEFS, CATALOG, buildingDef, hasBuildingDef } from './catalog/index.ts';
@@ -47,7 +47,7 @@ export function makePlacement(defId: string, seed: number, rot: Rot, w: number, 
 }
 
 export function placementKey(p: BuildingPlacement): string {
-  return `${p.def}:${p.seed}:${p.rot}:${p.w}:${p.d}:${p.x0}:${p.z0}:${p.base}${p.open ? ':open' : ''}`;
+  return `${p.def}:${p.seed}:${p.rot}:${p.w}:${p.d}:${p.x0}:${p.z0}:${p.base}${p.open ? ':open' : ''}${p.span ? `:${spanKey(p.span)}` : ''}`;
 }
 
 function lru<V>(max: () => number): { get(key: string, make: () => V): V; clear(): void; readonly size: number } {
@@ -74,14 +74,17 @@ function lru<V>(max: () => number): { get(key: string, make: () => V): V; clear(
   };
 }
 
-/** Generate a blueprint (uncached): what the tests and the preview tool call. */
-export function generateBlueprint(def: BuildingDef, w: number, d: number, seed: number): BuildingBlueprint {
-  return def.generate(seedRng(seed ^ 0x5bd1e995), { w, d, seed });
+/** L9: a bridge's span as part of a cache key. */
+const spanKey = (s: BridgeSpan): string => `${s.path.map((q) => `${q[0].toFixed(2)},${q[1].toFixed(2)}`).join(';')}|${s.ends.join(',')}|${s.water}|${s.from}|${s.to}|${(s.land ?? []).map((q) => q.join('-')).join(',')}`;
+
+/** Generate a blueprint (uncached): what the tests and the preview tool call. L9: `span` lays a bridge along its line. */
+export function generateBlueprint(def: BuildingDef, w: number, d: number, seed: number, span?: BridgeSpan): BuildingBlueprint {
+  return def.generate(seedRng(seed ^ 0x5bd1e995), span ? { w, d, seed, span } : { w, d, seed });
 }
 
 const blueprints = lru<BuildingBlueprint>(() => TACTICAL.interior.blueprints);
 export function blueprintOf(p: BuildingPlacement): BuildingBlueprint {
-  return blueprints.get(`${p.def}:${p.seed}:${p.w}:${p.d}`, () => generateBlueprint(buildingDef(p.def), p.w, p.d, p.seed));
+  return blueprints.get(`${p.def}:${p.seed}:${p.w}:${p.d}${p.span ? `:${spanKey(p.span)}` : ''}`, () => generateBlueprint(buildingDef(p.def), p.w, p.d, p.seed, p.span));
 }
 
 /** A collision box of a building in world coordinates. `pane`: stops movement only (glass). */

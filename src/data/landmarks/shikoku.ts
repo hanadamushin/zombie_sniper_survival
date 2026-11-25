@@ -28,4 +28,6 @@ export const LANDMARKS_SHIKOKU: readonly LandmarkSpot[] = [
   // Tokushima: the vine bridge across the Iya gorge (cell 21767); the Washi-no-mon by the station.
   { id: 'landmark.iya_kazurabashi', lat: 33.8751, lon: 133.8355, rot: 0, drain: 0.6, level: 30 },
   { id: 'landmark.tokushima_washinomon', lat: 34.0741, lon: 134.5538, rot: 0, drain: 0.3 },
+  // L9: the Ōnaruto Bridge from Ōge Island over the Naruto Strait to Awaji (its motorway's line, cell 21106).
+  { id: 'landmark.onaruto_bridge', lat: 34.23860, lon: 134.65029, rot: 0, bridge: { path: [[34.23482, 134.63989], [34.24265, 134.66168]], ends: [10.5, 2.7] } },
 ];

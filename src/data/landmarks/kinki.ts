@@ -34,14 +34,11 @@ export const LANDMARKS_KINKI: readonly LandmarkSpot[] = [
   { id: 'landmark.toji_pagoda', lat: 34.97083, lon: 135.7339, rot: 0, cutRoads: true },
   { id: 'landmark.kyodai_clock_tower', lat: 35.02621, lon: 135.78077, rot: 3 },
   // Hyogo. Himeji Castle over its moats on Himeyama (drain, level); the port tower on the edge of
-  // Naka pier (the harbour under half its lot filled); the Akashi bridge's north main tower in the
-  // strait: its lot is all sea, which counts a little over the lot's share (the edge tiles), hence
-  // drain 1.1; on the bridge's line (the motorway: cutRoads), kept near its point (reach 16: the
-  // cheapest cut is on the Maiko shore 104 m off). The point is the shrunk strait's quarter from the
-  // Maiko shore, as the real tower is 960 m out of 3.9 km (PROGRESS.md L5).
+  // Naka pier (the harbour under half its lot filled); L9: the Akashi Kaikyō Bridge along the area's
+  // motorway from the Maiko shore to Awaji (its line runs on into cell 20441, which builds the Awaji end).
   { id: 'landmark.himeji_castle', lat: 34.83944, lon: 134.69389, rot: 0, level: 14, drain: 0.3 },
   { id: 'landmark.kobe_port_tower', lat: 34.68263, lon: 135.18661, rot: 0, drain: 0.6 },
-  { id: 'landmark.akashi_kaikyo_bridge', lat: 34.6223, lon: 135.0294, rot: 0, drain: 1.1, cutRoads: true, reach: 16 },
+  { id: 'landmark.akashi_kaikyo_bridge', lat: 34.61752, lon: 135.02190, rot: 0, bridge: { path: [[34.63425, 135.03567], [34.59913, 135.00671]], ends: [6, 12] } },
   // Nara (cell 20282). Kōfuku-ji first (Sarusawa Pond's edge, Noborioji-dōri cut: in the other order
   // Tōdai-ji's lot pushed it 115 m east), then Tōdai-ji on the slope of the park.
   { id: 'landmark.kofukuji_pagoda', lat: 34.68275, lon: 135.83217, rot: 0, drain: 0.25, cutRoads: true },

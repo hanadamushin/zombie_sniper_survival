@@ -22,16 +22,19 @@ export function heightAt(map: TacticalMap, x: number, z: number): number {
 
 /**
  * R0: depth of the water at (x, z) above the ground (0 where dry): the sea, rivers and lakes of a
- * real area (map.water). The nearest height sample with water decides the surface.
+ * real area (map.water). The nearest height sample with water decides the surface. L9: `feetY`
+ * (where someone stands, a bridge's deck) counts as the ground when it is higher.
  */
-export function waterDepthAt(map: TacticalMap, x: number, z: number): number {
+export function waterDepthAt(map: TacticalMap, x: number, z: number, feetY?: number): number {
   const W = map.water;
   if (!W) return 0;
   const ix = Math.min(map.n - 1, Math.max(0, Math.round(x / map.tile)));
   const iz = Math.min(map.n - 1, Math.max(0, Math.round(z / map.tile)));
   const level = W[iz * map.n + ix]!;
   if (!Number.isFinite(level)) return 0;
-  return Math.max(0, level - heightAt(map, x, z));
+  // L9: someone standing higher (on a bridge's deck over the shore) is not in the water.
+  const ground = heightAt(map, x, z);
+  return Math.max(0, level - (feetY === undefined ? ground : Math.max(ground, feetY)));
 }
 
 /** Terrain gradient (dh/dx, dh/dz) at (x, z). */

@@ -34,6 +34,7 @@ import { noise2, smoothstep } from '../noise.ts';
 import { districtOf, newTally, pickType, tallyAdd, type TypeTally } from '../placement.ts';
 import { GROUND, type Building, type GenParams, type MapPoi } from '../types.ts';
 import { DUR_N, ELEV_N, LINE, LINE_TUNNEL, LU, LU_N, POI, POP_N, type RealArea } from './format.ts';
+import { bridgesIn, cutByBridges, finishBridges, layBridges, type BridgeAt } from './bridges.ts';
 import { applyLandmark, landmarksIn } from './landmarks.ts';
 import { createPlanner, cutLine, levelSites, planLandmark, planSites, reserve, type Site } from './sites.ts';
 
@@ -201,7 +202,7 @@ function waterAndGround(b: Builder, real: RealArea, terrain: (x: number, z: numb
 // Roads and railways
 // ---------------------------------------------------------------------------------------------
 
-function realRoads(b: Builder, real: RealArea, water: Float32Array, sites: readonly Site[]): void {
+function realRoads(b: Builder, real: RealArea, water: Float32Array, sites: readonly Site[], bridges: readonly BridgeAt[]): void {
   const order = [...real.lines].sort((a, c) => c.width - a.width);
   for (const line of order) {
     if (line.flags & LINE_TUNNEL) continue; // inside the mountain
@@ -212,10 +213,13 @@ function realRoads(b: Builder, real: RealArea, water: Float32Array, sites: reado
     const rail = line.kind === LINE.rail || line.kind === LINE.shinkansen;
     const kind = rail ? 'track' : line.kind === LINE.motorway || line.width >= 14 ? 'avenue' : line.kind === LINE.local ? 'lane' : 'street';
     // 07d-3: the minor roads (and a station's own railway) stop at the fence of a site that took them.
-    for (const piece of cutLine(pts, line.kind, line.width, sites)) {
-      // Over water a road is carried on an embankment (R0: no bridge decks yet).
-      causeway(b, piece, line.width, water);
-      addRoad(b, kind, line.width, piece, true);
+    for (const cut of cutLine(pts, line.kind, line.width, sites)) {
+      // L9: where a bridge landmark runs, its deck carries the road (gen/real/bridges.ts).
+      for (const piece of cutByBridges(cut, bridges)) {
+        // Over water a road is carried on an embankment (R0: no bridge decks yet).
+        causeway(b, piece, line.width, water);
+        addRoad(b, kind, line.width, piece, true);
+      }
     }
   }
 }
@@ -902,6 +906,7 @@ export function layoutReal(b: Builder, real: RealArea, terrain: (x: number, z: n
   // landmark's `poi` name is where it stands (and is no lookout tower).
   const taken = new Set<number>();
   for (const m of landmarksIn(real.cell)) {
+    if (m.spot.bridge) continue; // L9: laid along its line (bridges.ts), not a lot
     let poi = m.spot.poi ? pois.findIndex((p) => p.name === m.spot.poi) : -1;
     if (poi < 0) {
       poi = pois.length;
@@ -909,6 +914,14 @@ export function layoutReal(b: Builder, real: RealArea, terrain: (x: number, z: n
     }
     taken.add(poi);
     planLandmark(P, m.spot.id, pois[poi]!.x, pois[poi]!.z, m.spot.rot, m.spot.reach ?? 48, poi, { level: m.spot.level, drain: m.spot.drain, cutRoads: m.spot.cutRoads });
+  }
+  // L9: the bridge landmarks whose line runs through this area: no facility under their deck.
+  const bridges = bridgesIn(real.cell);
+  for (const br of bridges) {
+    for (let s = br.from; s <= br.to; s += 6) {
+      const p = br.f.at(s);
+      reserve(P, p.x, p.z, br.hw + 3);
+    }
   }
   // R1, R9: the lookout towers keep their spot (they were placed for the sight lines).
   pois.forEach((p, i) => {
@@ -919,7 +932,9 @@ export function layoutReal(b: Builder, real: RealArea, terrain: (x: number, z: n
   const nearCity = b.params.land !== 'urban' && around.some((c, k) => k !== 4 && c?.land === 'urban');
   planSites(P, { pois, facts: b.params.facts, townGradeAt: (x, z) => townGrade(real, x, z), nearCity });
   levelSites(b, P.sites, water);
-  realRoads(b, real, water, P.sites);
+  // L9: the bridge landmarks replace the roads' embankments along their line.
+  realRoads(b, real, water, P.sites, bridges);
+  layBridges(b, bridges, water);
   buildSites(b, P.sites, pois, ctx);
   // L1: a landmark's moat / canal / lawn and its firing positions (its blueprint's ground and vantages).
   for (const s of P.sites) if (s.what === 'landmark') applyLandmark(b, b.buildings[pois[s.poi]!.building!]!, water);
@@ -930,6 +945,8 @@ export function layoutReal(b: Builder, real: RealArea, terrain: (x: number, z: n
   realTowns(b, real, ctx);
   roofVantages(b);
   realFields(b, real);
+  // L9: the ground under the bridges' decks (after the town's streets have graded theirs).
+  finishBridges(b, bridges, water);
   // Water tiles are never walked on (nav) — the sim keeps the player out of deep water.
   for (let i = 0; i < b.ground.length; i++) if (b.ground[i] === GROUND.water) b.occupied[i] = 1;
   return { water, pois, sites: P.sites };

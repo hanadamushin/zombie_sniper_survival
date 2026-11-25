@@ -46,4 +46,6 @@ export const LANDMARKS_KYUSHU: readonly LandmarkSpot[] = [
   // Ryūtan pond (31 m). The Churaumi Aquarium on the slope over the sea in Ocean Expo Park (34906).
   { id: 'landmark.shuri_castle', lat: 26.2174, lon: 127.7182, rot: 3, level: 20 },
   { id: 'landmark.churaumi_aquarium', lat: 26.6946, lon: 127.8781, rot: 3, level: 20, drain: 0.25 },
+  // L9: the Kanmon Bridge from the Moji shore over the strait (its motorway's line in cell 21574).
+  { id: 'landmark.kanmon_bridge', lat: 33.96179, lon: 130.95852, rot: 0, bridge: { path: [[33.95765, 130.96731], [33.95906, 130.96384], [33.96575, 130.95082]], ends: [16, 9] } },
 ];

@@ -20,7 +20,7 @@ import { isMemorialLandmark } from '../../../../data/landmarks/index.ts';
 import { PAINT, type PaintName } from '../../../../data/render.ts';
 import type { BuildingKind } from '../../../types.ts';
 import { createKit, type Kit } from '../../kit.ts';
-import type { BuildingBlueprint, BuildingDef, GroundFeature, MaterialId, Part, PartShape, RoofKind } from '../../types.ts';
+import type { BridgeSpan, BuildingBlueprint, BuildingDef, GroundFeature, MaterialId, Part, PartShape, RoofKind } from '../../types.ts';
 
 const PAINTS = Object.keys(PAINT) as PaintName[];
 /** The `tint` of a named colour of the material `paint`. */
@@ -44,6 +44,8 @@ export interface Lm {
   readonly k: Kit;
   readonly w: number;
   readonly d: number;
+  /** L9: a bridge landmark's line in its area (bridge.ts); absent in the yard and the catalog tests. */
+  readonly span?: BridgeSpan;
   rand(): number;
   range(lo: number, hi: number): number;
   /** A box (or another shape) of the shell. */
@@ -118,7 +120,7 @@ export function landmarkDef(spec: LandmarkSpec): BuildingDef {
     lootable: false,
     exteriorOnly: true,
     generate(rng, params) {
-      const L = lm(createKit(def, params, rng), def.memorial === true);
+      const L = lm(createKit(def, params, rng), def.memorial === true, params.span);
       spec.build(L);
       return L.finish();
     },
@@ -128,7 +130,7 @@ export function landmarkDef(spec: LandmarkSpec): BuildingDef {
   return def;
 }
 
-function lm(k: Kit, memorial = false): Lm {
+function lm(k: Kit, memorial = false, span?: BridgeSpan): Lm {
   /** L6: what a place of remembrance may not have. */
   const refuse = (what: string): void => {
     if (memorial) throw new Error(`${k.def.id}: a memorial landmark has no ${what} (docs/realmap_guide.md §7)`);
@@ -160,6 +162,7 @@ function lm(k: Kit, memorial = false): Lm {
     k,
     w: k.w,
     d: k.d,
+    span,
     rand: () => k.rand(),
     range: (lo, hi) => k.range(lo, hi),
     box,

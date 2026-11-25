@@ -13,9 +13,10 @@ import { LANDMARK_HARIMAYA_BRIDGE } from '../defs/landmark/shikoku/harimaya_brid
 import { LANDMARK_RYOMA_STATUE } from '../defs/landmark/shikoku/ryoma_statue.ts';
 import { LANDMARK_IYA_KAZURABASHI } from '../defs/landmark/shikoku/iya_kazurabashi.ts';
 import { LANDMARK_TOKUSHIMA_WASHINOMON } from '../defs/landmark/shikoku/tokushima_washinomon.ts';
+import { LANDMARK_ONARUTO_BRIDGE } from '../defs/landmark/shikoku/onaruto_bridge.ts';
 
 export const LANDMARK_SHIKOKU: readonly BuildingDef[] = [
   LANDMARK_MATSUYAMA_CASTLE, LANDMARK_DOGO_ONSEN_HONKAN, LANDMARK_KOTOHIRAGU, LANDMARK_TAKAMATSU_TSUKIMI_YAGURA,
   LANDMARK_KOCHI_CASTLE, LANDMARK_HARIMAYA_BRIDGE, LANDMARK_RYOMA_STATUE, LANDMARK_IYA_KAZURABASHI,
-  LANDMARK_TOKUSHIMA_WASHINOMON,
+  LANDMARK_TOKUSHIMA_WASHINOMON, LANDMARK_ONARUTO_BRIDGE,
 ];

@@ -6,9 +6,9 @@ import type { LandmarkSpot } from './types.ts';
 
 export const LANDMARKS_TOHOKU: readonly LandmarkSpot[] = [
   // Aomori: Hirosaki Castle's keep in the south-east corner of the main enclosure (the moats south
-  // and east of it); one tower of the bay bridge by Aomori Station, its deck east–west.
+  // and east of it); the bay bridge by Aomori Station from 柳川 to 安方 (L9: its real line).
   { id: 'landmark.hirosaki_castle', lat: 40.6075, lon: 140.4645, rot: 0, drain: 0.25 },
-  { id: 'landmark.aomori_bay_bridge', lat: 40.8302, lon: 140.7385, rot: 0 },
+  { id: 'landmark.aomori_bay_bridge', lat: 40.8302, lon: 140.7385, rot: 0, bridge: { path: [[40.83469, 140.72653], [40.8326, 140.7300], [40.83126, 140.73333], [40.83075, 140.73497], [40.82980, 140.73805], [40.82921, 140.74046], [40.82908, 140.74167], [40.82889, 140.74448]], ends: [0.4, 0.8] } },
   // Iwate: the Golden Hall's cover hall at the top of 月見坂 (the lot's middle is half way up the
   // avenue, which climbs from the south-east).
   { id: 'landmark.chusonji_konjikido', lat: 39.0003, lon: 141.1012, rot: 0 },

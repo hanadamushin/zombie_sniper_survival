@@ -129,6 +129,8 @@ describe.skipIf(cells.length === 0)('the landmarks in the real areas (L1)', () =
       for (const m of landmarksIn(cell)) {
         const p = map.placements.find((q) => q.def === m.spot.id);
         expect(p, `${m.spot.id} (cell ${cell}) was not placed`).toBeDefined();
+        // L9: a bridge is laid along its line, not in a lot (tests/bridges.test.ts checks it).
+        if (m.spot.bridge) continue;
         const cx = (p!.x0 + p!.x1) / 2;
         const cz = (p!.z0 + p!.z1) / 2;
         const anchor = m.spot.poi ? map.pois?.find((q) => q.name === m.spot.poi) ?? m : m;

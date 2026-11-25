@@ -270,6 +270,12 @@ export interface TacticalMap {
   apronN: number;
   /** R0: water surface height per height sample (n × n, NaN: dry) — sea, rivers and lakes of a real area. */
   water?: Float32Array;
+  /**
+   * L9: tiles (tiles × tiles) under a bridge landmark's deck where the ground was raised to carry it
+   * over the water (gen/real/bridges.ts): 1 = the terrain is not drawn there (the deck is, and the
+   * water under it). Absent when the area has no such bridge.
+   */
+  decks?: Uint8Array;
   /** R0: facilities of the real map (07d-3 chooses their buildings). */
   pois?: MapPoi[];
 }

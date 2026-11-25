@@ -8,12 +8,12 @@ import type { LandmarkSpot } from './types.ts';
 export const LANDMARKS_KANTO: readonly LandmarkSpot[] = [
   // --- L3a Tokyo ---
   // Cell 18480 (Marunouchi, Kasumigaseki, Shiba, the harbour): the station before the palace, the
-  // Diet, the tower, one tower of the Rainbow Bridge.
+  // Diet, the tower; the Rainbow Bridge from the Shibaura shore to Daiba (L9: along the area's own road).
   { id: 'landmark.tokyo_station', lat: 35.68124, lon: 139.76712, rot: 3, cutRoads: true },
   { id: 'landmark.kokyo_nijubashi', lat: 35.6802, lon: 139.7504, rot: 1, drain: 0.3, cutRoads: true },
   { id: 'landmark.national_diet', lat: 35.67594, lon: 139.74485, rot: 1, cutRoads: true },
   { id: 'landmark.tokyo_tower', lat: 35.65858, lon: 139.74543, rot: 0, cutRoads: true },
-  { id: 'landmark.rainbow_bridge', lat: 35.6366, lon: 139.7636, rot: 0, drain: 1 },
+  { id: 'landmark.rainbow_bridge', lat: 35.63633, lon: 139.76407, rot: 0, bridge: { path: [[35.63818, 139.75854], [35.63510, 139.76830], [35.63493, 139.77057], [35.63625, 139.77459], [35.63633, 139.77806], [35.63572, 139.78001]], ends: [0.8, 0.9] } },
   // Cell 18313 (Hongō, Kōrakuen, Kudan, Asakusa, Oshiage).
   { id: 'landmark.tokyo_skytree', lat: 35.71006, lon: 139.8107, rot: 0 },
   { id: 'landmark.sensoji', lat: 35.7127, lon: 139.7966, rot: 0 },

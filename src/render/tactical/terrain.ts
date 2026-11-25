@@ -73,6 +73,13 @@ function lodTerrain(map: TacticalMap): LodTerrain {
   geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(map.size / 2, 0, map.size / 2), map.size * 0.75 + 200);
   geometry.boundingSphere.center.y = map.height[Math.floor(n * n / 2)]!;
 
+  // L9: tiles under a bridge's deck over the water are not drawn (the deck and the water are).
+  const decks = map.decks;
+  const tiles = map.tiles;
+  const hole = (ix: number, iz: number, st: number): boolean => {
+    for (let z = iz; z < Math.min(tiles, iz + st); z++) for (let x = ix; x < Math.min(tiles, ix + st); x++) if (decks![z * tiles + x]) return true;
+    return false;
+  };
   const L = RENDER.terrainLod;
   let signature = '';
   const levels = new Int8Array(chunks * chunks);
@@ -104,6 +111,7 @@ function lodTerrain(map: TacticalMap): LodTerrain {
           // Same diagonal as gen/height.ts: (ix, iz + 1) -> (ix + 1, iz).
           for (let iz = iz0; iz < iz0 + CHUNK; iz += st) {
             for (let ix = ix0; ix < ix0 + CHUNK; ix += st) {
+              if (decks && hole(ix, iz, st)) continue; // L9: under a bridge's deck
               const a = iz * n + ix;
               const b = a + n * st;
               idx.push(a, b, a + st, b, b + st, a + st);

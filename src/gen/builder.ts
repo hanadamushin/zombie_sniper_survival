@@ -46,6 +46,10 @@ export interface Builder {
   forestAt?: (x: number, z: number) => number;
   /** 07d-3: the building types placed so far (per-area caps of data/placement.ts). */
   tally?: TypeTally;
+  /** L9: tiles under a bridge's deck where the terrain is not drawn (TacticalMap.decks). */
+  decks?: Uint8Array;
+  /** L9: tiles along a bridge's deck that are walked whatever the ground's slope under them (the deck is level). */
+  deckWalk?: Uint8Array;
 }
 
 export function createBuilder(params: GenParams): Builder {

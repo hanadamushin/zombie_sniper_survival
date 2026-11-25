@@ -46,4 +46,20 @@ export interface LandmarkSpot {
    * ones that come chasing may pass), and no search point or ammunition cache lies there.
    */
   memorial?: boolean;
+  /**
+   * L9: a bridge landmark (its building type made with defs/landmark/bridge.ts): the deck's axis from
+   * bank to bank, as real points (WGS84 [lat, lon]) — the first and the last on dry land where the
+   * area's roads meet it. The bridge is not a lot: gen/real/bridges.ts lays it along this line in
+   * every area the line crosses, cuts the area's roads and railways that ran on an embankment there,
+   * and raises the ground under the deck so that people and the dead walk over (the water stays under
+   * it). `lat` / `lon` stay the bridge's middle (the strategic map's mark); `rot`, `reach`, `level`,
+   * `drain` and `cutRoads` are not used.
+   */
+  bridge?: {
+    path: readonly (readonly [number, number])[];
+    /** The deck's height (game m above the sea) at the first and the last point: the ground there. */
+    ends: readonly [number, number];
+    /** The water's surface under it (game m above the sea; default 0: the sea). A river's is higher. */
+    water?: number;
+  };
 }

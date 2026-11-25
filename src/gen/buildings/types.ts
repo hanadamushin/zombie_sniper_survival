@@ -229,6 +229,31 @@ export interface GenerateParams {
   d: number;
   /** Placement seed (the rng passed to generate() is seeded from it). */
   seed: number;
+  /** L9: a bridge landmark's line in the area (BridgeSpan); absent in the yard and the catalog tests. */
+  span?: BridgeSpan;
+}
+
+/**
+ * L9: where a bridge landmark (defs/landmark/bridge.ts) runs in its area: the deck's axis from bank to
+ * bank and the heights it joins. Plain numbers (the placement keeps it; JSON-able). Coordinates are the
+ * lot's local frame (the placement is never turned: rot 0), heights are above the placement's base.
+ */
+export interface BridgeSpan {
+  /** The deck's axis (x, z), the whole bridge: it may run past the lot where a neighbouring area builds the rest. */
+  path: [number, number][];
+  /** Height of the deck's top at the path's first and last point. */
+  ends: [number, number];
+  /** The water's surface (the feet of the towers and piers stand in it). */
+  water: number;
+  /** The stretch of the path (m from its first point) this lot builds. */
+  from: number;
+  to: number;
+  /**
+   * Stretches of the path (m) over dry land: there the ground keeps its own height (roads and people
+   * pass under the viaduct) and hidden boxes of the bridge carry the deck; over the water the area's
+   * ground is raised under it (gen/real/bridges.ts).
+   */
+  land?: [number, number][];
 }
 
 export interface BuildingDef {
@@ -295,4 +320,6 @@ export interface BuildingPlacement {
   structure?: number;
   /** 07d-2f: the area's key has been found: the building's `key` doors are open. */
   open?: boolean;
+  /** L9: a bridge landmark laid along the area's line (generated from it; the placement is not turned). */
+  span?: BridgeSpan;
 }
