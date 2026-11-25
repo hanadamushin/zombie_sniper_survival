@@ -62,10 +62,11 @@
 | L7 | [L7_landmarks_shikoku.md](L7_landmarks_shikoku.md) | 四国 |
 | L8 | [L8_landmarks_kyushu.md](L8_landmarks_kyushu.md) | 九州・沖縄 |
 | L9 | [L9_landmark_bridges.md](L9_landmark_bridges.md) | 橋の名所を端から端まで（実物どおりの主塔・アーチの数で区域の橋と置き換え） |
+| L10 | [L10_ordinary_bridges.md](L10_ordinary_bridges.md) | 普通の川・海の土手を桁橋に（区域で幅 30m 以上）、瀬戸大橋・しまなみ海道 |
 
 ## 沖縄（O1）
 
-- 発注者の要望で、沖縄に圧倒的な報酬（弾薬 100,000・耳 10,000・最強の生存者）を置き、主要都市の名所に手がかりを残す。L9 の後、09 の前に実行（環境はどれでもよい）
+- 発注者の要望で、沖縄と軍艦島に圧倒的な報酬を置き、名所に手がかりを残す。L10 の後、09 の前に実行（環境はどれでもよい）
 
 | # | ファイル | 内容 |
 |---|---|---|
