@@ -23,6 +23,7 @@ import { ensureFarVantages } from './vantage.ts';
 import type { RealArea } from './real/format.ts';
 import { smoothstep } from './noise.ts';
 import { detailOf } from './buildings/index.ts';
+import { stashHost, stashOfCell } from './stash.ts';
 import { memorialNear } from './real/landmarks.ts';
 import { GROUND, type Brush, type GenParams, type LootSpot, type Solid, type StaticHash, type TacticalMap } from './types.ts';
 
@@ -103,6 +104,13 @@ function placeLootSpots(b: Builder): LootSpot[] {
   for (let i = pool.length - 1; i > 0; i--) {
     const j = randInt(rng, 0, i);
     [pool[i], pool[j]] = [pool[j]!, pool[i]!];
+  }
+  // O1: a hidden stash's host is always searched first (its safe holds the vault and the key).
+  const stash = stashOfCell(b.params.real?.cell);
+  if (stash) {
+    const host = stashHost(stash, b.placements);
+    const at = pool.findIndex((bd) => bd.enter === host);
+    if (at > 0) pool.unshift(...pool.splice(at, 1));
   }
   // L6: nothing to search round a place of remembrance.
   const quiet = memorialNear(b.placements, BALANCE.world.memorialClear);

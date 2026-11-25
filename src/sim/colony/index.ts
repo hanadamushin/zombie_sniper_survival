@@ -113,7 +113,8 @@ export const colonySystem: System = {
       if (reason) {
         ctx.emit({ type: 'commandRejected', command: 'resupply', reason });
         // 07c (playtest: "pressed B at the blue light, nothing happened"): say why on the HUD.
-        logEntry(c, 'economy', reason === 'full' ? 'log.resupplyFull' : reason === 'noAmmo' ? 'log.resupplyEmpty' : 'log.resupplyNowhere', {});
+        const O1: Record<string, string> = { stashLocked: 'log.stashLocked', noMaterials: 'log.stashEmpty', storesFull: 'log.stashStoresFull' };
+        logEntry(c, 'economy', O1[reason] ?? (reason === 'full' ? 'log.resupplyFull' : reason === 'noAmmo' ? 'log.resupplyEmpty' : 'log.resupplyNowhere'), {});
       }
     },
   },

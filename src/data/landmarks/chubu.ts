@@ -8,7 +8,7 @@ export const LANDMARKS_CHUBU: readonly LandmarkSpot[] = [
   // Aichi (Nagoya, cell 19289: the castle, the TV tower, the station's towers; Atsuta in 19456). The
   // castle stands over the remains of its moats (drain); the twin towers west of the station's tracks
   // (a band 100 m wide in the area, never cut), facing west; Atsuta between national roads (cutRoads).
-  { id: 'landmark.nagoya_castle', lat: 35.18531, lon: 136.89956, rot: 0, drain: 0.3 },
+  { id: 'landmark.nagoya_castle', lat: 35.18531, lon: 136.89956, rot: 0, drain: 0.3, clues: ['okinawa'] },
   { id: 'landmark.mirai_tower', lat: 35.17198, lon: 136.90839, rot: 0 },
   { id: 'landmark.nagoya_twin_towers', lat: 35.17083, lon: 136.8825, rot: 3 },
   { id: 'landmark.atsuta_jingu', lat: 35.12796, lon: 136.90858, rot: 0, drain: 0.3, cutRoads: true },

@@ -20,6 +20,7 @@ import { createTacticalRenderer } from './tactical/index.ts';
 import { createScopeRenderer } from './tactical/scope.ts';
 import { createSignalRenderer } from './tactical/signals.ts';
 import { createBeaconRenderer } from './tactical/beacons.ts';
+import { createStashRenderer } from './tactical/stash.ts';
 import { createStructureRenderer } from './tactical/structures.ts';
 import { createSurvivorRenderer } from './tactical/survivors.ts';
 import { createZombieRenderer } from './tactical/zombies.ts';
@@ -190,6 +191,7 @@ export function createRenderer(canvas: HTMLCanvasElement, events: EventBus): Ren
   api.register(createSurvivorRenderer());
   api.register(createSignalRenderer()); // 07b: smoke / light over hideouts
   api.register(createBeaconRenderer()); // 07c: where to get ammunition
+  api.register(createStashRenderer()); // O1: clue boards, Hashima's boats, the stash's heap
   api.register(createEffectsRenderer());
   api.register(createShotRenderer()); // 08: the streak behind the player's own round
   api.register(createScopeRenderer()); // last: drawn over everything

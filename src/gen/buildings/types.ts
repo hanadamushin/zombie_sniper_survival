@@ -204,6 +204,12 @@ export interface BuildingBlueprint {
   /** L1: firing positions on the outside of an exterior-only landmark (local, feet): its deck or roof, reached by an outside ladder. */
   vantages?: [number, number, number][];
   /**
+   * O1: named local points the sim looks up (feet; y from the lot's base): a hidden stash's supply
+   * point (`stash`), where its elites hide (`hide`), the boat landing (`dock`), where its zombies stand
+   * (`zombies`). See sim/world/stash.ts.
+   */
+  marks?: Record<string, [number, number, number][]>;
+  /**
    * L1: what a landmark does to the ground of its lot (local polygons, inside the footprint): a moat
    * or a canal (`water`: the ground dug `depth` m under the lot's ground, the surface `drop` m under
    * it), a lawn, a paved square. gen/real/landmarks.ts applies them when the landmark is placed.

@@ -198,6 +198,8 @@ interface Building {
   place: BuildingPlacement;
   /** L1: an exterior-only landmark: its outside out to RENDER.enterables.landmarkFar, no inside, no far box. */
   landmark: boolean;
+  /** O1: a landmark with an inside (not exterior-only): its inside is drawn close by. */
+  walked: boolean;
   stage: Stage;
   shell: Held[];
   inside: Held[];
@@ -379,7 +381,7 @@ export function buildEnterables(map: TacticalMap): EnterablePart {
     const wx = p.x1 - p.x0;
     const wz = p.z1 - p.z0;
     const seed = p.seed;
-    if (show && buildingDef(p.def).exteriorOnly) show = false; // L1: a landmark has no far box
+    if (show && buildingDef(p.def).category === 'landmark') show = false; // L1: a landmark has no far box (O1: Hashima's neither)
     if (show) {
       m4.compose(pos.set((p.x0 + p.x1) / 2, p.base - SUNK + (p.eaves + SUNK) / 2, (p.z0 + p.z1) / 2), quat.identity(), scl.set(wx, p.eaves + SUNK, wz));
       farBox.setColorAt(at.box, col.setHex(colourOf(p.roof === 'flat' ? 'concrete' : 'siding', undefined, seed, 1)));
@@ -476,7 +478,7 @@ export function buildEnterables(map: TacticalMap): EnterablePart {
       if (b) b.place = p;
       else {
         const [st, it] = guessTris(p);
-        seenKeys.set(key, (b = { place: p, landmark: buildingDef(p.def).exteriorOnly === true, stage: 0, shell: [], inside: [], shellTris: st, insideTris: it }));
+        seenKeys.set(key, (b = { place: p, landmark: buildingDef(p.def).category === 'landmark', walked: buildingDef(p.def).exteriorOnly !== true, stage: 0, shell: [], inside: [], shellTris: st, insideTris: it }));
       }
       list.push(b);
     }
@@ -500,7 +502,8 @@ export function buildEnterables(map: TacticalMap): EnterablePart {
         const dist = Math.hypot(Math.max(p.x0 - cx, 0, cx - p.x1), Math.max(p.z0 - cz, 0, cz - p.z1));
         const inside = dist === 0 && cy > p.base - 1 && cy < p.base + p.height + 1;
         const hy = (s: Stage): number => (b.stage >= s ? E.hysteresis : 0);
-        const stage: Stage = b.landmark ? (dist < E.landmarkFar + hy(1) ? 1 : 0) : inside || dist < E.near + hy(2) ? 2 : dist < E.mid + hy(1) ? 1 : 0;
+        // O1: a landmark one goes into (Hashima) shows its inside close by, like any building.
+        const stage: Stage = b.landmark ? (b.walked && (inside || dist < E.near + hy(2)) ? 2 : dist < E.landmarkFar + hy(1) ? 1 : 0) : inside || dist < E.near + hy(2) ? 2 : dist < E.mid + hy(1) ? 1 : 0;
         if (stage === 0) {
           if (b.stage > 0) setStage(b, 0);
         } else close.push({ b, stage, dist: inside ? -1 : dist - (b.stage > 0 ? E.hysteresis : 0) });

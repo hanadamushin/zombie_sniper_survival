@@ -325,7 +325,7 @@ export const BALANCE = {
       perBuilding: [1, 4] as [number, number],
       buildingsPerStep: 3,
       playerClear: 40,
-      weights: [['landmark.', 0], ['public.hospital', 4], ['transport.', 4], ['base.j', 4], ['military.', 2.5], ['public.', 1.6], ['shop.', 1.2], ['office.', 1]] as [string, number][],
+      weights: [['landmark.hashima', 2], ['landmark.', 0], ['public.hospital', 4], ['transport.', 4], ['base.j', 4], ['military.', 2.5], ['public.', 1.6], ['shop.', 1.2], ['office.', 1]] as [string, number][],
       rooms: { ward: 2.5, train: 2, platform: 1.5, lobby: 1.5, barracks: 1.5, hall: 0.8, stairs: 0, roof: 0.3, toilet: 0.4, closet: 0.2, bath: 0.4 } as Record<string, number>,
     },
     /** LOD: beyond these distances a zombie is updated every 2nd / 4th step (with a longer dt). */
@@ -356,5 +356,58 @@ export const BALANCE = {
   research: {
     defaultAllocation: { F: 20, W: 20, A: 20, S: 20, C: 20 },
   },
+
+  // --- docs/02_systems_spec.md §3.12 the hidden stashes (O1). The owner wants them overwhelming: far and
+  // dangerous, but worth it. 09 keeps them so (prompts/O1). Same place and contents in every game. ---
+  /** The last SDF depot of Okinawa: in the Naha garrison (陸自 那覇駐屯地, cell 35906, base.jgsdf_s). */
+  okinawa: {
+    cell: 35906,
+    /** Where the strategic map shows the rumour (one clue): the middle of the main island (Okinawa City). */
+    rumourCell: 35573,
+    /** The host building: the first placement in the cell whose type starts with one of these. */
+    host: ['base.jgsdf', 'base.', 'military.camp_battalion', 'military.'],
+    /** What lies there (the supply point: B; taken a carry at a time or by expeditions). */
+    stock: { ammo: 100_000 } as Partial<Record<'ammo' | 'wood' | 'metal' | 'cement' | 'parts' | 'medicine' | 'fuel' | 'food', number>>,
+    /** Ears in the commander's safe: once, into the pack (handed in at home). */
+    vault: 10_000,
+    /** The supply point needs the area's key (the depot is locked until the safe is found). */
+    locked: true,
+    /** Elite survivors hiding in the HQ's armory (ja.ts `stash.elite.<id>` is not needed: names here). */
+    elites: [
+      { name: '比嘉 隼人', trait: 'specops' },
+      { name: '仲宗根 葵', trait: 'specops' },
+      { name: '上原 誠', trait: 'specops' },
+      { name: '島袋 礼子', trait: 'scientist' },
+    ] as readonly { name: string; trait: string }[],
+    /** What one member of an expedition carries home from the stash (limited by the room in the stores). */
+    carryPerMember: 1000,
+  },
+  /** Hashima (端島, 軍艦島, cell 23901): builders holed up in the old flats with their materials. */
+  hashima: {
+    cell: 23901,
+    rumourCell: 23901,
+    host: ['landmark.hashima'],
+    stock: { wood: 10_000, metal: 10_000, cement: 10_000, parts: 10_000, fuel: 10_000, medicine: 1_000 } as Partial<Record<'ammo' | 'wood' | 'metal' | 'cement' | 'parts' | 'medicine' | 'fuel' | 'food', number>>,
+    vault: 0,
+    locked: false,
+    elites: [
+      { name: '浦川 剛', trait: 'masterBuilder' },
+      { name: '岩永 千秋', trait: 'masterBuilder' },
+      { name: '松尾 鉄平', trait: 'artisan' },
+    ] as readonly { name: string; trait: string }[],
+    carryPerMember: 150,
+    /** What the player takes per B (each material; the pack has no limit for them, the stash does). */
+    playerCarry: { wood: 100, metal: 100, cement: 100, parts: 100, fuel: 100, medicine: 20 } as Partial<Record<'wood' | 'metal' | 'cement' | 'parts' | 'medicine' | 'fuel', number>>,
+    /** Game minutes the boat takes between the Nagasaki shore and the island. */
+    boatMinutes: 60,
+    /** Zombies on the island when the player lands (a few: it was empty before the fall). */
+    zombies: 8,
+    /** Reach of E at a landing (m). */
+    dockReach: 4,
+  },
+  /** Every elite (both stashes): all four stats at the top, the lowest wage (the fee follows: 1 ear). */
+  elite: { stat: 10, wage: 0.2 },
+  /** Clues at the landmarks (data/landmarks `clues`): the reach of E and how many open the stash's cell on the map. */
+  clues: { reach: 3.5, okinawaExact: 2, hashimaExact: 1 },
 } as const;
 

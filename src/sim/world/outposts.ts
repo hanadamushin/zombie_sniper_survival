@@ -15,6 +15,7 @@ import { killSurvivor } from '../colony/morale.ts';
 import { logEntry, moveEars, moveStock, type ColonyCtx } from '../colony/stock.ts';
 import { isFit, statSum } from '../colony/survivors.ts';
 import { isCleared, removeZombies } from './derive.ts';
+import { stashSite, stashSupply } from './stash.ts';
 import { cellDistance } from './grid.ts';
 
 const O = BUILD.outpost;
@@ -316,13 +317,16 @@ export function outpostPrefab(map: TacticalMap, tier: number): Prefab | null {
 
 export interface SupplyPoint {
   cell: CellId;
-  kind: 'home' | 'outpost' | 'cache';
+  /** O1: `stash` a hidden stash's supply point (data/balance okinawa), once its cell is known. */
+  kind: 'home' | 'outpost' | 'cache' | 'stash';
   /** For a cache: its index in TacticalMap.caches / cacheAmmo(). */
   index?: number;
   /** Rounds there now. */
   ammo: number;
   /** Where in the cell's area to head for (m, the area's own frame): the headquarters, or the compound's site when `map` is known (else the middle). */
   pos: [number, number];
+  /** O1: the floor it stands on (a stash inside a building), when known. */
+  y?: number;
 }
 
 /** Rounds left in each ammunition cache of a cell (07c). */
@@ -394,6 +398,14 @@ export function supplyPoints(state: GameState, mapOfCell?: (cell: CellId) => Tac
         out.push({ cell, kind: 'cache', index: i, ammo: n, pos: pos ? [pos[0], pos[1]] : [512, 512] });
       });
     }
+    // O1: the hidden stash with rounds, where its place is known (like a cache: next to it).
+    for (const sp of stashSupply(state, grid, mapOfCell)) {
+      if (!cacheCells.includes(sp.cell)) continue;
+      const map = mapOfCell?.(sp.cell) ?? null;
+      const site = map ? stashSite(map) : null;
+      if (map && !site) continue;
+      out.push(site ? { cell: sp.cell, kind: 'stash', ammo: sp.ammo, pos: sp.pos, y: site.supply[1] } : { cell: sp.cell, kind: 'stash', ammo: sp.ammo, pos: sp.pos });
+    }
   }
   return out;
 }
@@ -413,7 +425,7 @@ export function nearestSupply(
   const here = state.player.cell;
   // Caches only where their place is known (the areas whose maps are made).
   const points = supplyPoints(state, mapOfCell, grid, cacheCells.filter((c) => mapOfCell?.(c)));
-  if (points.some((p) => p.cell === here && p.kind !== 'cache')) return null;
+  if (points.some((p) => p.cell === here && p.kind !== 'cache' && p.kind !== 'stash')) return null;
   const px = (here % w) * size + state.player.pos[0];
   const pz = Math.floor(here / w) * size + state.player.pos[2];
   let best: { point: SupplyPoint; dist: number; dir: (typeof DIRS)[number]; turn: number } | null = null;

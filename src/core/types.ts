@@ -67,11 +67,25 @@ export interface WorldState {
   /** 07c: rounds already taken from the ammunition caches of a cell (cell id -> per cache index). Sparse; absent = untouched. */
   cacheTaken?: Record<string, number[]>;
   expeditions: Expedition[];
+  /** O1: the hidden stashes (Okinawa, Hashima; BALANCE.okinawa / hashima): what has been taken. Absent = untouched. */
+  stashes?: Partial<Record<StashId, StashState>>;
   /** `fast` (06): between the base and outposts, one cell per game hour. */
   travel: { from: CellId; to: CellId; path: CellId[]; progress: number; fast?: boolean } | null;
   hordeMeter: number;
   /** A horde on its way (06). `dir` is the bearing it comes from (radians, 0 = north, clockwise); `warned` once the colony knows. */
   pendingHorde: { arrivesDay: number; arrivesMinute: number; size: number; dir: number; warned?: boolean } | null;
+}
+
+/** O1: the hidden stashes. */
+export type StashId = 'okinawa' | 'hashima';
+export const STASH_IDS: readonly StashId[] = ['okinawa', 'hashima'];
+export interface StashState {
+  /** Amounts already taken from the supply point (B, expeditions). */
+  taken: Partial<Record<ResourceId, number>>;
+  /** The safe's ears have been taken. */
+  vault?: boolean;
+  /** Indexes (BALANCE.<stash>.elites) of the elites met (they became candidates; never hidden again). */
+  met?: number[];
 }
 
 // Static per-cell data is NOT part of GameState. It is loaded from public/data/grid.json
@@ -240,7 +254,8 @@ export interface TacticalState {
   rangeT?: number[];
   /** People hiding at search points of this area (05). `met` once the player has talked to them. */
   /** 07b: `spot` is -1 for a camp away from any building; `sure` = someone is there even if the cell's H says nobody is left (the first contact of a new game). */
-  hideouts?: { spot: number; pos: [number, number]; met: boolean; sure?: boolean }[];
+  /** O1: `elite` the index of a hidden stash's elite (BALANCE.<stash>.elites), `y` the floor they stand on. */
+  hideouts?: { spot: number; pos: [number, number]; met: boolean; sure?: boolean; elite?: number; y?: number }[];
 }
 export interface Zombie {
   id: EntityId;

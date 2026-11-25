@@ -231,6 +231,12 @@ export const RENDER = {
   },
 
   // --- supply beacons (07c): a faint column over the headquarters and the outposts ---
+  /** O1: the clue boards, Hashima's boats, the heaps at a hidden stash (render/tactical/stash.ts). */
+  stash: {
+    post: 0x4a3f33, paper: 0xe8e0c8, read: 0x8a8270,
+    hull: 0x3d4a52, cabin: 0xd8d4c8, pier: 0x5b4a3a, boatDrop: 1.1,
+    ammo: 0x4f5a34, ammoDark: 0x3a4226, timber: 0x9a7a52, steel: 0x6a7078, sacks: 0xb8b0a0,
+  },
   beacons: { color: 0x4f8fff, opacity: 0.32, radius: 2.4, height: 110, cacheHeight: 28, crate: 0x4b5233, hideNear: 80, hideNearCache: 30 },
 
   // --- signs of people (07b): smoke over a hideout by day, a small fire light at night ---
