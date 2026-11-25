@@ -190,7 +190,13 @@ test('the bridge landmarks: whole from bank to bank, walked end to end, the dead
   await page.getByTestId('start-0').click();
   await page.waitForFunction(() => window.__game?.map != null, null, { timeout: 60_000 });
   await heal(page);
+  // (Each row is printed as it comes: a failure later in a long run keeps the earlier results.)
   const rows: string[] = [];
+  const push = rows.push.bind(rows);
+  rows.push = (...r: string[]): number => {
+    for (const x of r) console.log(x);
+    return push(...r);
+  };
   for (const b of BRIDGES.filter((q) => ONLY.length === 0 || ONLY.some((o) => (q.name ?? q.id).includes(o)))) {
     const name = b.name ?? b.id.replace('landmark.', '');
     const cell = await page.evaluate(([la, lo]) => window.__game!.debug.gotoLatLon(la!, lo!), [b.lat, b.lon] as const);
@@ -336,7 +342,6 @@ test('the bridge landmarks: whole from bank to bank, walked end to end, the dead
       await settle(page);
       const m = await measure(page);
       rows.push(`${name} ${where}: ${m.calls} calls, ${(m.triangles / 1e4).toFixed(1)}万 tris, sim ${m.tick.toFixed(2)} + draw ${m.draw.toFixed(2)} ms`);
-      console.log(rows[rows.length - 1]);
       await page.screenshot({ path: `test-results/bridge-${name}-budget-${where}.png` });
       expect(m.calls, `${name} ${where}`).toBeLessThan(150);
       expect(m.triangles, `${name} ${where}`).toBeLessThan(500_000);
