@@ -5,6 +5,8 @@
 // the town, the facilities and the minor roads keep out of its footprint. Nothing else to touch
 // (docs/realmap_guide.md §7).
 
+import type { StashId } from '../../core/types.ts';
+
 export interface LandmarkSpot {
   /** The landmark's building type (`landmark.<variant>`). Its name is the ja.ts text of the same key. */
   id: string;
@@ -46,6 +48,12 @@ export interface LandmarkSpot {
    * ones that come chasing may pass), and no search point or ammunition cache lies there.
    */
   memorial?: boolean;
+  /**
+   * O1: a readable clue near the lot's entrance (a notice, a torn page, a broken radio's recording) that
+   * points at a hidden stash (BALANCE.okinawa / hashima). E reads it; the strategic map then shows the
+   * rumour (sim/world/stash.ts). The text is ja.ts `clue.<variant>.<stash>`. Never on a place of remembrance.
+   */
+  clues?: readonly StashId[];
   /**
    * L9: a bridge landmark (its building type made with defs/landmark/bridge.ts): the deck's axis from
    * bank to bank, as real points (WGS84 [lat, lon]) — the first and the last on dry land where the

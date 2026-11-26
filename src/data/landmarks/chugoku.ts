@@ -11,7 +11,7 @@ export const LANDMARKS_CHUGOKU: readonly LandmarkSpot[] = [
   // avenues are under its lot (drain, cutRoads; held at its point). The castle over its moats, held at
   // its point (reach 16: free to go 40 m south-east, its lot took the city hospital's site, which shrank).
   { id: 'landmark.genbaku_dome', lat: 34.39548, lon: 132.45357, rot: 3, memorial: true, drain: 0.3, cutRoads: true, reach: 16 },
-  { id: 'landmark.hiroshima_castle', lat: 34.40265, lon: 132.45938, rot: 0, drain: 0.3, cutRoads: true, reach: 16 },
+  { id: 'landmark.hiroshima_castle', lat: 34.40265, lon: 132.45938, rot: 0, drain: 0.3, cutRoads: true, reach: 16, clues: ['okinawa'] },
   // Miyajima: the great torii in the sea (the lot is all sea: drain 1.1 as Akashi's tower, L5).
   { id: 'landmark.itsukushima_otorii', lat: 34.29632, lon: 132.31803, rot: 2, drain: 1.1, reach: 16 },
   // Okayama (cell 20264): the castle by the Asahi River first, then Kōraku-en north of it across the river.

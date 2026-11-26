@@ -2,7 +2,9 @@
 // is the `travel` command.
 
 import { useMemo, useState } from 'preact/hooks';
-import type { CellFacts, CellId, GameState, StaticGrid } from '../../core/types.ts';
+import { STASH_IDS, type CellFacts, type CellId, type GameState, type StaticGrid } from '../../core/types.ts';
+import { BALANCE } from '../../data/balance.ts';
+import { cluesRead, stashKnown, stashLeft, stashTotalLeft } from '../../sim/world/stash.ts';
 import { dangerOf, isCleared } from '../../sim/world/derive.ts';
 import { findRoute, travelFactor, travelMinutesLeft } from '../../sim/world/travel.ts';
 import { forecastInfection } from '../../sim/research/forecast.ts';
@@ -20,6 +22,22 @@ import { allLandmarks } from '../../gen/real/landmarks.ts';
 import { legendGradient, lootColor, popColor, UNKNOWN, zColor } from './palette.ts';
 
 type ViewMode = 'z' | 'loot' | 'pop';
+
+/** O1: what the map says of a hidden stash in (or, for the rumour, near) this cell. */
+function stashInfo(state: GameState, cell: CellId): string | null {
+  for (const id of STASH_IDS) {
+    const k = stashKnown(state, id);
+    const D = BALANCE[id];
+    if (k === 'rumour' && (cell === D.rumourCell || cell === D.cell)) return id === 'okinawa' ? t('world.stashInfo.okinawa.rumour', { n: cluesRead(state, id) }) : t('world.stashInfo.hashima.rumour');
+    if (k !== 'exact' || cell !== D.cell) continue;
+    const left = stashLeft(state, id);
+    const st = state.world.stashes?.[id];
+    const elites = D.elites.length - (st?.met?.length ?? 0);
+    if (id === 'okinawa') return t('world.stashInfo.okinawa.exact', { ammo: Math.floor(left.ammo ?? 0).toLocaleString('ja-JP'), ears: st?.vault ? 0 : D.vault.toLocaleString('ja-JP'), elites });
+    return t('world.stashInfo.hashima.exact', { n: Math.floor(stashTotalLeft(state, id)).toLocaleString('ja-JP'), elites });
+  }
+  return null;
+}
 
 /** L1: the landmarks per cell (names from ja.ts; one label per cell: the first name and how many more). */
 let landmarkCache: { list: { cell: CellId; name: string }[]; byCell: Map<CellId, string[]> } | null = null;
@@ -90,6 +108,14 @@ export function WorldMap({ state, grid, actions }: Props) {
     if (cell === here || cell === state.world.homeCell || outpostAt(state, cell)) continue;
     markers.push({ cell, kind: 'cache', label: t('world.cacheLabel', { n: c.n, rounds: c.rounds }), supply: true });
   }
+  // O1: the hidden stashes — the rumour after one clue, the cell once it is known.
+  for (const id of STASH_IDS) {
+    const k = stashKnown(state, id);
+    if (k === 'none') continue;
+    const D = BALANCE[id];
+    if (k === 'rumour') markers.push({ cell: D.rumourCell, kind: 'rumour', label: t(`world.rumour.${id}`) });
+    else markers.push({ cell: D.cell, kind: 'stash', label: t(`world.stash.${id}`, { n: Math.floor(stashTotalLeft(state, id)) }), supply: id === 'okinawa' && (stashLeft(state, id).ammo ?? 0) > 0 });
+  }
   for (const sp of supplyPoints(state)) {
     const o = sp.kind === 'outpost' ? outpostAt(state, sp.cell) : undefined;
     const name = sp.kind === 'home' ? t('world.home') : t(`world.outpost.tier.${o?.tier ?? 1}` as TextKey);
@@ -153,7 +179,7 @@ export function WorldMap({ state, grid, actions }: Props) {
           <span>{t('world.legend.high')}</span>
         </div>
         <p class="legend marker-legend" data-testid="map-marker-legend">
-          {(['player', 'home', 'outpost', 'target', 'cache'] as const).map((k) => (
+          {(['player', 'home', 'outpost', 'target', 'cache', ...STASH_IDS.some((id) => stashKnown(state, id) !== 'none') ? ['rumour', 'stash'] as const : []] as const).map((k) => (
             <span key={k}><i class="dot" style={{ background: MARKER_COLOR[k] }} />{t(`world.legend.${k}` as TextKey)}</span>
           ))}
           <span><i class="dash" />{t('world.legend.sea')}</span>
@@ -199,6 +225,7 @@ export function WorldMap({ state, grid, actions }: Props) {
           )}
         </dl>
         {info.real && <RealFacts facts={info.real} />}
+        {stashInfo(state, shown) && <p class="help" data-testid="info-stash">{stashInfo(state, shown)}</p>}
         {landmarkMarks().byCell.has(shown) && <p class="help" data-testid="info-landmarks">{t('world.landmarks', { names: landmarkMarks().byCell.get(shown)!.join('・') })}</p>}
         {hub && <p class="help">{t('world.hub', { name: hub.name })}</p>}
         {sea && <p class="help">{t('world.sea', { name: sea.name })}</p>}

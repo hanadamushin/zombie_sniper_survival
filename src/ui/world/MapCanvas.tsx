@@ -7,7 +7,8 @@ import { SEA } from './palette.ts';
 
 export interface MapMarker {
   cell: CellId;
-  kind: 'player' | 'home' | 'target' | 'candidate' | 'source' | 'outpost' | 'cache';
+  /** O1: `rumour` what a clue says of a hidden stash, `stash` its cell once known. */
+  kind: 'player' | 'home' | 'target' | 'candidate' | 'source' | 'outpost' | 'cache' | 'rumour' | 'stash';
   /** 07c: ammunition can be taken here — drawn as a badge beside the ring. */
   supply?: boolean;
   label?: string;
@@ -55,7 +56,7 @@ export function setSupplyGlyph(glyph: string): void {
 }
 /** L1: the landmark diamond. */
 export const LANDMARK_COLOR = '#e8c25a';
-export const MARKER_COLOR: Record<MapMarker['kind'], string> = { player: '#ffffff', home: '#c9a24a', target: '#7fd4ff', candidate: '#ffffff', source: '#ff5a4a', outpost: '#8fd48a', cache: '#8fb4ff' };
+export const MARKER_COLOR: Record<MapMarker['kind'], string> = { player: '#ffffff', home: '#c9a24a', target: '#7fd4ff', candidate: '#ffffff', source: '#ff5a4a', outpost: '#8fd48a', cache: '#8fb4ff', rumour: '#e0a0ff', stash: '#ff9f3a' };
 
 export function MapCanvas(props: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);

@@ -148,7 +148,8 @@ describe('formulas (spec §4)', () => {
     expect(sum / N / 4).toBeGreaterThan(5.2);
     expect(sum / N / 4).toBeLessThan(5.8);
     expect(TRAITS.length).toBeGreaterThanOrEqual(12);
-    for (const t of TRAITS) {
+    // O1: the elites' traits (weight 0: never rolled, only the hidden stashes give them) are overwhelming on purpose.
+    for (const t of TRAITS.filter((x) => x.weight > 0)) {
       for (const v of [t.wageMul ?? 1, t.foodMul ?? 1, ...Object.values(t.job ?? {})]) {
         expect(v).toBeGreaterThanOrEqual(0.7);
         expect(v).toBeLessThanOrEqual(1.3);

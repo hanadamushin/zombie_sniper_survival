@@ -13,6 +13,7 @@ import { getMod } from '../research/modifiers.ts';
 import { dangerOf, removeZombies } from '../world/derive.ts';
 import { cellDistance, cellsWithin } from '../world/grid.ts';
 import { findRoute } from '../world/travel.ts';
+import { expeditionHaul, stashTargets } from '../world/stash.ts';
 import { jobMul, outputPerHour } from './jobs.ts';
 import { killSurvivor } from './morale.ts';
 import { itemsParam, logEntry, moveEars, moveStock, type ColonyCtx } from './stock.ts';
@@ -60,7 +61,10 @@ export function expeditionTargets(state: GameState, grid: StaticGrid): Expeditio
   if (home === null) return [];
   const out: ExpeditionTarget[] = [];
   const timeMul = getMod(state, 'expedition.time', 1);
-  for (const cell of cellsWithin(grid, home, expeditionRadius(state))) {
+  // O1: a hidden stash whose cell is known is a target whatever the distance (the way to carry it home).
+  const cells = cellsWithin(grid, home, expeditionRadius(state));
+  for (const c of stashTargets(state)) if (!cells.includes(c)) cells.push(c);
+  for (const cell of cells) {
     if (cell === home) continue;
     const route = findRoute(grid, home, cell);
     if (!route) continue;
@@ -80,7 +84,7 @@ export function sendExpedition(c: ColonyCtx, memberIds: number[], target: CellId
   if (members.some((s) => !s || !isFit(s))) return 'memberUnavailable';
   const weapon = expeditionWeapon(weaponId);
   if (!weapon || !weaponAvailable(state, weapon)) return 'weapon';
-  if (!grid.cells[target] || target === home || cellDistance(grid, home, target) > expeditionRadius(state)) return 'tooFar';
+  if (!grid.cells[target] || target === home || (cellDistance(grid, home, target) > expeditionRadius(state) && !stashTargets(state).includes(target))) return 'tooFar';
   const route = findRoute(grid, home, target);
   if (!route) return 'noRoute';
   const ammo = expeditionAmmo(state, weapon, ids.length);
@@ -164,6 +168,8 @@ function resolve(c: ColonyCtx, exp: Expedition): void {
     haul.ears = ears;
   }
   if ((cells.intel[exp.target] ?? 0) < 2) cells.intel[exp.target] = 2;
+  // O1: from a hidden stash, as much as the people who came back can carry and the stores can hold.
+  const fromStash = expeditionHaul(c, exp.target, fine.length + hurt.length);
 
   // The story, one line per thing that happened.
   const back = fine.length + hurt.length;
@@ -171,6 +177,7 @@ function resolve(c: ColonyCtx, exp: Expedition): void {
   if (back > 0 && Object.keys(haul).length > 0) logEntry(c, 'expedition', 'log.expHaul', { items: itemsParam(haul) });
   else if (back > 0) logEntry(c, 'expedition', 'log.expEmpty', {});
   if (best && top) logEntry(c, 'expedition', 'log.expFind', { name: best.name, items: itemsParam({ [top]: haul[top] }) });
+  if (Object.keys(fromStash).length > 0) logEntry(c, 'expedition', 'log.expStash', { items: itemsParam(fromStash) });
   if (kills > 0) logEntry(c, 'expedition', 'log.expKills', { n: kills, weapon: weapon.id });
 
   for (const s of [...fine, ...hurt]) {

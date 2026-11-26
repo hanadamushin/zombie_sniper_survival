@@ -9,7 +9,7 @@ import type { LandmarkSpot } from './types.ts';
 export const LANDMARKS_KYUSHU: readonly LandmarkSpot[] = [
   // Fukuoka: the tower on the Momochi seaside (cell 22236); Dazaifu Tenmangū (22405), 11 m from the
   // cell's north edge at the foot of the hills: the lot is levelled into a terrace (40 m south).
-  { id: 'landmark.fukuoka_tower', lat: 33.5933, lon: 130.3515, rot: 0 },
+  { id: 'landmark.fukuoka_tower', lat: 33.5933, lon: 130.3515, rot: 0, clues: ['okinawa', 'hashima'] },
   { id: 'landmark.dazaifu_tenmangu', lat: 33.5215, lon: 130.5348, rot: 0, level: 20 },
   // Saga: Karatsu Castle (22400). Its hill at the river mouth is a small peninsula, gone in the shrunk
   // area (the point is in the sea): the castle stands on the shore 23 m south, half its lot over the
@@ -19,14 +19,16 @@ export const LANDMARKS_KYUSHU: readonly LandmarkSpot[] = [
   { id: 'landmark.yoshinogari', lat: 33.3285, lon: 130.3835, rot: 0 },
   // Nagasaki (23735): Ōura Church and the Glover House 120 m apart on the hillside over the harbour (12 m
   // in the area; the church first). The national road runs along the shore under them: both stand on
-  // terraces cut into the hill (level). Hashima in the sea off the peninsula (23901), drawn small.
-  { id: 'landmark.oura_cathedral', lat: 32.7342, lon: 129.8702, rot: 3, level: 30 },
-  { id: 'landmark.glover_house', lat: 32.7332, lon: 129.8688, rot: 3, level: 30 },
-  { id: 'landmark.hashima', lat: 32.6276, lon: 129.7385, rot: 1, drain: 1.1, reach: 16 },
+  // terraces cut into the hill (level). Hashima in the sea off the peninsula (23901): O1 made it 0.42 of
+  // its size and walkable (216 × 80 m lot): its real point (32.6276) put the lot over the area's south
+  // edge, so the point is 0.58 km north (58 m in the area), still in the open sea west of the peninsula.
+  { id: 'landmark.oura_cathedral', lat: 32.7342, lon: 129.8702, rot: 3, level: 30, clues: ['hashima'] },
+  { id: 'landmark.glover_house', lat: 32.7332, lon: 129.8688, rot: 3, level: 30, clues: ['hashima'] },
+  { id: 'landmark.hashima', lat: 32.6328, lon: 129.7385, rot: 1, drain: 1.1, reach: 16 },
   // Kumamoto (23575): the keep's point (32.8062, 130.7058) has the railway 10 m east and the moat round
   // it; left free the lot went 45 m west onto a high school's site (the cell lost the school). The point
   // is moved 470 m north into the castle grounds: the castle stands 49 m from the keep's shrunk point.
-  { id: 'landmark.kumamoto_castle', lat: 32.8104, lon: 130.7062, rot: 0, drain: 0.3, reach: 16 },
+  { id: 'landmark.kumamoto_castle', lat: 32.8104, lon: 130.7062, rot: 0, drain: 0.3, reach: 16, clues: ['hashima'] },
   // Ōita: Umi Jigoku among the hells of Kannawa, Beppu (22747): national roads all round the point; the
   // lot is cut into the hillside above them (20 m north).
   { id: 'landmark.beppu_umi_jigoku', lat: 33.3165, lon: 131.4678, rot: 0, level: 20 },
@@ -40,7 +42,7 @@ export const LANDMARKS_KYUSHU: readonly LandmarkSpot[] = [
   // moved 0.9 km south-east, beside the station's site (the station stays). Saigō's statue at the foot
   // of Shiroyama.
   { id: 'landmark.kagoshima_amu_run', lat: 31.5752, lon: 130.5529, rot: 1, reach: 16 },
-  { id: 'landmark.saigo_statue', lat: 31.5953, lon: 130.5549, rot: 0 },
+  { id: 'landmark.saigo_statue', lat: 31.5953, lon: 130.5549, rot: 0, clues: ['okinawa'] },
   // Okinawa: Shuri Castle (35906): the main hall is 24 m from the cell's east edge and 55 m from its
   // north edge; the point is between Shureimon and the hall, the lot on the hill between the edge and
   // Ryūtan pond (31 m). The Churaumi Aquarium on the slope over the sea in Ocean Expo Park (34906).

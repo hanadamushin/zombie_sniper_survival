@@ -498,6 +498,26 @@ input[type='checkbox'] { accent-color: var(--khaki); }
 .prompt .bar > span { display: block; height: 100%; width: 100%; transform-origin: left; transform: scaleX(0); background: var(--khaki); }
 .prompt .arrow { display: inline-block; color: var(--khaki); }
 .prompt.second { bottom: 184px; }
+.prompt.third { bottom: 218px; }
+/* O1: the text of a clue at a landmark, while standing at it (after reading). */
+.clue-note {
+  position: absolute;
+  left: 50%;
+  top: 22%;
+  transform: translateX(-50%);
+  width: min(520px, calc(100vw - 32px));
+  padding: var(--s3) var(--s4);
+  background: rgba(232, 224, 200, 0.94);
+  color: #2a2620;
+  border: 1px solid #6b604c;
+  border-radius: var(--r1);
+  font-size: var(--fs-m);
+  line-height: 1.6;
+  white-space: normal;
+  pointer-events: none;
+}
+.clue-note .clue-kind { margin: 0 0 4px; font-size: var(--fs-s); color: #6b604c; letter-spacing: 0.08em; }
+.clue-note p { margin: 0; }
 .prompt.someone .arrow { color: #e6d18a; }
 
 .supply-hint { right: 12px; top: 46px; display: flex; gap: 6px; align-items: center; font-size: var(--fs-s); max-width: min(46%, 360px); }

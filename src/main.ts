@@ -31,6 +31,7 @@ import { arrivalPos, generateSurvivor } from './sim/colony/survivors.ts';
 import { supportAt } from './sim/tactical/collision.ts';
 import { initWorld } from './sim/world/scenario.ts';
 import { beginAt, findStartCandidates } from './sim/world/start.ts';
+import { cluesOf, stashSite, type ClueBoard, type StashSite } from './sim/world/stash.ts';
 import { commandView } from './core/view.ts';
 import { buildNow } from './sim/build/blueprints.ts';
 import { createUi } from './ui/index.tsx';
@@ -392,6 +393,8 @@ interface DebugApi {
   audioStatus(): { state: string; peak: number };
   /** 08: play the settings screen's test sound (a shot and the bolt). */
   audioTest(): void;
+  /** O1: the hidden stash of the current map (supply point, hides, landings) and its clue boards. */
+  stash(): { site: StashSite | null; clues: ClueBoard[] };
 }
 declare global {
   interface Window {
@@ -458,6 +461,10 @@ window.__game = {
       state.player.aim.airPeak = null; // L1: a jump of the debug camera is not a fall
       if (yaw !== undefined) state.player.yaw = yaw;
       if (pitch !== undefined) state.player.pitch = pitch;
+    },
+    stash() {
+      const map = state ? mapOf(state) : null;
+      return { site: map ? stashSite(map) : null, clues: map ? cluesOf(map) : [] };
     },
     setClock(hour) {
       if (!state) return;

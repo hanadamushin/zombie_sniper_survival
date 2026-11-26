@@ -12,7 +12,7 @@ export const LANDMARKS_KINKI: readonly LandmarkSpot[] = [
   // stands over Abenobashi station in reality: its lot keeps 80 m north of the tracks (never cut).
   // Tsūtenkaku is held at its point (reach 16): 46 m east its lot took the ground of Tennōji station's
   // yard, which then shrank from the prefectural to the city size.
-  { id: 'landmark.osaka_castle', lat: 34.68731, lon: 135.52582, rot: 0, drain: 0.4, level: 14, cutRoads: true },
+  { id: 'landmark.osaka_castle', lat: 34.68731, lon: 135.52582, rot: 0, drain: 0.4, level: 14, cutRoads: true, clues: ['okinawa'] },
   { id: 'landmark.abeno_harukas', lat: 34.64593, lon: 135.51337, rot: 0, cutRoads: true },
   { id: 'landmark.tsutenkaku', lat: 34.65249, lon: 135.50632, rot: 0, cutRoads: true, reach: 16 },
   // The Expo park (its ponds), Umeda Sky at the east edge of 20111 between the Yodo River and the
@@ -29,7 +29,7 @@ export const LANDMARKS_KINKI: readonly LandmarkSpot[] = [
   // south-west (the station's south-west corner, the same side of the tracks; PROGRESS.md L5).
   { id: 'landmark.kiyomizudera', lat: 34.99486, lon: 135.78502, rot: 0, level: 30 },
   { id: 'landmark.kinkakuji', lat: 35.03937, lon: 135.72924, rot: 0 },
-  { id: 'landmark.kyoto_tower', lat: 34.98756, lon: 135.75936, rot: 0, cutRoads: true },
+  { id: 'landmark.kyoto_tower', lat: 34.98756, lon: 135.75936, rot: 0, cutRoads: true, clues: ['okinawa'] },
   { id: 'landmark.fushimi_inari', lat: 34.96715, lon: 135.77267, rot: 3, level: 20 },
   { id: 'landmark.toji_pagoda', lat: 34.97083, lon: 135.7339, rot: 0, cutRoads: true },
   { id: 'landmark.kyodai_clock_tower', lat: 35.02621, lon: 135.78077, rot: 3 },
@@ -37,7 +37,7 @@ export const LANDMARKS_KINKI: readonly LandmarkSpot[] = [
   // Naka pier (the harbour under half its lot filled); L9: the Akashi Kaikyō Bridge along the area's
   // motorway from the Maiko shore to Awaji (its line runs on into cell 20441, which builds the Awaji end).
   { id: 'landmark.himeji_castle', lat: 34.83944, lon: 134.69389, rot: 0, level: 14, drain: 0.3 },
-  { id: 'landmark.kobe_port_tower', lat: 34.68263, lon: 135.18661, rot: 0, drain: 0.6 },
+  { id: 'landmark.kobe_port_tower', lat: 34.68263, lon: 135.18661, rot: 0, drain: 0.6, clues: ['okinawa'] },
   { id: 'landmark.akashi_kaikyo_bridge', lat: 34.61752, lon: 135.02190, rot: 0, bridge: { path: [[34.63425, 135.03567], [34.59913, 135.00671]], ends: [6, 12] } },
   // Nara (cell 20282). Kōfuku-ji first (Sarusawa Pond's edge, Noborioji-dōri cut: in the other order
   // Tōdai-ji's lot pushed it 115 m east), then Tōdai-ji on the slope of the park.

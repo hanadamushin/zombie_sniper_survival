@@ -51,6 +51,8 @@ const LEVEL_OF: Record<string, NoticeLevel> = {
   'log.noFood': 'warn', 'log.unpaid': 'warn', 'log.noMaterials': 'warn', 'log.noMedicine': 'warn', 'log.homeless': 'warn',
   'log.candidateLeft': 'warn', 'log.expBitten': 'warn', 'log.expHurt': 'warn', 'log.expLost': 'warn',
   'log.resupplyEmpty': 'warn', 'log.resupplyFull': 'warn', 'log.resupplyNowhere': 'warn',
+  'log.stashLocked': 'warn', 'log.stashEmpty': 'warn', 'log.stashStoresFull': 'warn',
+  'log.stashVault': 'good', 'log.eliteMet': 'good', 'log.expStash': 'good', 'log.clueOkinawa': 'good', 'log.clueHashima': 'good', 'log.stashTaken': 'good',
   'log.hired': 'good', 'log.built': 'good', 'log.techDone': 'good', 'log.eraAdvanced': 'good', 'log.raidRepelled': 'good',
   'log.outpostFounded': 'good', 'log.outpostGrew': 'good', 'log.outpostUpgraded': 'good', 'log.victory': 'good', 'log.cured': 'good',
   'log.playerCured': 'good', 'log.met': 'good', 'log.expBack': 'good', 'log.expHaul': 'good', 'log.expRescue': 'good', 'log.radioVisitor': 'good',

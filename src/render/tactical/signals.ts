@@ -56,7 +56,7 @@ export function createSignalRenderer(): SubRenderer {
       for (let hi = 0; hi < hideouts.length && hi < MAX; hi++) {
         const h = hideouts[hi]!;
         if (h.met) continue;
-        const y0 = heightAt(map, h.pos[0], h.pos[1]) + S.base;
+        const y0 = (h.y ?? heightAt(map, h.pos[0], h.pos[1])) + S.base;
         // Each puff climbs the column, widening and drifting with a slow sway; the cycle wraps.
         for (let k = 0; k < S.puffs; k++) {
           const u = (clock / S.seconds + k / S.puffs + hi * 0.37) % 1;

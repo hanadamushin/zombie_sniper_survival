@@ -14,7 +14,7 @@ export const LANDMARKS_TOHOKU: readonly LandmarkSpot[] = [
   { id: 'landmark.chusonji_konjikido', lat: 39.0003, lon: 141.1012, rot: 0 },
   // Miyagi (Sendai, cell 13647): the statue on the castle site looking east over the city; the
   // mausoleum on 経ヶ峯 across the river, its stairs coming up from the north.
-  { id: 'landmark.date_masamune_statue', lat: 38.2532, lon: 140.8563, rot: 1, level: 12 },
+  { id: 'landmark.date_masamune_statue', lat: 38.2532, lon: 140.8563, rot: 1, level: 12, clues: ['okinawa'] },
   { id: 'landmark.zuihoden', lat: 38.2523, lon: 140.88, rot: 2 },
   // Akita: the samurai street of Kakunodate, running north–south.
   { id: 'landmark.kakunodate_bukeyashiki', lat: 39.597, lon: 140.5625, rot: 0 },

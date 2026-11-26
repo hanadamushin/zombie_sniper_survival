@@ -11,6 +11,7 @@ import { ZOMBIES } from '../data/zombies.ts';
 import { isUnlocked } from '../sim/build/structures.ts';
 import { playerAtHome } from '../sim/colony/morale.ts';
 import { mapOf } from '../sim/tactical/area.ts';
+import { cluesRead } from '../sim/world/stash.ts';
 import { sightBlocked } from '../sim/tactical/collision.ts';
 import { headingDeg } from '../sim/tactical/player.ts';
 import { victoryProgress } from '../sim/research/victory.ts';
@@ -19,7 +20,7 @@ import { t, type TextKey } from './i18n/ja.ts';
 
 export type StepId = 'move' | 'scope' | 'shoot' | 'ears' | 'meet' | 'hire' | 'job' | 'fence' | 'research' | 'map' | 'expedition' | 'outpost';
 /** Hints that are not part of the sequence: shown once, when the situation comes up. */
-export type TipId = 'ammo' | 'tower' | 'hq' | 'moat' | 'cross' | 'night';
+export type TipId = 'ammo' | 'tower' | 'hq' | 'moat' | 'cross' | 'night' | 'okinawa' | 'hashima';
 
 export interface Hint {
   id: StepId | TipId;
@@ -129,6 +130,9 @@ function stepHint(s: GameState, id: StepId): Hint | null {
 function tipFor(s: GameState): Hint | null {
   const tip = (id: TipId, key: TextKey, where: Hint['where'] = 'any'): Hint => ({ id, tip: true, text: t(key), where });
   const ammo = s.player.inv.ammo ?? 0;
+  // O1: the first clue of a hidden stash says how to get there.
+  if (!seen(s, 'okinawa') && cluesRead(s, 'okinawa') > 0) return tip('okinawa', 'tut.tip.okinawa');
+  if (!seen(s, 'hashima') && cluesRead(s, 'hashima') > 0) return tip('hashima', 'tut.tip.hashima');
   if (!seen(s, 'ammo') && ammo + s.player.weapon.mag <= 40 && stepDone(s, 'shoot')) return tip('ammo', 'tut.tip.ammo', 'tactical');
   if (!seen(s, 'hq') && s.build.raid) return tip('hq', 'tut.tip.hq');
   if (!seen(s, 'tower') && (isUnlocked('tower', s) || hasStructure(s, (d) => d === 'tower')) && people(s) > 0) return tip('tower', 'tut.tip.tower');

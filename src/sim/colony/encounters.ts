@@ -14,6 +14,7 @@ import { addCandidates, hideoutGroup } from './survivors.ts';
 import { applyKeys, mapOf } from '../tactical/area.ts';
 import { heightAt, isWalkable } from '../tactical/collision.ts';
 import { GROUND, type TacticalMap } from '../../gen/index.ts';
+import { clueInReach, dockInReach, eliteHideouts, eliteReachable, meetElite, openVault, readClue, stashInReach, takeBoat, takeFromStash } from '../world/stash.ts';
 
 const N = COLONY.encounter;
 
@@ -84,7 +85,8 @@ export function ensureHideouts(state: GameState): void {
 }
 
 export interface Interaction {
-  kind: 'talk' | 'search';
+  /** O1: `read` a clue at a landmark, `boat` across to Hashima and back. */
+  kind: 'talk' | 'search' | 'read' | 'boat';
   /** Search point id; -1 when talking to someone camping in the open. */
   spot: number;
   dist: number;
@@ -107,12 +109,24 @@ export function interactionAt(state: GameState): Interaction | null {
     if (s.y !== undefined && Math.abs(s.y - state.player.pos[1]) > 1.4) continue;
     if (dist <= N.reach && (!best || dist < best.dist)) best = hide >= 0 ? { kind: 'talk', spot: s.id, dist, hide } : { kind: 'search', spot: s.id, dist };
   }
+  let elitesOpen: boolean | null = null;
   hideouts.forEach((h, hide) => {
     if (h.met || h.spot >= 0) return;
+    // O1: the elites hide behind the locked doors until the safe's key has opened them.
+    if (h.elite !== undefined && !(elitesOpen ??= eliteReachable(state))) return;
+    if (h.y !== undefined && Math.abs(h.y - state.player.pos[1]) > 1.6) return;
     const dist = Math.hypot(h.pos[0] - px, h.pos[1] - pz);
-    if (dist <= N.reach && (!best || dist < best.dist)) best = { kind: 'talk', spot: -1, dist, hide };
+    // An elite within reach is talked to before the shelves of their room are searched.
+    if (dist <= N.reach && (!best || dist < best.dist || (h.elite !== undefined && best.kind === 'search'))) best = { kind: 'talk', spot: -1, dist, hide };
   });
-  return best;
+  // O1: a clue board, or the boat at a landing, when nothing nearer.
+  const found = best as Interaction | null;
+  if (!found) {
+    const clue = clueInReach(state);
+    if (clue) return { kind: 'read', spot: -1, dist: Math.hypot(clue.pos[0] - px, clue.pos[2] - pz) };
+    if (dockInReach(state)) return { kind: 'boat', spot: -1, dist: 0 };
+  }
+  return found;
 }
 
 const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'] as const;
@@ -146,9 +160,23 @@ function interact(c: ColonyCtx, grid: StaticGrid | null): void {
   const t = state.tactical;
   const at = interactionAt(state);
   if (!t || !at) return;
+  if (at.kind === 'read') {
+    const clue = clueInReach(state);
+    if (clue) readClue(c, clue);
+    return;
+  }
+  if (at.kind === 'boat') {
+    const why = takeBoat(c);
+    if (why) c.emit({ type: 'commandRejected', command: 'interact', reason: why });
+    return;
+  }
   if (at.kind === 'talk') {
     const hide = t.hideouts![at.hide!]!;
     hide.met = true;
+    if (hide.elite !== undefined) {
+      meetElite(c, hide.elite);
+      return;
+    }
     // The first contact is there whatever the cell's numbers say.
     const H = state.world.cells.H;
     if (hide.sure && (H[t.cell] ?? 0) < 1) H[t.cell] = 1;
@@ -180,6 +208,7 @@ function interact(c: ColonyCtx, grid: StaticGrid | null): void {
     const map = mapOf(state);
     if (map) applyKeys(state, map);
     logEntry(c, 'search', 'log.keyFound', {});
+    openVault(c, spot); // O1: the hidden stash's safe also holds its ears
   }
 }
 
@@ -187,6 +216,7 @@ function interact(c: ColonyCtx, grid: StaticGrid | null): void {
 export function updateEncounters(state: GameState, ctx: SimContext): void {
   if (!state.tactical || state.flags.range) return;
   ensureHideouts(state);
+  eliteHideouts(state);
   if (ctx.input.interact && state.mode === 'tactical' && state.player.aim.deadT <= 0) interact(ctxNow(state, ctx.grid, ctx.emit), ctx.grid);
 }
 
@@ -220,6 +250,8 @@ export function resupply(c: ColonyCtx): string | null {
   if (!playerAtHome(state)) {
     // 06: outposts hold their own ammunition; 07c: elsewhere, a cache within reach.
     if (outpostAt(state, state.player.cell)) return resupplyAtOutpost(c);
+    // O1: a hidden stash's supply point, when the player stands at it.
+    if (stashInReach(state)) return takeFromStash(c);
     return resupplyFromCache(c, mapOf(state));
   }
   const inv = state.player.inv;

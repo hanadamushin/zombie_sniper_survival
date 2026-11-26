@@ -10,6 +10,8 @@ import { TACTICAL } from '../../data/tactical.ts';
 import { ZOMBIES } from '../../data/zombies.ts';
 import type { TacticalMap } from '../../gen/index.ts';
 import { interactionAt, nearestHideout } from '../../sim/colony/encounters.ts';
+import { clueInReach, clueIsRead, dockInReach, stashInReach, stashOpen, stashTotalLeft } from '../../sim/world/stash.ts';
+
 import { playerAtHome } from '../../sim/colony/morale.ts';
 import { hasFlag } from '../../sim/research/modifiers.ts';
 import { areaParams, cachedMap, mapOf } from '../../sim/tactical/area.ts';
@@ -181,6 +183,10 @@ export function TacticalLayer({ state, grid, actions }: { state: GameState; grid
   const windSpeed = Math.hypot(wind[0], wind[1]);
   const act = dead ? null : interactionAt(state);
   const someone = dead || act ? null : nearestHideout(state);
+  // O1: a clue at a landmark (its text while standing at it, once read) and a hidden stash's supply point.
+  const clue = dead ? null : clueInReach(state);
+  const stashAt = dead ? null : stashInReach(state);
+  const stashHere = stashAt ? { id: stashAt.site.id, open: stashOpen(stashAt.map, stashAt.site), left: Math.floor(stashTotalLeft(state, stashAt.site.id)) } : null;
   // First steps (07b): somebody is willing to join but nobody has been hired yet — say where to do that.
   const hireHint = !dead && !range && state.colony.candidates.length > 0 && state.colony.survivors.length === 0;
   // 07c: where to get ammunition, when it cannot be had right here (caches in this and the neighbouring areas).
@@ -192,7 +198,7 @@ export function TacticalLayer({ state, grid, actions }: { state: GameState; grid
   const supplyAt = dead || range || state.world.travel ? null : nearestSupply(state, TACTICAL.size, mapOfCell, grid, nearCells);
   const cache = dead || playerAtHome(state) ? null : cacheInReach(state, grid, mapOf(state));
   const post = playerAtHome(state) || state.world.travel ? undefined : outpostAt(state, p.cell);
-  const supply = playerAtHome(state) ? state.colony.stock.ammo : post ? post.ammo : (cache?.left ?? 0);
+  const supply = playerAtHome(state) ? state.colony.stock.ammo : post ? post.ammo : stashHere ? (stashHere.open ? stashHere.left : 0) : (cache?.left ?? 0);
   const carried = p.inv.ammo ?? 0;
   const canResupply = !dead && supply >= 1 && carried < BALANCE.player.maxAmmo;
   // Rangefinder (W6a) and observation records (S2): what the reticle rests on.
@@ -210,7 +216,18 @@ export function TacticalLayer({ state, grid, actions }: { state: GameState; grid
       {reach && !dead && <EarsPrompt />}
       {act && !reach && (
         <div class="prompt" data-testid="hud-act" data-kind={act.kind}>
-          <span>{t(act.kind === 'talk' ? 'hud.talk' : 'hud.search')}</span>
+          <span>{t(act.kind === 'talk' ? 'hud.talk' : act.kind === 'read' ? (clue && clueIsRead(state, clue) ? 'hud.readAgain' : 'hud.read') : act.kind === 'boat' ? (dockInReach(state) === 'island' ? 'hud.boatBack' : 'hud.boatOver') : 'hud.search')}</span>
+        </div>
+      )}
+      {clue && clueIsRead(state, clue) && (
+        <div class="clue-note panel" data-testid="hud-clue" data-stash={clue.stash}>
+          <p class="clue-kind">{t('clue.title', { place: t(`landmark.${clue.variant}` as TextKey) })}</p>
+          <p>{t(`clue.${clue.variant}.${clue.stash[0]}` as TextKey)}</p>
+        </div>
+      )}
+      {stashHere && (
+        <div class="prompt third" data-testid="hud-stash" data-open={stashHere.open ? 1 : 0}>
+          <span>{stashHere.open ? t(stashHere.id === 'okinawa' ? 'hud.stashAmmo' : 'hud.stashMaterials', { n: stashHere.left }) : t('hud.stashLocked')}</span>
         </div>
       )}
       {someone && (
@@ -228,7 +245,11 @@ export function TacticalLayer({ state, grid, actions }: { state: GameState; grid
       {supplyAt && (
         <div class="hud-box supply-hint" data-testid="hud-supply" data-dir={supplyAt.dir} data-kind={supplyAt.point.kind}>
           <span class="arrow" style={{ transform: `rotate(${(-supplyAt.turn).toFixed(2)}rad)` }}>▲</span>
-          <span>{supplyAt.point.kind === 'cache' ? t('hud.supplyCache', {
+          <span>{supplyAt.point.kind === 'stash' ? t('hud.supplyStash', {
+            dir: t(`compass.${supplyAt.dir}` as TextKey),
+            dist: fmtDist(supplyAt.dist),
+            n: supplyAt.point.ammo,
+          }) : supplyAt.point.kind === 'cache' ? t('hud.supplyCache', {
             dir: t(`compass.${supplyAt.dir}` as TextKey),
             dist: fmtDist(supplyAt.dist),
             n: supplyAt.point.ammo,

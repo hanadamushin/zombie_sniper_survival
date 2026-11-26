@@ -7,7 +7,7 @@ import type { LandmarkSpot } from './types.ts';
 export const LANDMARKS_HOKKAIDO: readonly LandmarkSpot[] = [
   // Sapporo (cell 4800): the TV tower at the east end of Ōdōri Park (R1's point, its clock to the park),
   // the clock tower on 北一条通, the red-brick office facing east down 北三条通; the university to the north.
-  { id: 'landmark.sapporo_tv_tower', lat: 43.0611, lon: 141.3564, rot: 3, poi: 'さっぽろテレビ塔' },
+  { id: 'landmark.sapporo_tv_tower', lat: 43.0611, lon: 141.3564, rot: 3, poi: 'さっぽろテレビ塔', clues: ['okinawa'] },
   { id: 'landmark.sapporo_clock_tower', lat: 43.0626, lon: 141.3536, rot: 0 },
   { id: 'landmark.hokkaido_akarenga', lat: 43.0637, lon: 141.3478, rot: 1 },
   { id: 'landmark.hokudai_clark', lat: 43.0700, lon: 141.3460, rot: 0 },

@@ -21,6 +21,12 @@ export interface TraitDef {
 
 export const TRAITS: readonly TraitDef[] = [
   { id: 'veteran', weight: 1, wageMul: 1.1, job: { defense: 1.25 }, returnBonus: 0.05 },
+  // O1: the elites of the hidden stashes (weight 0: never rolled; BALANCE.okinawa / hashima give them).
+  // Far beyond the ±30 % of the others on purpose (the owner's "overwhelming").
+  { id: 'specops', weight: 0, job: { defense: 2.2, scavenging: 2 }, returnBonus: 0.3 },
+  { id: 'scientist', weight: 0, job: { research: 2.4, medical: 1.8 } },
+  { id: 'masterBuilder', weight: 0, job: { construction: 2.4, crafting: 1.6 } },
+  { id: 'artisan', weight: 0, job: { crafting: 2.4, construction: 1.6 } },
   { id: 'farmer', weight: 1.4, job: { farming: 1.25 } },
   { id: 'greedy', weight: 1, wageMul: 1.3, job: { all: 1.1 } },
   { id: 'loyal', weight: 1, unpaidMorale: -5 },

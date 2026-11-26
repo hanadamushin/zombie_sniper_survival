@@ -43,12 +43,13 @@ describe('the landmark table (L1)', () => {
     expect(a.z).toBeCloseTo(173, 0);
   });
 
-  it('places only exterior-only landmark types, every landmark type is placed somewhere, and each has its name', () => {
+  it('places only exterior-only landmark types (O1: but Hashima), every landmark type is placed somewhere, and each has its name', () => {
     for (const s of LANDMARKS) {
       expect(hasBuildingDef(s.id), s.id).toBe(true);
       const def = buildingDef(s.id);
       expect(def.category).toBe('landmark');
-      expect(def.exteriorOnly, s.id).toBe(true);
+      // O1: Hashima is walked (its blocks of flats are entered: the hidden stash); the others are seen from outside.
+      if (s.id !== 'landmark.hashima') expect(def.exteriorOnly, s.id).toBe(true);
       expect([0, 1, 2, 3]).toContain(s.rot);
     }
     for (const d of landmarkDefs) {
