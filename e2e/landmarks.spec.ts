@@ -306,16 +306,18 @@ const CELLS: { name: string; lat: number; lon: number }[] = [
 // half a minute of loading before it is passed over).
 const CELLS_ONLY = (process.env.LANDMARK_CELLS ?? '').split(',').filter(Boolean);
 
-test('real map: the landmarks at their place, the busiest cell within the budgets, the marks on the strategic map', async ({ page }) => {
-  // L4: 21 of the 25 minutes went with 12 cells of its own and the other regions' 26 cells visited and
-  // passed over; 40 minutes leaves room for L5–L8. L5: 51 places with the 13 of kinki — 60 minutes.
+// 09b: the 76 places take about three minutes each on the software renderer — far more than one test's
+// hour — so they are visited ten to a test (each test starts its own game).
+const VISITS = CELLS.filter((q) => CELLS_ONLY.length === 0 || CELLS_ONLY.includes(q.name));
+const PER_TEST = 10;
+for (let part = 0; part * PER_TEST < Math.max(VISITS.length, 1); part++) test(`real map ${part + 1}: the landmarks at their place, the busiest cell within the budgets, the marks on the strategic map`, async ({ page }) => {
   test.setTimeout(3_600_000);
   const errors = trackErrors(page);
   await page.goto('/?seed=12&scenario=0');
   await startNewGame(page);
   await heal(page);
   const rows: string[] = [];
-  for (const c of CELLS.filter((q) => CELLS_ONLY.length === 0 || CELLS_ONLY.includes(q.name))) {
+  for (const c of VISITS.slice(part * PER_TEST, (part + 1) * PER_TEST)) {
     const cell = await page.evaluate(([la, lo]) => window.__game!.debug.gotoLatLon(la!, lo!), [c.lat, c.lon]);
     await page.waitForFunction((id) => {
       const info = window.__game!.debug.realInfo();

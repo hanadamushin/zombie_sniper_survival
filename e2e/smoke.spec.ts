@@ -467,9 +467,16 @@ test('colony: meet someone, hire, assign jobs, days pass — food and materials 
     let t0 = performance.now();
     for (let i = 0; i < 600; i++) g.sim.tick(s, 1 / 60, { ...g.debug.noInput });
     const tick = (performance.now() - t0) / 600;
-    t0 = performance.now();
-    for (let i = 0; i < 20; i++) g.renderer.draw(s, 0, 1 / 60);
-    const draw = (performance.now() - t0) / 20;
+    // 09b: five at a time with a pause between — twenty submissions back to back queue up in the
+    // software renderer (about 180 MB each here), which ran the browser out of memory.
+    let spent = 0;
+    for (let k = 0; k < 4; k++) {
+      t0 = performance.now();
+      for (let i = 0; i < 5; i++) g.renderer.draw(s, 0, 1 / 60);
+      spent += performance.now() - t0;
+      await new Promise((r) => setTimeout(r, 400));
+    }
+    const draw = spent / 20;
     return { calls: b.calls, triangles: b.triangles, cpu: (b.cpuMs - a.cpuMs) / Math.max(1, b.frames - a.frames), tick, draw, n: s.colony.survivors.filter((x) => x.location.kind === 'home').length };
   });
   await page.evaluate(() => {
