@@ -24,8 +24,11 @@ const N = COLONY.encounter;
  * Their smoke (render/tactical/signals.ts) is what tells the player that somebody is out there.
  */
 /** 07d: people hide on the ground floor only (they are drawn and met at ground level). */
-function onGround(map: TacticalMap, s: { pos: [number, number]; y?: number }): boolean {
-  return s.y === undefined || s.y - heightAt(map, s.pos[0], s.pos[1]) < 1;
+function onGround(map: TacticalMap, s: { id: number; pos: [number, number]; y?: number }): boolean {
+  if (s.y === undefined) return true;
+  // 09b: the ground storey of its building (on a slope the floor is more than a metre over the low side's ground).
+  const bd = map.buildings[map.lootSpots[s.id]?.building ?? -1];
+  return s.y - (bd ? bd.base : heightAt(map, s.pos[0], s.pos[1])) < 1;
 }
 
 function firstContact(state: GameState): void {

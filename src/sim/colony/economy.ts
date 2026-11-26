@@ -1,9 +1,10 @@
 // Economy (spec §5): wages every morning, meals, the food market between the farmers and the
 // community, the neutral village, and ammunition made by the crafters.
 
-import { foodSaving } from '../build/structures.ts';
+import { foodSaving, isBuilt } from '../build/structures.ts';
 import type { GameState, StaticGrid } from '../../core/types.ts';
-import { COLONY } from '../../data/colony.ts';
+import { COLONY, SUPPLY_IDS, type SupplyId } from '../../data/colony.ts';
+import { hasFlag } from '../research/modifiers.ts';
 import { getMod } from '../research/modifiers.ts';
 import { cellsWithin } from '../world/grid.ts';
 import { facilityFactor, mealPerDay } from './jobs.ts';
@@ -92,6 +93,59 @@ export function buyFromVillage(c: ColonyCtx, amount: number, quiet = false): str
   colony.villageBought += qty;
   if (!quiet || colony.villageBought === qty) logEntry(c, 'economy', 'log.villageFood', { n: Math.round(qty * 10) / 10, cost: Math.round(paid * 10) / 10 });
   c.emit({ type: 'foodBought', amount: qty, cost: paid, source: 'village' });
+  return null;
+}
+
+/** 09b: is a market standing? (It widens what the pedlars bring and lowers their prices.) */
+function marketStands(state: GameState): boolean {
+  return state.build.structures.some((s) => s.def === 'market' && isBuilt(s));
+}
+
+/** 09b: ears per unit of a supply: cheaper with a market standing and with the trade technology (C4a). */
+export function supplyPrice(state: GameState, res: SupplyId): number {
+  const S = E.supply;
+  return S.price[res] * (marketStands(state) ? S.marketPrice : 1) * (hasFlag(state, 'trade') ? S.tradePrice : 1);
+}
+
+/** 09b: ears that can be spent on supplies per day: the base, its market, and every manned outpost by its tier. */
+export function supplyDailyEars(state: GameState): number {
+  const S = E.supply;
+  let cap = S.dailyEars + (marketStands(state) ? S.marketEars : 0);
+  for (const o of state.world.outposts) if (o.garrison.length > 0) cap += S.outpostEars * o.tier;
+  return cap;
+}
+
+/** 09b: do the pedlars come yet? (From the settlement era on: data economy.supply.fromEra.) */
+export function supplyOpen(state: GameState): boolean {
+  return state.world.homeCell !== null && (state.research.era >= E.supply.fromEra || state.flags.unlockAll === true);
+}
+
+/** 09b: units of a supply one press of the button buys (about `lotEars` ears' worth, what today's limit, the ears and the stores allow). */
+export function supplyLot(state: GameState, res: SupplyId): number {
+  const colony = state.colony;
+  if (!supplyOpen(state)) return 0;
+  const price = supplyPrice(state, res);
+  const left = supplyDailyEars(state) - colony.supplyBought;
+  const afford = Math.floor(Math.min(E.supply.lotEars, left, colony.stock.ears) / price + 1e-9);
+  return Math.max(0, Math.min(afford, Math.floor(colony.capacity[res] - colony.stock[res])));
+}
+
+/** 09b: buy supplies for ears (spec §5). Returns a rejection reason, or null when something was bought. */
+export function buySupply(c: ColonyCtx, resource: string, amount: number): string | null {
+  const colony = c.state.colony;
+  if (c.state.world.homeCell === null) return 'noHome';
+  if (!supplyOpen(c.state)) return 'noPedlar';
+  if (!(SUPPLY_IDS as readonly string[]).includes(resource)) return 'unknownResource';
+  const res = resource as SupplyId;
+  const price = supplyPrice(c.state, res);
+  const left = supplyDailyEars(c.state) - colony.supplyBought;
+  if (left < price) return 'dailyCap';
+  const qty = Math.floor(Math.min(amount, left / price + 1e-9, colony.capacity[res] - colony.stock[res], colony.stock.ears / price + 1e-9));
+  if (!(qty > 0)) return colony.stock.ears < price ? 'noEars' : 'noRoom';
+  const paid = moveEars(c, 'other', qty * price);
+  moveStock(c, res, qty);
+  colony.supplyBought = Math.round((colony.supplyBought + paid) * 1000) / 1000;
+  logEntry(c, 'economy', 'log.supplyBought', { items: `${res}:${qty}`, cost: Math.round(paid * 10) / 10 });
   return null;
 }
 

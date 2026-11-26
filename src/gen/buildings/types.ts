@@ -331,4 +331,16 @@ export interface BuildingPlacement {
   open?: boolean;
   /** L9: a bridge landmark laid along the area's line (generated from it; the placement is not turned). */
   span?: BridgeSpan;
+  /** 09b: steps up to its outside doors where the ground is lower than the floor (gen/doorsteps.ts). */
+  steps?: DoorSteps[];
+}
+
+/**
+ * 09b: the way up a flight of door steps (the boxes are 'stair' solids of the map): world waypoints
+ * (feet) from the ground at the foot to the landing, put before the outside end of the nav link
+ * `link` (index into the blueprint's links, the key links counted after them).
+ */
+export interface DoorSteps {
+  link: number;
+  pts: [number, number, number][];
 }

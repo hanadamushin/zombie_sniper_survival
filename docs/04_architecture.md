@@ -255,7 +255,7 @@ export interface Expedition { id: EntityId; members: EntityId[]; target: CellId;
 ```
 
 05 が追加（STATE_VERSION 4）:
-- `ColonyState.market{food}`（農家の売り物）、`work{build, research, craft, medical}`（消費待ちの作業ポイント）、`policy{autoBuyFood}`、`villageBought`、`lastMinute`（共同体が処理済みの絶対分）、`memorial[]`、`metCells`
+- `ColonyState.market{food}`（農家の売り物）、`work{build, research, craft, medical}`（消費待ちの作業ポイント）、`policy{autoBuyFood}`、`villageBought`、`supplyBought`（09b: 今日、行商人に払った耳）、`lastMinute`（共同体が処理済みの絶対分）、`memorial[]`、`metCells`
 - `ledger[]` は `LedgerDay`（`flow?: 資源 → [入, 出]` を追加）、`log[]` は `LogEntry`（`text` は `ui/i18n/ja.ts` のキー、`params` が埋め込み値。sim は日本語を組み立てない）
 - `Survivor.meals / missed / infectedUntil`、候補のみ `fromCell / waitsUntilDay`。死者は `survivors` から外して `memorial` へ（`status: 'dead'` の要素は残らない）
 - `TacticalState.hideouts[]`（探索ポイントに潜む人）
@@ -318,7 +318,7 @@ xoshiro128**。状態はプレーンオブジェクトで、関数に渡して�
 例: `{type:'assignJob', survivor, job}`, `{type:'placeBlueprint', def, tx, ty, rot}`, `{type:'cancelStructure', id}`,
 `{type:'hire', candidate}`, `{type:'dismiss', survivor}`, `{type:'startResearch', id}`, `{type:'setAllocation', allocation}`, `{type:'dismissEnding'}`（07）,
 `{type:'sendExpedition', members, target, weapon}`, `{type:'foundOutpost', cell}`, `{type:'travel', to}`,
-`{type:'setSpeed', speed}`, `{type:'buyFood', amount, source}`, `{type:'resupply'}`, `{type:'setMode', mode}`
+`{type:'setSpeed', speed}`, `{type:'buyFood', amount, source}`, `{type:'buySupply', resource, amount}`（09b: 耳で弾薬・金属・部品・医薬品・燃料）, `{type:'resupply'}`, `{type:'setMode', mode}`
 
 プレイヤーのリアルタイム操作（移動・視点・射撃）はコマンドではなく、毎ステップ渡す `InputFrame`:
 ```ts

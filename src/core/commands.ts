@@ -13,6 +13,8 @@ export type Command =
   | { type: 'hire'; candidate: EntityId }
   | { type: 'dismiss'; survivor: EntityId }
   | { type: 'buyFood'; amount: number; source: string }
+  /** 09b: supplies for ears (ammo, metal, parts, medicine, fuel; data/colony.ts economy.supply). */
+  | { type: 'buySupply'; resource: string; amount: number }
   | { type: 'sendExpedition'; members: EntityId[]; target: CellId; weapon: string }
   | { type: 'setPolicy'; autoBuyFood: boolean }
   // --- build / defense (06) ---

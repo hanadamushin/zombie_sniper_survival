@@ -101,10 +101,19 @@ export function buildBuildings(map: TacticalMap): Built {
     });
     if (b.roof === 'gable') roofs.push({ b, color: pickFrom(B.roofs, hash01(b.id, 3, seed)) });
   }
+  // 09b: the door steps of the enterable buildings (thousands of small boxes in a town on a slope) are
+  // drawn per block of B.stepChunk metres, so that the blocks out of view are culled.
+  const steps = new Map<number, typeof boxes>();
   for (const s of map.solids) {
     if (s.kind !== 'stair' && s.kind !== 'prop') continue;
     const solidFlight = s.y1 - s.y0 > 0.6 && s.kind === 'stair';
-    boxes.push({
+    let list = boxes;
+    if (s.kind === 'stair' && map.buildings[s.ref]?.enter !== undefined) {
+      const key = Math.floor((s.z0 + s.z1) / 2 / B.stepChunk) * 64 + Math.floor((s.x0 + s.x1) / 2 / B.stepChunk);
+      list = steps.get(key) ?? [];
+      steps.set(key, list);
+    }
+    list.push({
       x: (s.x0 + s.x1) / 2, y: (s.y0 + s.y1) / 2, z: (s.z0 + s.z1) / 2,
       sx: s.x1 - s.x0, sy: s.y1 - s.y0, sz: s.z1 - s.z0,
       color: solidFlight ? B.concrete : B.steel, style: 0, shade: 1,
@@ -134,23 +143,29 @@ export function buildBuildings(map: TacticalMap): Built {
   const q = new THREE.Quaternion();
   const color = new THREE.Color();
 
-  if (boxes.length > 0) {
-    const geo = new THREE.BoxGeometry(1, 1, 1);
-    const style = new Float32Array(boxes.length);
+  if (boxes.length > 0 || steps.size > 0) {
     const material = boxMaterial();
-    const mesh = new THREE.InstancedMesh(geo, material, boxes.length);
-    boxes.forEach((bx, i) => {
-      m.compose(new THREE.Vector3(bx.x, bx.y, bx.z), q, new THREE.Vector3(bx.sx, bx.sy, bx.sz));
-      mesh.setMatrixAt(i, m);
-      mesh.setColorAt(i, color.setHex(bx.color).multiplyScalar(bx.shade));
-      style[i] = bx.style;
-    });
-    geo.setAttribute('aStyle', new THREE.InstancedBufferAttribute(style, 1));
-    mesh.instanceMatrix.needsUpdate = true;
-    mesh.computeBoundingSphere();
-    mesh.name = 'boxes';
-    group.add(mesh);
-    disposables.push(geo, material, mesh);
+    disposables.push(material);
+    const add = (list: typeof boxes, name: string): void => {
+      if (list.length === 0) return;
+      const geo = new THREE.BoxGeometry(1, 1, 1);
+      const style = new Float32Array(list.length);
+      const mesh = new THREE.InstancedMesh(geo, material, list.length);
+      list.forEach((bx, i) => {
+        m.compose(new THREE.Vector3(bx.x, bx.y, bx.z), q, new THREE.Vector3(bx.sx, bx.sy, bx.sz));
+        mesh.setMatrixAt(i, m);
+        mesh.setColorAt(i, color.setHex(bx.color).multiplyScalar(bx.shade));
+        style[i] = bx.style;
+      });
+      geo.setAttribute('aStyle', new THREE.InstancedBufferAttribute(style, 1));
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.computeBoundingSphere();
+      mesh.name = name;
+      group.add(mesh);
+      disposables.push(geo, mesh);
+    };
+    add(boxes, 'boxes');
+    for (const list of steps.values()) add(list, 'steps');
   }
 
   if (roofs.length > 0) {

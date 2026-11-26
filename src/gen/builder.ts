@@ -273,6 +273,9 @@ export function addBuilding(b: Builder, kind: BuildingKind, x0: number, z0: numb
   return building;
 }
 
+/** 09b: the ring round a footprint whose ground counts for the building's ground level (m; the outside point of a door is up to 0.7 m out). */
+export const DOOR_RING = 1;
+
 /** Stable seed of the n-th enterable building of a map. */
 function placementSeed(mapSeed: number, n: number): number {
   let h = Math.imul((mapSeed ^ 0x27d4eb2f) >>> 0, 0x165667b1) ^ Math.imul(n + 1, 0x9e3779b1);
@@ -285,10 +288,13 @@ function placementSeed(mapSeed: number, n: number): number {
  * front facing `rot`, the world footprint starting at (x0, z0). The map keeps only the placement
  * and an envelope box; the blueprint is made when something comes close.
  */
-export function addEnterable(b: Builder, defId: string, x0: number, z0: number, lw: number, ld: number, rot: Rot): Building {
+export function addEnterable(b: Builder, defId: string, x0: number, z0: number, lw: number, ld: number, rot: Rot, base?: number): Building {
   const def = buildingDef(defId);
   const [ww, wd] = worldSize(rot, lw, ld);
-  const [, hi] = heightRange(b, x0, z0, x0 + ww, z0 + wd);
+  // 09b: `base` when the caller knows the ground level better than the highest ground under the footprint (a navy base: its sea strip is not levelled).
+  // The highest ground under the footprint and a metre round it: the ground just outside a door on the
+  // uphill side is not above the floor (09b: such doors were buried).
+  const hi = base ?? heightRange(b, x0 - DOOR_RING, z0 - DOOR_RING, x0 + ww + DOOR_RING, z0 + wd + DOOR_RING)[1];
   const id = b.buildings.length;
   const enter = b.placements.length;
   const place = makePlacement(defId, placementSeed(b.params.mapSeed, enter), rot, lw, ld, x0, z0, hi, id);

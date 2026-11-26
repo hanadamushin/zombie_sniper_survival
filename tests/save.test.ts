@@ -92,6 +92,15 @@ describe('save', () => {
     expect(loaded.time.minute).toBeGreaterThan(state.time.minute);
   });
 
+  it('brings a version-6 save up to date (09b: ears spent on supplies today)', () => {
+    const old = JSON.parse(serialize(played(60))) as Record<string, Record<string, unknown>> & { version: number };
+    old.version = 6;
+    delete old.colony!.supplyBought;
+    const loaded = deserialize(JSON.stringify(old));
+    expect(loaded.version).toBe(STATE_VERSION);
+    expect(loaded.colony.supplyBought).toBe(0);
+  });
+
   it('refuses a damaged save with a SaveError instead of failing later', () => {
     const good = JSON.parse(serialize(played(60))) as Record<string, unknown>;
     const broken = (change: (s: Record<string, Record<string, unknown>>) => void): string => {

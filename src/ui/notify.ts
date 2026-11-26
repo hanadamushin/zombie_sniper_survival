@@ -60,7 +60,7 @@ const LEVEL_OF: Record<string, NoticeLevel> = {
 /** Seconds a toast stays up, by level. */
 const LIFE: Record<NoticeLevel, number> = { info: 4.5, good: 5, warn: 6.5, danger: 9 };
 /** Commands whose refusal the player should hear about (others come from dragging and would be noise). */
-const SAY_NO = new Set(['hire', 'assignJob', 'startResearch', 'sendExpedition', 'foundOutpost', 'upgradeOutpost', 'travel', 'buyFood', 'dismiss', 'assignGarrison']);
+const SAY_NO = new Set(['hire', 'assignJob', 'startResearch', 'sendExpedition', 'foundOutpost', 'upgradeOutpost', 'travel', 'buyFood', 'buySupply', 'dismiss', 'assignGarrison']);
 
 export interface Notifier {
   /** Toasts still on screen, oldest first. */

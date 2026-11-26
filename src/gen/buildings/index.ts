@@ -47,7 +47,7 @@ export function makePlacement(defId: string, seed: number, rot: Rot, w: number, 
 }
 
 export function placementKey(p: BuildingPlacement): string {
-  return `${p.def}:${p.seed}:${p.rot}:${p.w}:${p.d}:${p.x0}:${p.z0}:${p.base}${p.open ? ':open' : ''}${p.span ? `:${spanKey(p.span)}` : ''}`;
+  return `${p.def}:${p.seed}:${p.rot}:${p.w}:${p.d}:${p.x0}:${p.z0}:${p.base}${p.open ? ':open' : ''}${p.span ? `:${spanKey(p.span)}` : ''}${p.steps ? `:s${p.steps.map((q) => `${q.link}@${q.pts[0]![0].toFixed(2)},${q.pts[0]![2].toFixed(2)}`).join(';')}` : ''}`;
 }
 
 function lru<V>(max: () => number): { get(key: string, make: () => V): V; clear(): void; readonly size: number } {
@@ -171,7 +171,17 @@ function buildDetail(p: BuildingPlacement): BuildingDetail {
   };
   return {
     place: p, bp, solids, cell, gx0, gz0, gnx, gnz, cells, ladders, rooms,
-    links: bp.links.map((l) => ({ ...l, wpts: l.pts.map(pt) })),
+    links: bp.links.map((l, li) => {
+      const wpts = l.pts.map(pt);
+      // 09b: the way in starts at the foot of the door steps.
+      const st = p.steps?.find((q) => q.link === li);
+      if (st) {
+        const extra = st.pts.map((q): [number, number, number] => [q[0], q[1], q[2]]);
+        if (l.a === -1) wpts.unshift(...extra);
+        else wpts.push(...extra.reverse());
+      }
+      return { ...l, wpts };
+    }),
     search: bp.search.map((s) => ({ ...s, wpos: pt(s.pos) })),
   };
 }

@@ -147,7 +147,10 @@ export const REAL_CHECK = {
   overlaps: 0,
   /** Largest area file (bytes, gzip) and generation time (ms, Node). */
   maxBytes: 80_000,
-  maxMs: 900,
+  // 09b: 900 -> 1200. The door steps (gen/doorsteps.ts) make the blueprint of every building on a slope
+  // when the area is generated: 0.2 to 0.4 s more in a hilly town of a thousand buildings (Sendai 230 -> 600 ms
+  // alone, 900 ms next to the other test files).
+  maxMs: 1200,
 } as const;
 
 /**

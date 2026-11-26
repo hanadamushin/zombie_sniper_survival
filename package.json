@@ -20,7 +20,8 @@
     "e2e": "playwright test",
     "data:region": "node tools/real/region.ts",
     "balance": "node tests/balance/run.ts",
-    "balance:play": "node tests/balance/playthrough.ts"
+    "balance:play": "node tests/balance/playthrough.ts",
+    "doors": "node tools/real/doors.ts"
   },
   "dependencies": {
     "preact": "^11.2.0",

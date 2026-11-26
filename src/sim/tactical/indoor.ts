@@ -207,7 +207,17 @@ function around(det: BuildingDetail, p: Readonly<Vec3>, q: [number, number, numb
   const z1 = pl.z1 + m;
   // Does the straight line cross the footprint (shrunk a little, so that a door point on its edge does not count)?
   const s = 0.05;
-  if (!segmentCrossesRect(p[0], p[2], q[0], q[2], pl.x0 + s, pl.z0 + s, pl.x1 - s, pl.z1 - s)) return q;
+  // 09b: a way in that starts inside the footprint (a porch, a yard, the foot of door steps along the
+  // wall): from the side it opens to, straight at it; from elsewhere, round to that side first.
+  const target = q;
+  if (q[0] > pl.x0 + s && q[0] < pl.x1 - s && q[2] > pl.z0 + s && q[2] < pl.z1 - s) {
+    const d = [q[2] - pl.z0, pl.x1 - q[0], pl.z1 - q[2], q[0] - pl.x0]; // to the N, E, S, W edges
+    const e = d.indexOf(Math.min(...d));
+    const beyond = e === 0 ? p[2] <= pl.z0 + s : e === 1 ? p[0] >= pl.x1 - s : e === 2 ? p[2] >= pl.z1 - s : p[0] <= pl.x0 + s;
+    if (beyond) return target;
+    q = e === 0 ? [q[0], q[1], z0] : e === 1 ? [x1, q[1], q[2]] : e === 2 ? [q[0], q[1], z1] : [x0, q[1], q[2]];
+    if (!segmentCrossesRect(p[0], p[2], q[0], q[2], pl.x0 + s, pl.z0 + s, pl.x1 - s, pl.z1 - s)) return [q[0], p[1], q[2]];
+  } else if (!segmentCrossesRect(p[0], p[2], q[0], q[2], pl.x0 + s, pl.z0 + s, pl.x1 - s, pl.z1 - s)) return q;
   // Corners clockwise from the north-west, and the position of a point along that perimeter.
   const corners: [number, number][] = [[x0, z0], [x1, z0], [x1, z1], [x0, z1]];
   const per = 2 * (x1 - x0 + z1 - z0);

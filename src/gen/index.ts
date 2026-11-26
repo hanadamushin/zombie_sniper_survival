@@ -13,6 +13,7 @@ import { randInt, randRange } from '../core/rng.ts';
 import { TACTICAL } from '../data/tactical.ts';
 import { addTower, createBuilder, hAt, homeDist, N, rectFree, rngOf, SIZE, TILE, TILES, tileIndex, type Builder } from './builder.ts';
 import { scatterCover } from './cover.ts';
+import { addDoorSteps } from './doorsteps.ts';
 import { cacheAmmo } from './caches.ts';
 import { BALANCE } from '../data/balance.ts';
 import { heightStats, scatterFlora } from './flora.ts';
@@ -261,7 +262,8 @@ function buildWalkGrid(b: Builder): Uint8Array {
     // 07d-3: a big enterable site (a station, a school, a garrison, an airport) is mostly open ground:
     // its buildings stop whatever walks there by their own walls, not the whole footprint.
     if (s.kind === 'building' && !(s.enter !== undefined && Math.max(s.x1 - s.x0, s.z1 - s.z0) > T.openSite)) block(s.x0, s.z0, s.x1, s.z1, 0.6);
-    else if (s.kind === 'stair') block(s.x0, s.z0, s.x1, s.z1, 0.2);
+    // 09b: door steps are walked over (the buildings they belong to are enterable).
+    else if (s.kind === 'stair' && b.buildings[s.ref]?.enter === undefined) block(s.x0, s.z0, s.x1, s.z1, 0.2);
     else if (s.kind === 'rock' && s.x1 - s.x0 > 2.4) block(s.x0, s.z0, s.x1, s.z1, 0.3);
   }
   // L9: along a bridge's deck (where the shore meets the raised ground the slope under it is steep).
@@ -384,6 +386,7 @@ export function generateTacticalMap(params: GenParams): TacticalMap {
       if (slope > 0.85 && (b.ground[t] === GROUND.grass || b.ground[t] === GROUND.forest)) b.ground[t] = GROUND.rock;
     }
   }
+  addDoorSteps(b);
   return finishMap(b, terrain);
 }
 
@@ -413,6 +416,7 @@ function generateRealMap(params: GenParams, real: RealArea): TacticalMap {
       if (slope > 0.85 && (b.ground[t] === GROUND.grass || b.ground[t] === GROUND.forest)) b.ground[t] = GROUND.rock;
     }
   }
+  addDoorSteps(b);
   const map = finishMap(b, terrain);
   map.water = water;
   map.pois = pois;

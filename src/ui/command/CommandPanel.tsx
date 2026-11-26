@@ -6,8 +6,8 @@ import { useMemo, useState } from 'preact/hooks';
 import { RESOURCE_IDS, type CellId, type GameState, type JobId, type StaticGrid, type Survivor } from '../../core/types.ts';
 import { toAbsMinutes } from '../../core/time.ts';
 import { BALANCE } from '../../data/balance.ts';
-import { COLONY, EXPEDITION_WEAPONS, expeditionWeapon } from '../../data/colony.ts';
-import { craftingByHand, foodDays, foodNeedPerDay, villageNear, villagePrice, wageDue } from '../../sim/colony/economy.ts';
+import { COLONY, EXPEDITION_WEAPONS, expeditionWeapon, SUPPLY_IDS } from '../../data/colony.ts';
+import { craftingByHand, foodDays, foodNeedPerDay, supplyDailyEars, supplyLot, supplyOpen, supplyPrice, villageNear, villagePrice, wageDue } from '../../sim/colony/economy.ts';
 import { expeditionAmmo, expeditionBonus, expeditionDanger, expeditionRadius, expeditionTargets, returnChance, weaponAvailable } from '../../sim/colony/expeditions.ts';
 import { farmPlots, housingBeds, jobMul, outputPerHour, seasonOf } from '../../sim/colony/jobs.ts';
 import { JOB_TECH } from '../../sim/colony/index.ts';
@@ -245,6 +245,19 @@ function Economy({ state, actions, grid }: Props) {
         ) : (
           <span class="note">{t('cmd.noVillage')}</span>
         )}
+      </div>
+      <div class="actions" data-testid="supply">
+        <span class="label">{t('cmd.supply')}</span>
+        {!supplyOpen(state) && <span class="note">{t('cmd.supplyLater')}</span>}
+        {supplyOpen(state) && SUPPLY_IDS.map((res) => {
+          const lot = supplyLot(state, res);
+          return (
+            <button key={res} data-testid={`buy-${res}`} disabled={lot <= 0} onClick={() => actions.dispatch({ type: 'buySupply', resource: res, amount: lot })}>
+              {t('cmd.supplyBuy', { res: t(`res.${res}` as TextKey), n: Math.max(lot, 1), cost: num(Math.max(lot, 1) * supplyPrice(state, res)) })}
+            </button>
+          );
+        })}
+        {supplyOpen(state) && <span class="note">{t('cmd.supplyLeft', { n: num(Math.max(0, supplyDailyEars(state) - colony.supplyBought)), cap: num(supplyDailyEars(state)) })}</span>}
       </div>
       <div class="actions">
         <button data-testid="resupply" disabled={!atHome || colony.stock.ammo < 1 || carriedAmmo >= BALANCE.player.maxAmmo} onClick={() => actions.dispatch({ type: 'resupply' })}>

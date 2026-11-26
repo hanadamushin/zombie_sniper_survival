@@ -264,7 +264,8 @@ export const PUBLIC_FACTORY_CHEM = def('factory_chem', { size: { w: [52, 60], d:
   k.box(-1, yr[2] - 2.45, k.eaves + 7.6, yr[3] - 2.45, yr[2] - 0.55, k.eaves + 8.2, yr[3] - 0.55, 'sign', { layer: 'shell', tint: 0.6, solid: false });
   // Pipe bridge from the yard to the warehouse (drawn, high).
   k.box(-1, wx0 + 3, k.levelY(1) + 1.5, dz1 - 0.5, wx0 + 3.4, k.levelY(1) + 1.9, wz0 + 0.5, 'steel', { layer: 'shell', solid: false });
-  mesh(k, 0.3, d - 0.3, wx0 - 1, d - 0.3, [[12, 20]], 1.8);
+  // 09b: the gap reaches past the control building's door (x 8.7): the fence stood 0.6 m in front of it, too close for anyone to pass.
+  mesh(k, 0.3, d - 0.3, wx0 - 1, d - 0.3, [[7.4, 20]], 1.8);
 });
 
 export const FACTORIES: readonly BuildingDef[] = [PUBLIC_MACHI_KOBA, PUBLIC_FACTORY_FOOD, PUBLIC_FACTORY_METAL, PUBLIC_FACTORY_CHEM];

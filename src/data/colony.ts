@@ -5,6 +5,10 @@ import type { JobId, Land, ResourceId } from '../core/types.ts';
 
 export type LootTable = Partial<Record<ResourceId, number>>;
 
+/** 09b: what ears buy (economy.supply). */
+export type SupplyId = 'ammo' | 'metal' | 'parts' | 'medicine' | 'fuel';
+export const SUPPLY_IDS: readonly SupplyId[] = ['ammo', 'metal', 'parts', 'medicine', 'fuel'];
+
 export const COLONY = {
   /** 07d: how wide survivors are when the base's buildings pick the doors they use (m, radius). */
   walkRadius: 0.3,
@@ -100,6 +104,25 @@ export const COLONY = {
     villageMinPeople: 50,
     /** With the auto-buy policy on, the village is used when the stock falls below this many days. */
     autoBuyBelowDays: 1,
+    /**
+     * 09b: supplies for ears (pedlars who come to the base and to the outposts). From day 30 on a settled
+     * colony earned more ears than wages and food could use (3,800 to 4,400 left over on day 150); this is
+     * where they go. `price`: ears per unit. `dailyEars`: ears that can be spent per day at the base,
+     * `marketEars` more with a market standing, `outpostEars` more per tier of every manned outpost.
+     * `marketPrice`: prices with a market standing; `tradePrice`: with the trade technology (C4a).
+     * `lotEars`: about how many ears one press of the button spends.
+     */
+    supply: {
+      price: { ammo: 0.5, metal: 1, parts: 2.5, medicine: 3, fuel: 1.5 } as Record<SupplyId, number>,
+      dailyEars: 12,
+      marketEars: 12,
+      outpostEars: 4,
+      marketPrice: 0.8,
+      tradePrice: 0.85,
+      lotEars: 6,
+      /** Pedlars come from this era on (1: the settlement era, about day 17): before it every ear is needed for people. */
+      fromEra: 1,
+    },
     ledgerDays: 30,
     logMax: 200,
   },

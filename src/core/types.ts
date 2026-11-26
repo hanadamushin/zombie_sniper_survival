@@ -13,7 +13,7 @@ import { seedRng, type RngState } from './rng.ts';
  * core/save.ts `validate` rejects a save whose shape cannot be played. From here on: raise this and
  * add a migration whenever a field is added that old saves do not have.
  */
-export const STATE_VERSION = 6;
+export const STATE_VERSION = 7;
 
 export type CellId = number; // gy * gridW + gx
 export type EntityId = number; // allocated from state.nextId (see allocId)
@@ -364,6 +364,8 @@ export interface ColonyState {
   policy: { autoBuyFood: boolean };
   /** Food bought from the village today. */
   villageBought: number;
+  /** 09b: ears spent on supplies today (economy.supply). */
+  supplyBought: number;
   /** Absolute game minute the colony has been simulated up to (-1: not started). */
   lastMinute: number;
   /** The dead. */
@@ -574,6 +576,7 @@ export function initialColony(): ColonyState {
     work: { build: 0, research: 0, craft: 0, medical: 0 },
     policy: { autoBuyFood: false },
     villageBought: 0,
+    supplyBought: 0,
     lastMinute: -1,
     memorial: [],
     metCells: {},

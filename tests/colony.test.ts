@@ -10,7 +10,7 @@ import { BALANCE } from '../src/data/balance.ts';
 import { COLONY, EXPEDITION_WEAPONS, expeditionWeapon } from '../src/data/colony.ts';
 import { TRAITS } from '../src/data/traits.ts';
 import { catchUp, colonySystem } from '../src/sim/colony/index.ts';
-import { foodPriceFor } from '../src/sim/colony/economy.ts';
+import { foodPriceFor, supplyDailyEars, supplyLot, supplyPrice } from '../src/sim/colony/economy.ts';
 import { interactionAt } from '../src/sim/colony/encounters.ts';
 import { expeditionsMinute, expeditionTargets, returnChance, sendExpedition } from '../src/sim/colony/expeditions.ts';
 import { activityAt, defenders, distributeBuildWork, mealPerDay, outputPerHour, seasonFactor, takeResearchPoints, workHours } from '../src/sim/colony/jobs.ts';
@@ -673,6 +673,81 @@ describe('the player and the colony', () => {
     expect(state.flags.defeat).toBe(true);
     expect(r.events.filter((e) => e.type === 'defeat').length).toBe(1);
     expect(state.player.aim.deadT).toBeGreaterThan(0);
+  });
+});
+
+describe('09b supplies for ears', () => {
+  const S = COLONY.economy.supply;
+  it('buys rounds and materials at the listed prices, up to the day’s limit, the ears and the stores', () => {
+    const r = rig();
+    const { state } = r;
+    const colony = state.colony;
+    colony.stock.ears = 1000;
+    colony.stock.ammo = 0;
+    colony.stock.metal = 0;
+    expect(supplyPrice(state, 'ammo')).toBe(S.price.ammo);
+    expect(supplyDailyEars(state)).toBe(S.dailyEars);
+    r.sim.dispatch({ type: 'buySupply', resource: 'ammo', amount: 10 });
+    r.sim.applyCommands(state);
+    expect(colony.stock.ammo).toBe(10);
+    expect(colony.stock.ears).toBeCloseTo(1000 - 10 * S.price.ammo, 6);
+    expect(colony.supplyBought).toBeCloseTo(10 * S.price.ammo, 6);
+    // The ledger books it under "other"; the log says what came.
+    expect(colony.ledger[colony.ledger.length - 1]!.other).toBeCloseTo(10 * S.price.ammo, 6);
+    expect(colony.log.some((l) => l.text === 'log.supplyBought')).toBe(true);
+    // One press of the button is about lotEars' worth.
+    expect(supplyLot(state, 'metal')).toBe(Math.floor(S.lotEars / S.price.metal));
+    // The rest of the day's limit, and not a unit more.
+    r.sim.dispatch({ type: 'buySupply', resource: 'metal', amount: 1e6 });
+    r.sim.applyCommands(state);
+    expect(colony.stock.metal).toBe(Math.floor((S.dailyEars - 10 * S.price.ammo) / S.price.metal));
+    r.events.length = 0;
+    r.sim.dispatch({ type: 'buySupply', resource: 'parts', amount: 1 });
+    r.sim.applyCommands(state);
+    expect(r.events.some((e) => e.type === 'commandRejected' && e.reason === 'dailyCap')).toBe(true);
+    expect(supplyLot(state, 'parts')).toBe(0);
+    // A new day, a new limit.
+    r.run(DAY);
+    expect(colony.supplyBought).toBe(0);
+    // Before the settlement era no pedlar comes.
+    delete state.flags.unlockAll;
+    colony.stock.ears = 1000;
+    expect(supplyLot(state, 'ammo')).toBe(0);
+    r.events.length = 0;
+    r.sim.dispatch({ type: 'buySupply', resource: 'ammo', amount: 1 });
+    r.sim.applyCommands(state);
+    expect(r.events.some((e) => e.type === 'commandRejected' && e.reason === 'noPedlar')).toBe(true);
+    state.research.era = 1;
+    expect(supplyLot(state, 'ammo')).toBeGreaterThan(0);
+    // Not what is not for sale, not without ears, not past the stores.
+    for (const [res, ears, reason] of [['wood', 1000, 'unknownResource'], ['ammo', 0, 'noEars']] as const) {
+      colony.stock.ears = ears;
+      r.events.length = 0;
+      r.sim.dispatch({ type: 'buySupply', resource: res, amount: 1 });
+      r.sim.applyCommands(state);
+      expect(r.events.some((e) => e.type === 'commandRejected' && e.reason === reason), res).toBe(true);
+    }
+    colony.stock.ears = 1000;
+    colony.stock.fuel = colony.capacity.fuel;
+    r.events.length = 0;
+    r.sim.dispatch({ type: 'buySupply', resource: 'fuel', amount: 1 });
+    r.sim.applyCommands(state);
+    expect(r.events.some((e) => e.type === 'commandRejected' && e.reason === 'noRoom')).toBe(true);
+    expect(colony.stock.fuel).toBe(colony.capacity.fuel);
+  });
+
+  it('a market, the trade technology and manned outposts widen the limit and lower the prices', () => {
+    const r = rig();
+    const { state } = r;
+    const base = supplyDailyEars(state);
+    state.world.outposts.push({ id: 9001, cell: state.world.homeCell! + 1, tier: 2, ammo: 0, garrison: [1], defense: 30 });
+    state.world.outposts.push({ id: 9002, cell: state.world.homeCell! + 2, tier: 3, ammo: 0, garrison: [], defense: 70 });
+    expect(supplyDailyEars(state)).toBe(base + 2 * S.outpostEars);
+    state.build.structures.push({ ...state.build.structures[0]!, id: 9003, def: 'market', progress: 1 });
+    expect(supplyDailyEars(state)).toBe(base + 2 * S.outpostEars + S.marketEars);
+    expect(supplyPrice(state, 'metal')).toBeCloseTo(S.price.metal * S.marketPrice, 9);
+    state.research.done.push('C4a');
+    expect(supplyPrice(state, 'metal')).toBeCloseTo(S.price.metal * S.marketPrice * S.tradePrice, 9);
   });
 });
 

@@ -14,7 +14,7 @@ import type { GameEvent } from '../../src/core/events.ts';
 import { emptyInputFrame, type CellId, type GameState, type JobId, type ResourceId, type StaticGrid, type Survivor, type TechCategory } from '../../src/core/types.ts';
 import { BALANCE } from '../../src/data/balance.ts';
 import { BUILD, BUILDINGS, footprint } from '../../src/data/buildings.ts';
-import { COLONY, EXPEDITION_WEAPONS, LOOT_TABLE } from '../../src/data/colony.ts';
+import { COLONY, EXPEDITION_WEAPONS, LOOT_TABLE, SUPPLY_IDS, type SupplyId } from '../../src/data/colony.ts';
 import { TECHS } from '../../src/data/techs.ts';
 import { ZOMBIES } from '../../src/data/zombies.ts';
 import { cacheAmmo } from '../../src/gen/caches.ts';
@@ -22,7 +22,7 @@ import { mapSeedFor } from '../../src/gen/index.ts';
 import { placementError } from '../../src/sim/build/blueprints.ts';
 import { awayPlayer, hordeThreshold } from '../../src/sim/build/raids.ts';
 import { bedsTotal, isBuilt, isRuin, isUnlocked, plotInfo } from '../../src/sim/build/structures.ts';
-import { foodNeedPerDay } from '../../src/sim/colony/economy.ts';
+import { foodNeedPerDay, supplyDailyEars, supplyLot, supplyOpen, supplyPrice } from '../../src/sim/colony/economy.ts';
 import { expeditionAmmo, expeditionTargets, weaponAvailable } from '../../src/sim/colony/expeditions.ts';
 import { aptitude } from '../../src/sim/colony/jobs.ts';
 import { lootYield } from '../../src/sim/colony/loot.ts';
@@ -324,6 +324,50 @@ function earsWanted(g: Game): boolean {
   if (colony.survivors.length < policy.pop(dayOf(state))) want += 12;
   if (state.world.outposts.length < policy.outposts(dayOf(state))) want += BUILD.outpost.tiers[0].ears;
   return have < want;
+}
+
+/**
+ * 09b: once the colony is as large as it means to be, ears beyond what it keeps for itself (the reserve
+ * of earsWanted, half as much again) go to the pedlars: rounds first while the stores are low, then
+ * whatever store is emptiest.
+ */
+function buySupplies(g: Game): void {
+  const { state, policy } = g;
+  const colony = state.colony;
+  // BALANCE_NO_SUPPLY=1: the games as they were before 09b (for the before / after tables).
+  if (policy.idle || !supplyOpen(state) || process.env.BALANCE_NO_SUPPLY) return;
+  if (dayOf(state) < Number(process.env.BALANCE_SUPPLY_FROM ?? 0)) return;
+  let reserve = 20 + wagesPerDay(state) * 7;
+  // People first: while the colony is smaller than it means to be, the ears wait for whoever turns up
+  // (the first run of 09b bought rounds on day 5 to 15, hired three people fewer before the first
+  // horde and lost the headquarters to it in 4 of 6 hard games instead of 1).
+  if (colony.survivors.length < Math.min(policy.pop(dayOf(state)), populationCap(state))) return;
+  if (state.world.outposts.length < policy.outposts(dayOf(state))) reserve += BUILD.outpost.tiers[0].ears;
+  reserve *= 1.5;
+  for (let guard = 0; guard < 200; guard++) {
+    const spare = colony.stock.ears - reserve;
+    const left = supplyDailyEars(state) - colony.supplyBought;
+    if (spare < 1 || left < 0.5) return;
+    // The emptiest store first (rounds count double while under 300).
+    let best: SupplyId | null = null;
+    let bestFill = 0.9;
+    for (const res of SUPPLY_IDS) {
+      const price = supplyPrice(state, res);
+      if (price > spare || price > left || colony.capacity[res] - colony.stock[res] < 1) continue;
+      let fill = colony.stock[res] / colony.capacity[res];
+      if (res === 'ammo' && colony.stock.ammo < 300) fill /= 2;
+      if (fill < bestFill) {
+        bestFill = fill;
+        best = res;
+      }
+    }
+    if (!best) return;
+    const lot = Math.max(1, Math.min(supplyLot(state, best), Math.floor(spare / supplyPrice(state, best))));
+    const before = colony.supplyBought;
+    g.sim.dispatch({ type: 'buySupply', resource: best, amount: lot });
+    g.sim.applyCommands(state);
+    if (colony.supplyBought === before) return;
+  }
 }
 
 /** The player's part in a raid fought in numbers: one aimed round every few seconds from the roof of the headquarters. */
@@ -873,6 +917,7 @@ function botHour(g: Game): void {
   if (hour === 6 || hour === 12 || hour === 18) build(g);
   research(g);
   if (hour === 6) sendParty(g);
+  if (hour === 7) buySupplies(g);
   trips(g);
   if (hour === 6 && !state.colony.policy.autoBuyFood && !policy.idle) {
     g.sim.dispatch({ type: 'setPolicy', autoBuyFood: true });

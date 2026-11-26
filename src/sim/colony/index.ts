@@ -16,7 +16,7 @@ import { BALANCE } from '../../data/balance.ts';
 import { COLONY } from '../../data/colony.ts';
 import type { SimContext, System } from '../system.ts';
 import { updateSurvivorMotion } from './ai.ts';
-import { buyFromVillage, craftMinute, marketHour, payWages, serveMeal } from './economy.ts';
+import { buyFromVillage, buySupply, craftMinute, marketHour, payWages, serveMeal } from './economy.ts';
 import { depositCarried, resupply, updateEncounters } from './encounters.ts';
 import { expeditionsMinute, sendExpedition } from './expeditions.ts';
 import { construct } from '../build/construction.ts';
@@ -42,6 +42,7 @@ export function colonyMinute(c: ColonyCtx): void {
     dailyMorale(c);
     expireCandidates(c);
     colony.villageBought = 0;
+    colony.supplyBought = 0;
   }
   ledgerOf(state, c.day);
   depositCarried(c);
@@ -98,6 +99,10 @@ export const colonySystem: System = {
     },
     buyFood(state, cmd, ctx) {
       const reason = cmd.source === 'village' ? buyFromVillage(ctxNow(state, ctx.grid, ctx.emit), cmd.amount) : 'unknownSource';
+      if (reason) ctx.emit({ type: 'commandRejected', command: cmd.type, reason });
+    },
+    buySupply(state, cmd, ctx) {
+      const reason = buySupply(ctxNow(state, ctx.grid, ctx.emit), cmd.resource, cmd.amount);
       if (reason) ctx.emit({ type: 'commandRejected', command: cmd.type, reason });
     },
     sendExpedition(state, cmd, ctx) {

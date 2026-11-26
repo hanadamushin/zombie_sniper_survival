@@ -184,6 +184,9 @@ export function validate(state: GameState): GameState {
   return state;
 }
 
+// 6 -> 7 (09b): ears spent on supplies today.
+MIGRATIONS[6] = (old) => ({ ...old, colony: { supplyBought: 0, ...(old.colony as Record<string, unknown>) } });
+
 export function migrate(raw: Record<string, unknown>): GameState {
   let data = raw;
   let version = typeof data.version === 'number' ? data.version : NaN;

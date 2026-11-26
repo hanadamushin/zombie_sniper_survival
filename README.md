@@ -13,6 +13,7 @@ npm run build    # 本番ビルド（dist/）
 npm run e2e      # Playwright スモーク
 npm run balance  # 通しプレイのボット 138 ゲーム（釣り合いの検証。結果は tmp/balance/、読み方は docs/balance_log.md）
 npm run balance:play -- 12 0 30 average   # 実シミュレーションで序盤 30 分を自動操縦
+npm run doors    # 全国の区域の「外から入れる扉」を歩いて数える（段差で入れない扉が無いことの確認、約 4 分）
 ```
 
 ## ドキュメント

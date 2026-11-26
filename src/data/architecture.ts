@@ -49,3 +49,49 @@ export const ARCH = {
   /** Generating one blueprint must stay below this (ms, Node) — tests. */
   generateMs: 4,
 } as const;
+
+/**
+ * 09b: steps up to the outside doors of buildings on sloping ground (src/gen/doorsteps.ts). A building's
+ * ground level is the highest ground under it; where the way in meets a drop of more than `over`
+ * (the walkers' step-up is 0.5 m) a landing and a flight are added.
+ */
+export const DOORSTEPS = {
+  /** A drop on the way in higher than this gets steps (m; a little under the step-up). */
+  over: 0.45,
+  /** Rise and going of a step, and the most the last step down to the ground may be (m). */
+  rise: 0.25,
+  going: 0.3,
+  last: 0.3,
+  /** Going of the top step of a flight straight out of a door; the flight is at least `minWidth` wide, `widen` wider than the door (m). */
+  topGoing: 0.6,
+  minWidth: 1.4,
+  /** The narrowest flight (where nothing wider fits). */
+  narrow: 0.8,
+  widen: 0.5,
+  /** A flight along the wall (when something stands in the way straight out): how far it and its landing stand out (m). */
+  sideWidth: 1.0,
+  /** Clear ground kept at the foot (m; a walker is 0.7 m across). */
+  foot: 0.8,
+  /** Where that does not fit (a small walled yard): a steeper flight with less room at the foot (m). */
+  tightGoing: 0.2,
+  tightFoot: 0.45,
+  tightSide: 0.72,
+  /** The last resort where even that does not fit: steps as steep as a ship's ladder (m; a walker moves less than this per step of the simulation). */
+  steepGoing: 0.12,
+  /** Steps per flight at most (a drop of maxSteps × rise). */
+  maxSteps: 64,
+  /** How far past the footprint the way out is looked at, and how far inside it from the door (a porch, a small yard) (m). */
+  probe: 1.2,
+  yard: 4,
+  /** A lot counts as level (nothing to do) when its lowest ground is this much closer to the floor than `over` (m; the ground is sampled every 2 m). */
+  levelMargin: 0.1,
+  /** Ground this far above a building's ground level at one of its doors (earthworks laid later): the building is seated again (m). */
+  buried: 0.3,
+  /** Half the side of the square in front of a door that the flights of the other doors keep clear of (m). */
+  front: 0.55,
+  /** Only doors whose floor is at most this high above the building's ground level (the ground storey). */
+  maxFloor: 2,
+  /** The boxes reach this far under the lowest ground below them, and are at least `thick` high (m). */
+  sunk: 0.3,
+  thick: 0.7,
+} as const;

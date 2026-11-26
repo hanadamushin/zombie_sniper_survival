@@ -26,7 +26,7 @@ import { TACTICAL } from '../../data/tactical.ts';
 import { buildingDef } from '../buildings/catalog/index.ts';
 import { blueprintOf, envelopeOf, generateBlueprint, toWorld, type Rot } from '../buildings/index.ts';
 import {
-  addEnterable, addRoad, addTower, forTiles, hAt, heightRange, homeDist, inHomeZone, N, occupy, rectFree, rngOf, SIZE,
+  addEnterable, addRoad, DOOR_RING, addTower, forTiles, hAt, heightRange, homeDist, inHomeZone, N, occupy, rectFree, rngOf, SIZE,
   TILE, TILES, tileIndex, type Builder,
 } from '../builder.ts';
 import { farmstead } from '../lands.ts';
@@ -37,6 +37,7 @@ import { DUR_N, ELEV_N, LINE, LINE_TUNNEL, LU, LU_N, POI, POP_N, type RealArea }
 import { bridgesIn, cutByBridges, finishBridges, layBridges, type BridgeAt } from './bridges.ts';
 import { applyLandmark, landmarksIn } from './landmarks.ts';
 import { createPlanner, cutLine, levelSites, planLandmark, planSites, reserve, type Site } from './sites.ts';
+import { editFade } from '../world.ts';
 
 const R = REAL_AREA;
 const T = TACTICAL;
@@ -333,7 +334,21 @@ function buildSites(b: Builder, sites: readonly Site[], pois: MapPoi[], ctx: Tow
     forTiles(s.x0, s.z0, s.x1, s.z1, (t) => {
       ctx.sites[t] = 1;
     });
-    const bd = addEnterable(b, s.def, s.x0, s.z0, s.w, s.d, s.rot);
+    // 09b: a site stands on the highest of its graded ground. What sites.ts does not grade is left
+    // out: the sea strip of a navy base (a headland in it) and the band along the area's edge (navy
+    // bases and airports stood 10 to 38 m in the air, their doors out of reach).
+    let base: number | undefined;
+    if (Number.isFinite(s.level)) {
+      const q = s.sea;
+      let hi = -Infinity;
+      for (let z = s.z0 - DOOR_RING; z <= s.z1 + DOOR_RING; z += 1) for (let x = s.x0 - DOOR_RING; x <= s.x1 + DOOR_RING; x += 1) {
+        if (q && x >= q[0] - 4 && x <= q[2] + 4 && z >= q[1] - 4 && z <= q[3] + 4) continue;
+        if (editFade(x, z) < 0.999) continue;
+        hi = Math.max(hi, hAt(b, x, z));
+      }
+      if (Number.isFinite(hi)) base = hi;
+    }
+    const bd = addEnterable(b, s.def, s.x0, s.z0, s.w, s.d, s.rot, base);
     tallyAdd(ctx.tally, s.def);
     if (s.poi >= 0) pois[s.poi]!.building = bd.id;
     if (s.forecourt) forecourt(b, rng, bd, s.rot);
