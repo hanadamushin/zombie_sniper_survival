@@ -137,10 +137,23 @@ describe('flow field', () => {
       const crossed = walk(state, sx, sy).filter((t) => moats.some((m) => m.ty * TILES + m.tx === t));
       expect(crossed).toEqual([full.ty * TILES + full.tx]);
     }
-    // A water moat cannot be filled: closed, it shuts the dead out for good.
+    // A water moat swallows three times the bodies (09: it no longer shuts the dead out for good —
+    // a ring of water without a bridge made a base that no raid could touch).
     const wet = bare();
-    ring(wet, 'waterMoat', 10);
-    expect(raidField(wet, null).dist[(HQY + 50) * TILES + HQX]).toBe(FIELD_UNREACHED);
+    const water = ring(wet, 'waterMoat', 10);
+    const far = (HQY + 50) * TILES + HQX;
+    const closed = raidField(wet, null).dist[far]!;
+    expect(closed).not.toBe(FIELD_UNREACHED);
+    expect(BUILD.waterMoatFill).toBe(BUILD.moatFill * 3);
+    const dry = bare();
+    ring(dry, 'moat', 10);
+    expect(closed).toBeGreaterThan(raidField(dry, null).dist[far]!);
+    // Raiders fought in numbers pay for the crossing in bodies and then reach the headquarters.
+    const hq0 = hqOf(wet)!.hp;
+    const result = resolveAway(wet, { emit: () => {}, grid }, 'night', 40, 0, 0);
+    expect(Math.max(...water.map((m) => m.corpsesInMoat ?? 0))).toBe(BUILD.waterMoatFill);
+    expect(result.killed).toBeGreaterThanOrEqual(BUILD.waterMoatFill);
+    expect(hqOf(wet)!.hp).toBeLessThan(hq0);
   });
 
   it('is recomputed only when the structures change, in under 5 ms', () => {
@@ -511,6 +524,52 @@ describe('raids', () => {
     // The route the numbers follow is the one the zombies walk.
     expect(breachRoute(away.state, 0.3).route.at(-1)!.def).toBe('hq');
   });
+
+  // 09: the comparison above is one setting. Three more that 06 left unverified: no walls at all,
+  // nothing but a moat, and a large horde against a manned double ring.
+  for (const c of [
+    // Known gap (PROGRESS 09): with nothing in the way the real fight overruns guards on the ground, while
+    // the numbers let them shoot the column down as it arrives. Pinned here so that a fix shows up.
+    { name: 'no walls, two guards', size: 30, guards: 2, kinder: true, build: (_r: Rig): void => {} },
+    { name: 'a moat with one opening, two guards', size: 40, guards: 2, build: (r: Rig): void => void ring(r.state, 'moat', 9, (x, y) => x === HQX && y === HQY + 9) },
+    { name: 'a horde of 150 on a double ring with six guards', size: 150, guards: 6, build: (r: Rig): void => {
+      ring(r.state, 'earthwork', 8);
+      ring(r.state, 'palisade', 12);
+      for (const [x, y] of [[HQX - 7, HQY - 7], [HQX + 7, HQY - 7], [HQX + 7, HQY + 7], [HQX - 7, HQY + 7]] as const) buildNow(r.state, 'tower', x, y);
+    } },
+  ]) {
+    it(`in numbers vs watched — ${c.name}`, () => {
+      const setup = (): Rig => {
+        const r = rig(21);
+        hide(r.state);
+        c.build(r);
+        for (let i = 0; i < c.guards; i++) r.add('defense');
+        r.state.colony.stock.ammo = 1500;
+        return r;
+      };
+      const here = setup();
+      startHorde(here, c.size, 0.3);
+      here.run(5, () => here.state.build.raid !== null);
+      here.run(3600, () => here.state.build.raid === null || here.state.flags.defeat === true);
+      const seen = here.state.build.lastRaid ?? { killed: here.state.build.raid?.killed ?? 0, wallsLost: 0, repelled: false };
+      const seenHq = hqOf(here.state)?.hp ?? 0;
+      const away = setup();
+      away.state.world.cells.Z[away.state.world.homeCell!] = c.size + 50;
+      const result = resolveAway(away.state, { emit: () => {}, grid }, 'horde', c.size, 0.3, 0);
+      const awayHq = hqOf(away.state)?.hp ?? 0;
+      console.log(`[away vs watched] ${c.name}: watched killed ${seen.killed}/${c.size}, walls ${seen.wallsLost}, hq ${Math.round(seenHq)}, repelled ${seen.repelled} | in numbers killed ${result.killed}, walls ${result.wallsLost}, hq ${Math.round(awayHq)}, repelled ${result.repelled}`);
+      if ('kinder' in c) {
+        expect(seen.repelled).toBe(false);
+        expect(result.repelled).toBe(true);
+        expect(result.killed).toBeGreaterThanOrEqual(seen.killed);
+        return;
+      }
+      expect(result.repelled).toBe(seen.repelled);
+      expect(result.killed).toBeGreaterThanOrEqual(seen.killed * 0.5);
+      expect(result.killed).toBeLessThanOrEqual(Math.max(seen.killed * 2, seen.killed + 10));
+      expect(Math.abs(result.wallsLost - seen.wallsLost)).toBeLessThanOrEqual(4);
+    }, 120_000);
+  }
 
   it('raids during the three days after the player dies are fought in numbers', () => {
     const r = rig();

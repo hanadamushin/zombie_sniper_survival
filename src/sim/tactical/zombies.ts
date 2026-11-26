@@ -534,7 +534,7 @@ function followField(state: GameState, area: TacticalArea, ctx: SimContext, z: Z
     settle(area.map, z, dt);
     const sdef = defOf(st);
     if (sdef.kind === 'moat' || (sdef.kind === 'bridge' && sdef.hp <= 0)) {
-      if (sdef.unfillable || moatFilled(st)) return true;
+      if (moatFilled(st)) return true;
       z.moatT = (z.moatT ?? 0) + dt;
       if (z.moatT > BUILD.raid.moatFallSeconds * (0.5 + hash01(z.id, 3))) {
         // Pushed over the edge by the ones behind: one more body in the ditch.

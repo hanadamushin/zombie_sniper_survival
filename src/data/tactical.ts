@@ -22,7 +22,7 @@ export const TACTICAL = {
     /** Eye height approaches its target at this rate (1/s). */
     eyeRate: 9,
     /** Speeds in m/s. */
-    walk: 1.6,
+    walk: 2.0, // 09: 1.6 -> 2.0 (the autopilot playthroughs spent 27-49 % of the daylight walking to bodies; spec §3.6 allows up to 2.4)
     sprint: 5.0,
     crouch: 1.0,
     prone: 0.4,

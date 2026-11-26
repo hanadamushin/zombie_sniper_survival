@@ -29,7 +29,7 @@ import { activeCap, kindMix, removeZombies } from '../world/derive.ts';
 import { baseCentre } from './blueprints.ts';
 import { activeTurrets, ammoPerShot, defenderSkill, defenderWeapon, killsPerShot, sniperIds, towers, TURRET_WEAPON } from './defense.ts';
 import { FIELD_UNREACHED, raidField, tileOf } from './flowfield.ts';
-import { damageStructure, defOf, hqOf, isBuilt, moatFilled, overlayOf, TILE, TILES } from './structures.ts';
+import { damageStructure, defOf, hqOf, isBuilt, moatFilled, moatNeed, overlayOf, TILE, TILES } from './structures.ts';
 
 const R = BUILD.raid;
 type Ctx = Pick<SimContext, 'emit' | 'grid'>;
@@ -349,7 +349,6 @@ export function resolveAway(state: GameState, ctx: Ctx, kind: 'night' | 'horde',
   type Gun = { g: (typeof people)[number] | null; tower: boolean; sniper: boolean };
   const guns: Gun[] = people.map((g, i) => ({ g, tower: i < towerCount && !g.militia, sniper: i < towerCount && snipers.has(g.survivor.id) }));
   for (let i = activeTurrets(state).length; i > 0; i--) guns.push({ g: null, tower: true, sniper: false });
-  const guards = people;
   const ruinsBefore = ruinCount(state);
   const deadBefore = state.colony.memorial.length;
 
@@ -378,6 +377,8 @@ export function resolveAway(state: GameState, ctx: Ctx, kind: 'night' | 'horde',
     for (const gun of guns) {
       const turret = gun.g === null;
       if (turret && ammoLeft < 1) continue;
+      // 09: whoever has been bitten out of the fight (or killed) in an earlier round no longer shoots.
+      if (gun.g && (gun.g.survivor.status !== 'ok' || !state.colony.survivors.includes(gun.g.survivor))) continue;
       let w = turret ? TURRET_WEAPON : defenderWeapon(state, ammoLeft);
       const sniper = gun.sniper && w.ammo > 0;
       if (sniper) w = { ...w, headshot: RESEARCH.snipers.headshot };
@@ -414,8 +415,7 @@ export function resolveAway(state: GameState, ctx: Ctx, kind: 'night' | 'horde',
     if (!isBuilt(st)) {
       stage++;
     } else if (def.kind === 'moat' && !moatFilled(st)) {
-      if (def.unfillable) continue;
-      const fell = Math.min(alive, Math.ceil(BUILD.moatFill - (st.corpsesInMoat ?? 0)), Math.max(1, Math.round((front * dt) / R.moatFallSeconds)));
+      const fell = Math.min(alive, Math.ceil(moatNeed(st) - (st.corpsesInMoat ?? 0)), Math.max(1, Math.round((front * dt) / R.moatFallSeconds)));
       st.corpsesInMoat = (st.corpsesInMoat ?? 0) + fell;
       alive -= fell;
       killed += fell;
@@ -438,10 +438,14 @@ export function resolveAway(state: GameState, ctx: Ctx, kind: 'night' | 'horde',
 
     // inside: people caught in the open
     if (stage >= route.length - 1 && route.length > 0) {
-      for (const g of guards) {
-        const s = g.survivor;
+      // 09: those on a tower are out of reach (as in the real fight); the others are caught when the
+      // dead outnumber what each of them can keep at arm's length.
+      const onGround = guns.filter((x) => x.g !== null && !x.tower && x.g.survivor.status === 'ok').length;
+      for (const gun of guns) {
+        if (gun.g === null || gun.tower) continue;
+        const s = gun.g.survivor;
         if (s.status !== 'ok' || !state.colony.survivors.includes(s)) continue;
-        if (rand(stream(state, 'build.raid')) < Math.min(0.5, (alive / Math.max(1, guards.length)) * 0.04)) {
+        if (rand(stream(state, 'build.raid')) < Math.min(0.5, Math.max(0, alive / Math.max(1, onGround) - R.awayHold) * R.awayBite)) {
           s.hp -= R.biteDps * dt * 0.5;
           if (s.hp <= 0) killSurvivor(c, s, 'raid');
           else if (s.hp < R.fleeHp) s.status = 'injured';

@@ -164,7 +164,9 @@ const DEFS: TechDef[] = [
     ['W3', 1, 1200, ['W1'], [gear('bow')]],
     ['W4', 1, 1600, ['W2'], [gear('pistol'), gear('rifleArmor')]],
     // One shot, one kill — even through a row of them. Slow, loud on the shoulder, and hungry.
-    ['W5a', 1, 2000, ['W4'], [mul('weapon.damage', 2), add('weapon.pierce', 2), mul('weapon.velocity', 1.1), mul('weapon.bolt', 1.5), mul('weapon.sway', 1.2), mul('weapon.recoil', 1.5), mul('weapon.ammoPerShot', 3)], { excludes: 'W5b' }],
+    // 09: 3 -> 2 rounds a shot. Ammunition is what the whole economy is short of; at 3 the large calibre cost
+    // twice the rounds per kill of the plain rifle (4.6 against 2.2 for an average shot), at 2 it costs 1.4 times.
+    ['W5a', 1, 2000, ['W4'], [mul('weapon.damage', 2), add('weapon.pierce', 2), mul('weapon.velocity', 1.1), mul('weapon.bolt', 1.5), mul('weapon.sway', 1.2), mul('weapon.recoil', 1.5), mul('weapon.ammoPerShot', 2)], { excludes: 'W5b' }],
     // Ten rounds as fast as the trigger goes. Each one does a little less and stops in the first body.
     ['W5b', 1, 2000, ['W4'], [add('weapon.mag', 5), mul('weapon.bolt', 0.35 / 1.2), mul('weapon.torso', 0.85), add('weapon.pierce', -1), add('weapon.range', -100), mul('weapon.recoil', 0.7)], { excludes: 'W5a' }],
     ['W6a', 2, 3600, ['W4'], [mul('weapon.zoomMax', 2), flag('scope.rangefinder')], { excludes: 'W6b' }],

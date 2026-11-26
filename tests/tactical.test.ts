@@ -283,7 +283,7 @@ describe('player movement', () => {
       expect(p.pos[0]).toBeCloseTo(500, 6);
       expect(p.pos[1]).toBe(10);
     }
-    expect([P.walk, P.sprint, P.crouch, P.prone]).toEqual([1.6, 5, 1, 0.4]);
+    expect([P.walk, P.sprint, P.crouch, P.prone]).toEqual([2, 5, 1, 0.4]);
   });
 
   it('moves relative to where the player looks', () => {

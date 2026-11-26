@@ -12,7 +12,7 @@
 // Exit code 1 when an invariant was broken or a saved-and-loaded game came out differently.
 
 import { fork } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { cpus } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -171,11 +171,11 @@ function summarise(results: Result[], days: number): string {
   const bots = results.filter((r) => r.job.suite === 'bots');
   if (bots.length) {
     out.push(`### ボット × 難易度（${days} 日、シードごとの中央値。「到達」は到達した回数 / 回数）`, '',
-      '| ボット | 難易度 | 最初の雇用 | 最初の被害 | 定住期 | 再建期 | 復興期 | 建国 | 建国到達 | 崩壊 | 崩壊日 | 最大人口 | 死者 | 離反 | 壁の損失 | 弾切れの日数 | プレイヤー死亡 |', '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|');
+      '| ボット | 難易度 | 最初の雇用 | 司令部が初めて叩かれた日 | 最初の被害（壁・人） | 定住期 | 再建期 | 復興期 | 建国 | 建国到達 | 崩壊 | 崩壊日 | 最大人口 | 死者 | 離反 | 壁の損失 | 弾切れの日数 | プレイヤー死亡 |', '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|');
     for (const [key, rs] of by(bots, (r) => `${r.job.bot}|${r.job.difficulty}`)) {
       const [bot, d] = key.split('|');
       const med = (f: (r: Result) => number | null): string => fmt(median(nn(rs.map(f))));
-      out.push(`| ${bot} | ${DIFF[Number(d)]} | ${med((r) => r.m.firstHire)} | ${med((r) => r.m.firstLoss)} | ${med((r) => r.m.era[1]!)} | ${med((r) => r.m.era[2]!)} | ${med((r) => r.m.era[3]!)} | ${med((r) => r.m.victory)} | ${rs.filter((r) => r.m.victory !== null).length}/${rs.length} | ${rs.filter((r) => r.m.defeat !== null).length}/${rs.length} | ${med((r) => r.m.defeat)} | ${med((r) => r.peakPop)} | ${med((r) => r.m.dead)} | ${med((r) => r.m.deserted)} | ${med((r) => r.m.wallsLost)} | ${med((r) => r.m.dryDays)} | ${med((r) => r.m.playerDeaths)} |`);
+      out.push(`| ${bot} | ${DIFF[Number(d)]} | ${med((r) => r.m.firstHire)} | ${med((r) => r.m.firstHqHit)} | ${med((r) => r.m.firstLoss)} | ${med((r) => r.m.era[1]!)} | ${med((r) => r.m.era[2]!)} | ${med((r) => r.m.era[3]!)} | ${med((r) => r.m.victory)} | ${rs.filter((r) => r.m.victory !== null).length}/${rs.length} | ${rs.filter((r) => r.m.defeat !== null).length}/${rs.length} | ${med((r) => r.m.defeat)} | ${med((r) => r.peakPop)} | ${med((r) => r.m.dead)} | ${med((r) => r.m.deserted)} | ${med((r) => r.m.wallsLost)} | ${med((r) => r.m.dryDays)} | ${med((r) => r.m.playerDeaths)} |`);
     }
     out.push('', '#### 耳の収支（標準難易度、10 日ごとの収入の中央値。括弧は期間末の備蓄）', '', '| ボット | 1〜10 日 | 11〜20 日 | 21〜30 日 | 31〜40 日 | 150 日目の備蓄（耳 / 弾 / 食料） |', '|---|---|---|---|---|---|');
     for (const [bot, rs] of by(bots.filter((r) => r.job.difficulty === 1), (r) => r.job.bot)) {
@@ -226,6 +226,11 @@ async function main(): Promise<void> {
     return i >= 0 ? args.splice(i, 2)[1]! : def;
   };
   const days = Number(opt('days', '150'));
+  // --summarise: print the tables of the last run again without playing.
+  if (args.includes('--summarise')) {
+    console.log(summarise(JSON.parse(readFileSync(join(opt('out', 'tmp/balance'), 'summary.json'), 'utf8')) as Result[], days));
+    return;
+  }
   const seeds = opt('seeds', '1,2,3,5,7,12').split(',').map(Number);
   const outDir = opt('out', 'tmp/balance');
   const jobs = jobsFor(args, seeds, days);

@@ -544,7 +544,7 @@ describe('W5: the player\'s rifle', () => {
     expect(base).toEqual(WEAPONS.rifle);
     const big = weaponOf(range('W5a').state);
     const semi = weaponOf(range('W5b').state);
-    expect([big.damageMul, big.pierce, big.boltTime, big.magSize, big.ammoPerShot]).toEqual([2, 4, expect.closeTo(1.8, 6), 5, 3]);
+    expect([big.damageMul, big.pierce, big.boltTime, big.magSize, big.ammoPerShot]).toEqual([2, 4, expect.closeTo(1.8, 6), 5, 2]);
     expect(big.muzzleVelocity).toBeCloseTo(880, 6);
     expect([semi.damageMul, semi.pierce, semi.magSize, semi.maxRange, semi.ammoPerShot]).toEqual([1, 1, 10, 700, 1]);
     expect(semi.boltTime).toBeCloseTo(0.35, 6);

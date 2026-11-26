@@ -19,7 +19,8 @@
     "buildings:preview": "node tools/building-preview.ts tmp/buildings",
     "e2e": "playwright test",
     "data:region": "node tools/real/region.ts",
-    "balance": "node tests/balance/run.ts"
+    "balance": "node tests/balance/run.ts",
+    "balance:play": "node tests/balance/playthrough.ts"
   },
   "dependencies": {
     "preact": "^11.2.0",

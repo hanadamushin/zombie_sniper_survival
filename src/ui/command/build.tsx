@@ -185,7 +185,7 @@ export function BuildTab({ state, actions, tool, setTool }: Props) {
           ) : selDef.hp > 0 ? (
             <span>{t('build.durability', { hp: Math.round(sel.hp), max: Math.round(maxHp(state, selDef)) })}</span>
           ) : null}
-          {selDef.kind === 'moat' && sel.progress >= 1 && <span>{t('build.moatBodies', { n: Math.floor(sel.corpsesInMoat ?? 0), max: BUILD.moatFill })}</span>}
+          {selDef.kind === 'moat' && sel.progress >= 1 && <span>{t('build.moatBodies', { n: Math.floor(sel.corpsesInMoat ?? 0), max: selDef.unfillable ? BUILD.waterMoatFill : BUILD.moatFill })}</span>}
           <span class="label">{t('build.priority')}</span>
           {([0, 1, 2] as const).map((pr) => (
             <button key={pr} class={pr === sel.priority ? 'chip active' : 'chip'} onClick={() => actions.dispatch({ type: 'setStructurePriority', id: sel.id, priority: pr })}>

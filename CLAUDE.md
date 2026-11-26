@@ -39,3 +39,4 @@
 - `npm run data` — 地図・感染データの再生成（`tools/`）
 - `npm run tactical:preview` — 戦術マップ 5 区分を上から見た PNG を `tmp/tactical/` に書き出す（生成の目視確認）
 - `npm run e2e` — Playwright スモーク（ビルドして preview サーバで実行。`check` には含まれない）
+- `npm run balance` — 通しプレイのボット（4 ボット × 6 シード × 3 難易度 ほか 138 ゲーム、約 7 分）。数値を変えたら回して `docs/balance_log.md` と見比べる。`npm run balance:play` は実シミュレーションでの序盤 30 分の自動操縦

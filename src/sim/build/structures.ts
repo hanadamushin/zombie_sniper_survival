@@ -76,7 +76,9 @@ export function structureById(state: GameState, id: number): Structure | undefin
 }
 
 /** A moat tile that bodies have made passable. */
-export const moatFilled = (st: Structure): boolean => !defOf(st).unfillable && (st.corpsesInMoat ?? 0) >= BUILD.moatFill;
+/** Bodies a moat tile takes before the dead can walk across (a water moat swallows more, 09). */
+export const moatNeed = (st: Structure): number => (defOf(st).unfillable ? BUILD.waterMoatFill : BUILD.moatFill);
+export const moatFilled = (st: Structure): boolean => (st.corpsesInMoat ?? 0) >= moatNeed(st);
 
 // ---------------------------------------------------------------------------------------------
 // Overlay: what the structures do to each tile
@@ -111,7 +113,7 @@ const overlays = new WeakMap<GameState['build'], { walk: Uint8Array | null; alar
 /** Flow cost of a standing structure's tile. */
 function tileCost(st: Structure, def: BuildingDef, alarm: boolean): number {
   switch (def.kind) {
-    case 'moat': return def.unfillable ? Infinity : moatFilled(st) ? F.moatFilled : 1 + F.moatPerBody * (BUILD.moatFill - (st.corpsesInMoat ?? 0));
+    case 'moat': return moatFilled(st) ? F.moatFilled : 1 + F.moatPerBody * (moatNeed(st) - (st.corpsesInMoat ?? 0));
     case 'bridge': return alarm ? 1 + st.hp / F.wallHpPerCost + F.moatPerBody : 1;
     case 'wire': return 1 + F.wire;
     case 'field': return 1;

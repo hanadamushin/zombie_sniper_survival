@@ -314,7 +314,7 @@ test('a neglected fence is broken, the headquarters falls: defeat', async ({ pag
   await page.evaluate(() => { const v = window.__game!.debug.view; v.x = 510; v.z = 498; v.dist = 90; });
   await page.waitForTimeout(2000);
   await page.screenshot({ path: 'test-results/build-breach.png' });
-  expect(await runSim(page, 1500, 'g.state.flags.defeat === true')).toBe(true);
+  expect(await runSim(page, 5000, 'g.state.flags.defeat === true')).toBe(true); // 09: walls hold four times, buildings twice as long
   await expect(page.getByTestId('defeat')).toBeVisible();
   await expect(page.getByTestId('defeat-lead')).toHaveText(/司令部が破壊された/);
   await page.screenshot({ path: 'test-results/build-defeat.png' });

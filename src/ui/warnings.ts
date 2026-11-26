@@ -42,7 +42,7 @@ export function warnings(s: GameState): Warning[] {
     if (!isBuilt(st)) continue;
     const def = defOf(st);
     if (def.kind === 'moat') {
-      if (!def.unfillable && (st.corpsesInMoat ?? 0) >= BUILD.moatFill * 0.6) clogged++;
+      if ((st.corpsesInMoat ?? 0) >= (def.unfillable ? BUILD.waterMoatFill : BUILD.moatFill) * 0.6) clogged++;
     } else if (def.hp > 0 && (def.kind === 'wall' || def.kind === 'gate') && st.hp < maxHp(s, def) * 0.5) damaged++;
   }
   const ruins = s.build.structures.filter((st) => st.ruinUntil !== undefined && defOf(st).kind !== 'moat').length;

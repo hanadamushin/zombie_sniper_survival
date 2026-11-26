@@ -11,6 +11,8 @@ npm run dev      # 開発サーバ
 npm run check    # 型検査 + lint + テスト
 npm run build    # 本番ビルド（dist/）
 npm run e2e      # Playwright スモーク
+npm run balance  # 通しプレイのボット 138 ゲーム（釣り合いの検証。結果は tmp/balance/、読み方は docs/balance_log.md）
+npm run balance:play -- 12 0 30 average   # 実シミュレーションで序盤 30 分を自動操縦
 ```
 
 ## ドキュメント

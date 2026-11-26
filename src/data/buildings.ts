@@ -56,7 +56,7 @@ export interface BuildingDef {
   foodSaving?: number;
   /** Zombies die in a water moat never; fuel per tile and day it needs to stay filled. */
   fuelPerDay?: number;
-  /** Zombies cannot fill it with bodies. */
+  /** A water moat: bodies sink, it takes BUILD.waterMoatFill of them (not moatFill) to get across. */
   unfillable?: boolean;
   // --- global effects while at least one stands (07; compiled by sim/research/modifiers.ts) ---
   mods?: readonly { key: ModKey; op: 'add' | 'mul'; value: number }[];
@@ -106,7 +106,7 @@ const DEFS: BuildingDef[] = [
   building('apartment', 'housing', [3, 2], 900, { cement: 30, metal: 12 }, 160, 2, 'F5', 7.5, 'concrete', { beds: 16 }),
   { id: 'farm', kind: 'field', category: 'food', size: [4, 4], hp: 0, cost: {}, work: 24, era: 0, tech: 'A1', height: 0.3, look: 'soil', plots: 1 },
   building('ranch', 'food', [4, 3], 300, { wood: 30 }, 70, 1, 'A4a', 3.0, 'wood', { plots: 1, yieldMul: 1.8, morale: 2, mods: [{ key: 'raid.nightSize', op: 'mul', value: 1.2 }] }), // livestock draws the dead
-  building('greenhouse', 'food', [3, 2], 150, { metal: 10, parts: 4 }, 60, 1, 'A4b', 2.6, 'glass', { plots: 1, allSeason: true }),
+  building('greenhouse', 'food', [3, 2], 150, { metal: 10, parts: 4 }, 60, 1, 'A4b', 2.6, 'glass', { plots: 1, yieldMul: 1.3, allSeason: true }), // 09: x1.3 — a game ends before the first winter, so "all season" alone never paid
   building('storehouse', 'work', [2, 2], 300, { wood: 24 }, 40, 0, 'A2', 3.0, 'wood',
     { capacity: { food: 120, ammo: 600, wood: 300, metal: 200, cement: 200, parts: 80, medicine: 30, fuel: 80 } }),
   building('workshop', 'work', [2, 2], 300, { wood: 20, metal: 8 }, 50, 0, 'W2', 3.0, 'wood', { job: { crafting: 1 } }),
@@ -168,6 +168,12 @@ export const BUILD = {
   repairCost: 0.5,
   /** Moats: bodies that make a tile passable, and the work to clear one (spec §6.1). */
   moatFill: 8,
+  /**
+   * 09: a water moat (`unfillable`) takes this many — it used to take none at all, which made a base
+   * ringed by water without a bridge unreachable: every raid was "repelled" without a scratch while the
+   * defenders shot the crowd on the far bank for its ears. Three times a dry ditch is still a great deal.
+   */
+  waterMoatFill: 24,
   moatClearWork: 10,
   /** Rubble of a broken wall stays this many game minutes. */
   rubbleMinutes: 360,
@@ -251,6 +257,14 @@ export const BUILD = {
     roundSeconds: 10,
     approachSeconds: 200,
     engageShare: 0.7,
+    /**
+     * Abstract battle, guards on the ground once the dead are inside: each keeps `awayHold` of them off;
+     * per one more (per guard) the chance per round of being bitten rises by `awayBite` (09: guards on
+     * towers are safe, and whoever is bitten out of the fight stops shooting — before, two guards in an
+     * unwalled base "repelled" thirty without loss while the real fight lost the headquarters).
+     */
+    awayHold: 15,
+    awayBite: 0.02,
     /** Tower: range and accuracy bonus of a defender standing on one. */
     towerRange: 1.5,
     towerHit: 0.12,

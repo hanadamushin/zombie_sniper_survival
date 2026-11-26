@@ -341,6 +341,8 @@ interface DebugApi {
   /** Jump to the first cell of a land class (optionally the n-th), as if arriving by road. */
   gotoLand(land: string, nth?: number): number | null;
   /** R0: go to a cell (by id, or the cell holding lat / lon); returns the cell or null for the sea. */
+  /** 09: the saves in the store, newest first (e2e: was the autosave written?). */
+  saves(): Promise<{ slot: string; day: number; minute: number; version: number }[]>;
   gotoCell(cell: number): number | null;
   gotoLatLon(lat: number, lon: number): number | null;
   /** R0: real-map data of the current map (null: random layout), its facilities and the last area load times (ms). */
@@ -420,6 +422,7 @@ window.__game = {
   sim,
   renderer,
   debug: {
+    saves: () => listSaves(store),
     gotoCell(cell) {
       if (!state || !grid || !grid.cells[cell]) return null;
       state.world.travel = null;
