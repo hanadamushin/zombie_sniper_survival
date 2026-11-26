@@ -595,15 +595,15 @@ describe('W5: the player\'s rifle', () => {
     expect(semi).toMatchObject({ hits: 1, kills: 0 });
   });
 
-  it('large-calibre rounds cost three of the stock each', () => {
+  it('large-calibre rounds cost two of the stock each', () => {
     const r = range('W5a');
     const p = r.state.player;
     p.weapon.mag = 0;
     p.inv.ammo = 10;
     r.sim.tick(r.state, DT, input({ reload: true }));
     r.run(3.2);
-    expect(p.weapon.mag).toBe(3);
-    expect(p.inv.ammo).toBe(1);
+    expect(p.weapon.mag).toBe(5);
+    expect(p.inv.ammo).toBe(0);
   });
 });
 

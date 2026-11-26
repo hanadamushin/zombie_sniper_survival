@@ -121,7 +121,9 @@ test('O1: clues → the Okinawa ferry → the Naha stash (safe, B, elites) → h
   const path = await page.evaluate((to) => {
     const g = window.__game!;
     g.dispatch({ type: 'travel', to });
-    return new Promise<number[]>((r) => setTimeout(() => r(g.state!.world.travel?.path ?? []), 600));
+    // 09: applied here, not "by the next frame within 600 ms" (a software-rendered frame can take longer).
+    g.sim.applyCommands(g.state!);
+    return g.state!.world.travel?.path ?? [];
   }, NAHA);
   expect(path[0]).toBe(KAGOSHIMA);
   expect(path.at(-1)).toBe(NAHA);

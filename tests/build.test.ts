@@ -363,10 +363,10 @@ describe('raids', () => {
     hide(state);
     state.time.minute = 8 * 60;
     state.world.hordeMeter = hordeThreshold(state) + 30;
-    expect(hordeThreshold(state)).toBe(64);
+    expect(hordeThreshold(state)).toBe(44);
     r.run(61);
     const ph = state.world.pendingHorde!;
-    expect(ph.size).toBe(94);
+    expect(ph.size).toBe(74);
     expect(state.world.hordeMeter).toBe(0);
     // Nobody on a tower: the warning comes an hour ahead.
     expect(ph.warned).toBeFalsy();

@@ -355,16 +355,17 @@ describe('player movement', () => {
     expect(steps.length).toBeGreaterThan(20);
     const first = steps[0]!;
     const p = newPlayer(map, (first.x0 + first.x1) / 2, first.z0 - 1.5, Math.PI); // facing south (+z)
-    run(p, map, input({ moveZ: 1 }), 3.6); // up the first flight onto the landing
+    const T = 1.6 / TACTICAL.player.walk; // the walk was written for 1.6 m/s (09: 2.0)
+    run(p, map, input({ moveZ: 1 }), 3.6 * T); // up the first flight onto the landing
     expect(p.pos[1]).toBeCloseTo(13, 1);
     // Step across to the outer lane and walk back north up the second flight.
-    run(p, map, input({ moveX: -1 }), 0.75);
+    run(p, map, input({ moveX: -1 }), 0.75 * T);
     p.yaw = 0;
-    run(p, map, input({ moveZ: 1 }), 3.2);
+    run(p, map, input({ moveZ: 1 }), 3.2 * T);
     expect(p.pos[1]).toBeCloseTo(16, 1);
     // From the top landing onto the roof (west).
     p.yaw = Math.PI / 2;
-    run(p, map, input({ moveZ: 1 }), 4);
+    run(p, map, input({ moveZ: 1 }), 4 * T);
     expect(p.pos[1]).toBe(16);
     expect(p.pos[0]).toBeLessThan(109);
     expect(p.pos[0]).toBeGreaterThan(100);

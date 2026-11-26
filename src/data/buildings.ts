@@ -207,8 +207,12 @@ export const BUILD = {
     nightShare: 0.3,
     nightFullPop: 12,
     nightMin: 2,
-    /** Horde threshold = base + perHead * population (player included). */
-    hordeBase: 60,
+    /**
+     * Horde threshold = base + perHead * population (player included). 09: base 60 -> 40 — the first
+     * horde is what the threshold makes it (about 80 instead of 100 for eight people), and a player
+     * alone at the rifle puts down some five a minute while fences and the headquarters buy a quarter of an hour.
+     */
+    hordeBase: 40,
     hordePerHead: 4,
     /**
      * Largest horde (normal difficulty; 160 / 300 / 500 through the modifier `raid.hordeMax`).
@@ -219,10 +223,10 @@ export const BUILD = {
     /**
      * 09: the dead take time to find a new settlement — over the first hordeRampDays days of a game the
      * meter takes only (day / hordeRampDays) ^ hordeRampPower of the inflow (a busy start cell filled
-     * it in four days: a horde of 95 against five people on the fifth morning). With 14 days squared
-     * the busiest start candidates see their first horde around day 11, the quiet ones around day 25-30.
+     * it in four days: a horde of 95 against five people on the fifth morning). With 16 days squared
+     * the busiest start candidates see their first horde around day 11, the quiet ones around day 18-25.
      */
-    hordeRampDays: 14,
+    hordeRampDays: 16,
     hordeRampPower: 2,
     /** Hours between the horde forming and its arrival; who gets told when. */
     leadHours: 6,
@@ -244,8 +248,12 @@ export const BUILD = {
     repelMorale: 5,
     /** A zombie pressing into a moat goes over the edge after this many seconds. */
     moatFallSeconds: 4,
-    /** Buildings are far tougher than fences: zombies pawing at one do this share of their wall damage. */
-    buildingDamage: 0.05,
+    /**
+     * Buildings are far tougher than fences: zombies pawing at one do this share of their wall damage.
+     * 09: 0.025 -> 0.035 while wall damage went to a quarter: the headquarters (2,000) lasts about a quarter
+     * of an hour with sixty at it, about three times as long as before.
+     */
+    buildingDamage: 0.035,
     /** Zombies that can work on one wall tile at once (the abstract battle uses the same figure). */
     attackersPerTile: 5,
     /** Bites on people out in the open: damage per second and zombie within reach (m). */
@@ -263,8 +271,8 @@ export const BUILD = {
      * towers are safe, and whoever is bitten out of the fight stops shooting — before, two guards in an
      * unwalled base "repelled" thirty without loss while the real fight lost the headquarters).
      */
-    awayHold: 15,
-    awayBite: 0.02,
+    awayHold: 25,
+    awayBite: 0.01,
     /** Tower: range and accuracy bonus of a defender standing on one. */
     towerRange: 1.5,
     towerHit: 0.12,

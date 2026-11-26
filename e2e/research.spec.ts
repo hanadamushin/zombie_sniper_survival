@@ -85,7 +85,7 @@ test('research: from the palisade to earthworks to steel walls, an exclusive bra
     const g = window.__game!;
     g.dispatch({ type: 'setAllocation', allocation: { F: 100, W: 0, A: 0, S: 0, C: 0 } });
     g.sim.applyCommands(g.state!);
-    g.debug.research(600);
+    g.debug.research(1300); // 09: F3 costs 1,200
   });
   await expect(page.getByTestId('tech-F3')).toHaveAttribute('data-status', 'done');
   await page.getByTestId('tab-build').click();
@@ -117,8 +117,8 @@ test('research: from the palisade to earthworks to steel walls, an exclusive bra
     const g = window.__game!;
     g.dispatch({ type: 'setAllocation', allocation: { F: 0, W: 100, A: 0, S: 0, C: 0 } });
     g.sim.applyCommands(g.state!);
-    g.debug.research(600);
-    g.debug.research(600);
+    g.debug.research(1100); // 09: W5a costs 2,000
+    g.debug.research(1100);
   });
   await expect(page.getByTestId('tech-W5a')).toHaveAttribute('data-status', 'done');
   await expect(page.getByTestId('tech-W5b')).toHaveAttribute('data-status', 'locked');
