@@ -146,9 +146,12 @@ export function buildBuildings(map: TacticalMap): Built {
   if (boxes.length > 0 || steps.size > 0) {
     const material = boxMaterial();
     disposables.push(material);
-    const add = (list: typeof boxes, name: string): void => {
+    const add = (list: typeof boxes, name: string, open = false): void => {
       if (list.length === 0) return;
       const geo = new THREE.BoxGeometry(1, 1, 1);
+      // Door steps stand in the ground: their underside is never seen (BoxGeometry's faces are in the
+      // order +x -x +y -y +z -z, six indices each).
+      if (open) geo.setIndex(Array.from(geo.index!.array).filter((_, i) => i < 18 || i >= 24));
       const style = new Float32Array(list.length);
       const mesh = new THREE.InstancedMesh(geo, material, list.length);
       list.forEach((bx, i) => {
@@ -165,7 +168,7 @@ export function buildBuildings(map: TacticalMap): Built {
       disposables.push(geo, mesh);
     };
     add(boxes, 'boxes');
-    for (const list of steps.values()) add(list, 'steps');
+    for (const list of steps.values()) add(list, 'steps', true);
   }
 
   if (roofs.length > 0) {
