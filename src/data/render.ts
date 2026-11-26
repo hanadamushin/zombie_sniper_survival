@@ -199,9 +199,11 @@ export const RENDER = {
   },
   buildings: {
     /** 09b: door steps are drawn per block of this many metres (blocks out of view are culled). */
-    stepChunk: 256,
+    stepChunk: 128,
     /** 09b: door steps are drawn in the blocks within this many metres of the camera. */
     stepRange: 350,
+    /** 09b: ...and nearest first within this many triangles over all the maps drawn (the block the camera is in always). */
+    stepTris: 15_000,
     /** Wall colours by kind (picked by Building.tint). */
     walls: {
       house: [0xcfc8b8, 0xb9b3a6, 0xd6cdb4, 0xa9a59c, 0xc2b8a0],
