@@ -24,7 +24,8 @@ async function walk(page: Page, pts: [number, number, number][]): Promise<boolea
         const p = s.player;
         const dx = tx - p.pos[0];
         const dz = tz - p.pos[2];
-        if (Math.hypot(dx, dz) < 0.3 && Math.abs(ty - p.pos[1]) < 0.4) {
+        // 0.5: a door sill up to the 0.5 m step height (the player stands just below it at the threshold).
+        if (Math.hypot(dx, dz) < 0.3 && Math.abs(ty - p.pos[1]) < 0.5) {
           ok = true;
           break;
         }
@@ -237,10 +238,14 @@ test('city: far buildings are boxes, closer ones show their outside, the nearest
   const stand = async (dist: number): Promise<number> => {
     await page.evaluate(([b, dist]) => {
       const g = window.__game!;
-      const x = b.cx + b.ux * dist;
-      const z = b.cz + b.uz * dist;
+      // Stay inside this area: a point past its edge walks the player into the next cell (and the
+      // building index then points into another map). Go out the back instead when the front leaves it.
+      const inside = (v: number): boolean => v > 12 && v < 1012;
+      const sgn = inside(b.cx + b.ux * dist) && inside(b.cz + b.uz * dist) ? 1 : -1;
+      const x = b.cx + b.ux * dist * sgn;
+      const z = b.cz + b.uz * dist * sgn;
       // Look back at the building, from eye height over whatever is there.
-      g.debug.teleport(x, z, Math.atan2(b.ux, b.uz), dist > 200 ? 0.04 : 0.12);
+      g.debug.teleport(x, z, Math.atan2(b.ux * sgn, b.uz * sgn), dist > 200 ? 0.04 : 0.12);
     }, [b, dist] as const);
     await settle(page);
     return page.evaluate((i) => window.__game!.debug.enterableStage(i), b.i);
@@ -279,6 +284,12 @@ test('city: far buildings are boxes, closer ones show their outside, the nearest
   await stand(12);
   const ground = await measure(page);
   report.push(`ground: ${ground.calls} draw calls, ${ground.triangles} triangles, sim ${ground.tick.toFixed(2)} + draw ${ground.draw.toFixed(2)} ms`);
+  // 07d-3 puts zombies inside buildings and the cell keeps sending more: clear them so none stands on the stairs.
+  await page.evaluate(() => {
+    const t = window.__game!.state!.tactical!;
+    t.zombies = [];
+    t.spawnT = 1e9;
+  });
   const pathRoof = await page.evaluate((b) => window.__game!.debug.pathTo((b.roof.wx0 + b.roof.wx1) / 2, b.roof.wy, (b.roof.wz0 + b.roof.wz1) / 2), b);
   expect(await walk(page, pathRoof!)).toBe(true);
   await page.evaluate((b) => {

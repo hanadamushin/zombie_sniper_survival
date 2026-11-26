@@ -23,6 +23,7 @@
 | 07d-3 | [07d3_building_placement.md](07d3_building_placement.md) | 建物の配置（町の格・駅・空港・自衛隊の位置） | — | 大 |
 | 08 | [08_ui_audio.md](08_ui_audio.md) | UI/UX・音・チュートリアル | M6 | 中 |
 | 09 | [09_balance_qa.md](09_balance_qa.md) | バランス調整・QA | M7 | 中 |
+| 09b | [09b_fixes_after_balance.md](09b_fixes_after_balance.md) | 09 の積み残し（入口の段差・耳の使い道・e2e の通し） | M7 | 中 |
 | 10 | [10_mobile.md](10_mobile.md) | スマホ対応（任意） | M8 | 小 |
 
 ## 実在の地図（R0〜R8）
