@@ -84,7 +84,7 @@ export function gableGeometry(): THREE.BufferGeometry {
   return geo;
 }
 
-export function buildBuildings(map: TacticalMap): Built {
+export function buildBuildings(map: TacticalMap): Built & { update(x: number, z: number): void } {
   const seed = map.params.mapSeed;
   const boxes: { x: number; y: number; z: number; sx: number; sy: number; sz: number; color: number; style: number; shade: number }[] = [];
   const roofs: { b: Building; color: number }[] = [];
@@ -138,6 +138,7 @@ export function buildBuildings(map: TacticalMap): Built {
   }
 
   const group = new THREE.Group();
+  const stepBlocks: { mesh: THREE.InstancedMesh; x0: number; z0: number }[] = [];
   const disposables: { dispose(): void }[] = [];
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
@@ -146,8 +147,8 @@ export function buildBuildings(map: TacticalMap): Built {
   if (boxes.length > 0 || steps.size > 0) {
     const material = boxMaterial();
     disposables.push(material);
-    const add = (list: typeof boxes, name: string, open = false): void => {
-      if (list.length === 0) return;
+    const add = (list: typeof boxes, name: string, open = false): THREE.InstancedMesh | null => {
+      if (list.length === 0) return null;
       const geo = new THREE.BoxGeometry(1, 1, 1);
       // Door steps stand in the ground: their underside is never seen (BoxGeometry's faces are in the
       // order +x -x +y -y +z -z, six indices each).
@@ -166,9 +167,13 @@ export function buildBuildings(map: TacticalMap): Built {
       mesh.name = name;
       group.add(mesh);
       disposables.push(geo, mesh);
+      return mesh;
     };
     add(boxes, 'boxes');
-    for (const list of steps.values()) add(list, 'steps', true);
+    for (const [key, list] of steps) {
+      const mesh = add(list, 'steps', true);
+      if (mesh) stepBlocks.push({ mesh, x0: (key % 64) * B.stepChunk, z0: Math.floor(key / 64) * B.stepChunk });
+    }
   }
 
   if (roofs.length > 0) {
@@ -197,6 +202,13 @@ export function buildBuildings(map: TacticalMap): Built {
 
   return {
     object: group,
+    update(x, z) {
+      // Door steps only in the blocks within reach (a quarter-metre step is lost in the haze beyond).
+      for (const sb of stepBlocks) {
+        const d = Math.hypot(Math.max(sb.x0 - x, 0, x - sb.x0 - B.stepChunk), Math.max(sb.z0 - z, 0, z - sb.z0 - B.stepChunk));
+        sb.mesh.visible = d < B.stepRange;
+      }
+    },
     dispose() {
       for (const d of disposables) d.dispose();
     },

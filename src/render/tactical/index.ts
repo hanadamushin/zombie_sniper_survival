@@ -35,6 +35,7 @@ interface Entry {
   terrain: TerrainPart | null;
   vegetation: Vegetation | null;
   brush: BrushPart | null;
+  buildings: ReturnType<typeof buildBuildings> | null;
   enterables: EnterablePart | null;
   /** Parts still to build, in order. */
   todo: ('terrain' | 'water' | 'buildings' | 'enterables' | 'vegetation' | 'brush')[];
@@ -55,7 +56,7 @@ export function createTacticalRenderer(): SubRenderer {
   const start = (map: TacticalMap): Entry => {
     const group = new THREE.Group();
     ctx.scene.add(group);
-    const entry: Entry = { map, group, parts: [], terrain: null, vegetation: null, brush: null, enterables: null, todo: map.water ? ['terrain', 'water', 'buildings', 'enterables', 'vegetation', 'brush'] : ['terrain', 'buildings', 'enterables', 'vegetation', 'brush'] };
+    const entry: Entry = { map, group, parts: [], terrain: null, buildings: null, vegetation: null, brush: null, enterables: null, todo: map.water ? ['terrain', 'water', 'buildings', 'enterables', 'vegetation', 'brush'] : ['terrain', 'buildings', 'enterables', 'vegetation', 'brush'] };
     entries.set(map, entry);
     return entry;
   };
@@ -65,7 +66,7 @@ export function createTacticalRenderer(): SubRenderer {
     let part: Built;
     if (what === 'terrain') part = e.terrain = buildTerrain(e.map, ctx.renderer, { apron: !e.map.params.world, pixels: groundPixelsOf(e.map) });
     else if (what === 'water') part = buildWater(e.map);
-    else if (what === 'buildings') part = buildBuildings(e.map);
+    else if (what === 'buildings') part = e.buildings = buildBuildings(e.map);
     else if (what === 'enterables') part = e.enterables = buildEnterables(e.map);
     else if (what === 'vegetation') part = e.vegetation = buildVegetation(e.map);
     else if (what === 'brush') part = e.brush = buildBrush(e.map);
@@ -145,6 +146,7 @@ export function createTacticalRenderer(): SubRenderer {
         const away = Math.hypot(Math.max(-local.x, 0, local.x - map.size), Math.max(-local.z, 0, local.z - map.size));
         e.vegetation?.update(local, RENDER.fog.far, away < RENDER.flora.grassRange);
         e.brush?.update(local.x, local.z);
+        e.buildings?.update(local.x, local.z);
         if (e.enterables) {
           stages = e.enterables.update(local.x, local.y, local.z, stages, tris);
           pendingWork += e.enterables.pending();
