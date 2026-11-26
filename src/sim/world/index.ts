@@ -7,6 +7,7 @@
 import { rand, stream } from '../../core/rng.ts';
 import type { GameState, StaticGrid } from '../../core/types.ts';
 import { BALANCE } from '../../data/balance.ts';
+import { BUILD } from '../../data/buildings.ts';
 import type { System } from '../system.ts';
 import { dangerOf, removeZombies } from './derive.ts';
 import { stepInfection, type InfectionExtras } from './infection.ts';
@@ -86,7 +87,9 @@ export const worldSystem: System = {
     if (!worldReady(state, ctx.grid)) return;
     const stats = stepInfection(state.world.cells, ctx.grid, state.time.day, settlementAttraction(state), stream(state, 'world.infection'));
     const inflow = stats.inflow[0] ?? 0;
-    state.world.hordeMeter += getMod(state, 'raid.hordeGain', inflow); // difficulty, radio broadcasts (C6a)
+    // 09: a new settlement is found slowly — the meter takes a growing share of the inflow over the first days.
+    const ramp = Math.min(1, Math.max(0, state.time.day - BALANCE.time.startDay) / BUILD.raid.hordeRampDays) ** BUILD.raid.hordeRampPower;
+    state.world.hordeMeter += getMod(state, 'raid.hordeGain', inflow) * ramp; // difficulty, radio broadcasts (C6a)
     ctx.emit({ type: 'infectionStepped', day: state.time.day, homeInflow: inflow });
     outpostsDay(ctxNow(state, ctx.grid, ctx.emit), stats.inflow.slice(1));
   },

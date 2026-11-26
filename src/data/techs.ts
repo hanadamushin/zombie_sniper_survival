@@ -135,83 +135,85 @@ type Row = [id: string, era: 0 | 1 | 2 | 3, cost: number, req: readonly string[]
 const rows = (cat: TechCategory, list: Row[]): TechDef[] => list.map(([id, era, cost, req, effects, extra]) => ({ id, cat, era, cost, req, effects, ...extra }));
 
 /**
- * Costs are set so that four researchers on an even allocation, without a laboratory, reach the
- * settled era around day 15, the rebuilding era around day 45 and the revival era around day 90
- * (tests/research.test.ts prints the days).
+ * Costs. 07 set them for four researchers on an even allocation without a laboratory; in a played
+ * game the researchers multiply and the laboratory, the school and the power plant come on top, so
+ * the later eras went by far too fast (09, headless playthroughs: 20 / 35 / 50 days, the declaration
+ * around day 90). 09: era 0 x 0.7, era 1 x 2, era 2 x 3, era 3 x 2 — the solid bot on normal now
+ * reaches the eras around days 15 / 45 / 90 (docs/balance_log.md has the measurements).
  */
 const DEFS: TechDef[] = [
   // ------------------------------------------------------------------ F: fortification
   ...rows('F', [
-    ['F1', 0, 300, [], [B('earthwork'), B('gateEarth'), B('moat'), B('hut')]],
-    ['F2', 0, 400, ['F1'], [B('tower')]],
-    ['F3', 1, 600, ['F1'], [B('steelWall'), B('gateSteel'), B('house')]],
-    ['F4a', 1, 1000, ['F2', 'F3'], [mul('moat.work', 0.6), B('drawbridge'), flag('moat.slow')], { excludes: 'F4b' }],
-    ['F4b', 1, 1000, ['F2', 'F3'], [B('barbedWire'), mul('wall.hp', 1.25), mul('repair.speed', 1.5)], { excludes: 'F4a' }],
-    ['F5', 2, 900, ['F3'], [B('concreteWall'), B('gateConcrete'), B('apartment'), add('build.radius', 60)]],
-    ['F6a', 2, 1200, ['F4a', 'F5'], [B('waterMoat')]],
-    ['F6b', 2, 1200, ['F4b', 'F5'], [add('wall.selfRepair', 0.01)]],
-    ['F7a', 2, 1600, ['F5'], [B('turret'), flag('turret')], { excludes: 'F7b' }],
-    ['F7b', 2, 1600, ['F5'], [flag('militia')], { excludes: 'F7a' }],
-    ['F8', 3, 3000, [], [add('build.radius', 120), mul('tower.range', 1.25)], { any: ['F6a', 'F6b'] }],
-    ['F9', 3, 5000, ['F8'], [mul('defense.hp', 1.5)], { any: ['F7a', 'F7b'], goal: true }],
+    ['F1', 0, 210, [], [B('earthwork'), B('gateEarth'), B('moat'), B('hut')]],
+    ['F2', 0, 280, ['F1'], [B('tower')]],
+    ['F3', 1, 1200, ['F1'], [B('steelWall'), B('gateSteel'), B('house')]],
+    ['F4a', 1, 2000, ['F2', 'F3'], [mul('moat.work', 0.6), B('drawbridge'), flag('moat.slow')], { excludes: 'F4b' }],
+    ['F4b', 1, 2000, ['F2', 'F3'], [B('barbedWire'), mul('wall.hp', 1.25), mul('repair.speed', 1.5)], { excludes: 'F4a' }],
+    ['F5', 2, 2700, ['F3'], [B('concreteWall'), B('gateConcrete'), B('apartment'), add('build.radius', 60)]],
+    ['F6a', 2, 3600, ['F4a', 'F5'], [B('waterMoat')]],
+    ['F6b', 2, 3600, ['F4b', 'F5'], [add('wall.selfRepair', 0.01)]],
+    ['F7a', 2, 4800, ['F5'], [B('turret'), flag('turret')], { excludes: 'F7b' }],
+    ['F7b', 2, 4800, ['F5'], [flag('militia')], { excludes: 'F7a' }],
+    ['F8', 3, 6000, [], [add('build.radius', 120), mul('tower.range', 1.25)], { any: ['F6a', 'F6b'] }],
+    ['F9', 3, 10000, ['F8'], [mul('defense.hp', 1.5)], { any: ['F7a', 'F7b'], goal: true }],
   ]),
   // ------------------------------------------------------------------ W: weapons
   ...rows('W', [
-    ['W1', 0, 300, [], [gear('melee'), mul('knife.damage', 1.5)]],
-    ['W2', 0, 400, ['W1'], [B('workshop')]],
-    ['W3', 1, 600, ['W1'], [gear('bow')]],
-    ['W4', 1, 800, ['W2'], [gear('pistol'), gear('rifleArmor')]],
+    ['W1', 0, 210, [], [gear('melee'), mul('knife.damage', 1.5)]],
+    ['W2', 0, 280, ['W1'], [B('workshop')]],
+    ['W3', 1, 1200, ['W1'], [gear('bow')]],
+    ['W4', 1, 1600, ['W2'], [gear('pistol'), gear('rifleArmor')]],
     // One shot, one kill — even through a row of them. Slow, loud on the shoulder, and hungry.
-    ['W5a', 1, 1000, ['W4'], [mul('weapon.damage', 2), add('weapon.pierce', 2), mul('weapon.velocity', 1.1), mul('weapon.bolt', 1.5), mul('weapon.sway', 1.2), mul('weapon.recoil', 1.5), mul('weapon.ammoPerShot', 3)], { excludes: 'W5b' }],
+    ['W5a', 1, 2000, ['W4'], [mul('weapon.damage', 2), add('weapon.pierce', 2), mul('weapon.velocity', 1.1), mul('weapon.bolt', 1.5), mul('weapon.sway', 1.2), mul('weapon.recoil', 1.5), mul('weapon.ammoPerShot', 3)], { excludes: 'W5b' }],
     // Ten rounds as fast as the trigger goes. Each one does a little less and stops in the first body.
-    ['W5b', 1, 1000, ['W4'], [add('weapon.mag', 5), mul('weapon.bolt', 0.35 / 1.2), mul('weapon.torso', 0.85), add('weapon.pierce', -1), add('weapon.range', -100), mul('weapon.recoil', 0.7)], { excludes: 'W5a' }],
-    ['W6a', 2, 1200, ['W4'], [mul('weapon.zoomMax', 2), flag('scope.rangefinder')], { excludes: 'W6b' }],
-    ['W6b', 2, 1200, ['W4'], [add('weapon.pierce', 2), mul('weapon.velocity', 1.1), mul('weapon.drag', 0.8), mul('craft.cost', 0.6)], { excludes: 'W6a' }],
-    ['W7', 2, 1400, [], [flag('scope.nightVision')], { any: ['W6a', 'W6b'] }],
-    ['W8', 3, 3000, ['W7'], [mul('ammo.issue', 0.5), add('expedition.bonus', 0.05)]],
-    ['W9', 3, 3500, ['W8'], [flag('snipers')]],
+    ['W5b', 1, 2000, ['W4'], [add('weapon.mag', 5), mul('weapon.bolt', 0.35 / 1.2), mul('weapon.torso', 0.85), add('weapon.pierce', -1), add('weapon.range', -100), mul('weapon.recoil', 0.7)], { excludes: 'W5a' }],
+    ['W6a', 2, 3600, ['W4'], [mul('weapon.zoomMax', 2), flag('scope.rangefinder')], { excludes: 'W6b' }],
+    ['W6b', 2, 3600, ['W4'], [add('weapon.pierce', 2), mul('weapon.velocity', 1.1), mul('weapon.drag', 0.8), mul('craft.cost', 0.6)], { excludes: 'W6a' }],
+    ['W7', 2, 4200, [], [flag('scope.nightVision')], { any: ['W6a', 'W6b'] }],
+    ['W8', 3, 6000, ['W7'], [mul('ammo.issue', 0.5), add('expedition.bonus', 0.05)]],
+    ['W9', 3, 7000, ['W8'], [flag('snipers')]],
   ]),
   // ------------------------------------------------------------------ A: agriculture
   ...rows('A', [
-    ['A1', 0, 300, [], [B('farm')]],
-    ['A2', 0, 400, ['A1'], [B('storehouse'), mul('capacity.food', 1.5)]],
-    ['A3', 1, 600, ['A1'], [mul('farm.yield', 1.3)]],
-    ['A4a', 1, 1000, ['A3'], [B('ranch')], { excludes: 'A4b' }],
-    ['A4b', 1, 1000, ['A3'], [B('greenhouse')], { excludes: 'A4a' }],
-    ['A5', 2, 900, ['A3'], [mul('job.farming', 1.4)]],
-    ['A6a', 2, 1200, ['A2'], [add('expedition.radius', 2), mul('expedition.time', 0.8), flag('garrison.fed')], { any: ['A4a', 'A4b'], excludes: 'A6b' }],
-    ['A6b', 2, 1200, ['A2'], [B('tavern'), flag('brewery')], { any: ['A4a', 'A4b'], excludes: 'A6a' }],
-    ['A7', 3, 3000, ['A5'], [mul('farm.yield', 1.5), add('farm.seasonMin', 0.7)]],
-    ['A8', 3, 3500, ['A7'], [mul('food.priceMax', 1.2 / 2.5), flag('noStarve')]],
+    ['A1', 0, 210, [], [B('farm')]],
+    ['A2', 0, 280, ['A1'], [B('storehouse'), mul('capacity.food', 1.5)]],
+    ['A3', 1, 1200, ['A1'], [mul('farm.yield', 1.3)]],
+    ['A4a', 1, 2000, ['A3'], [B('ranch')], { excludes: 'A4b' }],
+    ['A4b', 1, 2000, ['A3'], [B('greenhouse')], { excludes: 'A4a' }],
+    ['A5', 2, 2700, ['A3'], [mul('job.farming', 1.4)]],
+    ['A6a', 2, 3600, ['A2'], [add('expedition.radius', 2), mul('expedition.time', 0.8), flag('garrison.fed')], { any: ['A4a', 'A4b'], excludes: 'A6b' }],
+    ['A6b', 2, 3600, ['A2'], [B('tavern'), flag('brewery')], { any: ['A4a', 'A4b'], excludes: 'A6a' }],
+    ['A7', 3, 6000, ['A5'], [mul('farm.yield', 1.5), add('farm.seasonMin', 0.7)]],
+    ['A8', 3, 7000, ['A7'], [mul('food.priceMax', 1.2 / 2.5), flag('noStarve')]],
   ]),
   // ------------------------------------------------------------------ S: science & medicine
   ...rows('S', [
-    ['S1', 0, 300, [], [mul('heal.rest', 2)]],
-    ['S2', 0, 400, ['S1'], [flag('intel.zombies')]],
-    ['S3', 1, 600, [], [B('lab')]],
-    ['S4', 1, 800, ['S1'], [B('clinic'), { kind: 'unlock', what: 'job', id: 'medical' }]],
-    ['S5a', 1, 1000, ['S3', 'S4'], [mul('infection.chance', 0.4), mul('cure.medicine', 0.5)], { excludes: 'S5b' }],
-    ['S5b', 1, 1000, ['S3', 'S4'], [B('generator'), mul('job.crafting', 1.3), mul('job.all', 1.1)], { excludes: 'S5a' }],
-    ['S6a', 2, 1200, ['S5a'], [B('hospital'), mul('infection.hours', 3.5)]],
-    ['S6b', 2, 1200, ['S5b'], [B('powerPlant')]],
-    ['S7a', 2, 1400, ['S6a'], [flag('map.forecast')]],
-    ['S7b', 2, 1400, ['S6b'], [mul('travel.time', 0.4), mul('travel.fast', 0.5), flag('supply.noDelay')]],
-    ['S8', 3, 3000, [], [B('school'), flag('education')], { any: ['S6a', 'S6b'] }],
-    ['S9', 3, 5000, ['S7a', 'S8'], [mul('infection.chance', 0), flag('vaccine')], { goal: true }],
+    ['S1', 0, 210, [], [mul('heal.rest', 2)]],
+    ['S2', 0, 280, ['S1'], [flag('intel.zombies')]],
+    ['S3', 1, 1200, [], [B('lab')]],
+    ['S4', 1, 1600, ['S1'], [B('clinic'), { kind: 'unlock', what: 'job', id: 'medical' }]],
+    ['S5a', 1, 2000, ['S3', 'S4'], [mul('infection.chance', 0.4), mul('cure.medicine', 0.5)], { excludes: 'S5b' }],
+    ['S5b', 1, 2000, ['S3', 'S4'], [B('generator'), mul('job.crafting', 1.3), mul('job.all', 1.1)], { excludes: 'S5a' }],
+    ['S6a', 2, 3600, ['S5a'], [B('hospital'), mul('infection.hours', 3.5)]],
+    ['S6b', 2, 3600, ['S5b'], [B('powerPlant')]],
+    ['S7a', 2, 4200, ['S6a'], [flag('map.forecast')]],
+    ['S7b', 2, 4200, ['S6b'], [mul('travel.time', 0.4), mul('travel.fast', 0.5), flag('supply.noDelay')]],
+    ['S8', 3, 6000, [], [B('school'), flag('education')], { any: ['S6a', 'S6b'] }],
+    ['S9', 3, 10000, ['S7a', 'S8'], [mul('infection.chance', 0), flag('vaccine')], { goal: true }],
   ]),
   // ------------------------------------------------------------------ C: society & economy
   ...rows('C', [
-    ['C1', 0, 300, [], [B('canteen'), mul('food.use', 0.95), mul('morale.hungry', 0.7)]],
-    ['C2', 0, 400, ['C1'], [mul('hire.fee', 0.7), flag('hire.stats')]],
-    ['C3', 1, 600, [], [{ kind: 'unlock', what: 'outpostTier', id: '2' }, mul('outpost.supply', 1.5)]],
-    ['C4a', 1, 1000, ['C1', 'C3'], [B('market'), flag('trade'), mul('food.price', 0.8), mul('wage', 1.1)], { excludes: 'C4b' }],
-    ['C4b', 1, 1000, ['C1', 'C3'], [B('barracks'), mul('wage', 0.75), mul('job.all', 1.1), mul('morale.max', 0.8), flag('desert.armed')], { excludes: 'C4a' }],
-    ['C5', 2, 900, ['C3'], [{ kind: 'unlock', what: 'outpostTier', id: '3' }, B('monument'), add('colony.popCap', 1000)]],
-    ['C6a', 2, 1200, ['C5'], [B('radio'), flag('radio'), mul('raid.hordeGain', 1.5)], { excludes: 'C6b' }],
-    ['C6b', 2, 1200, ['C5'], [flag('horde.scout'), flag('intel.scout'), add('expedition.danger', -0.1)], { excludes: 'C6a' }],
-    ['C7', 2, 1400, [], [mul('wage', 0.9), flag('ears.receipt')], { any: ['C4a', 'C4b'] }],
-    ['C8', 3, 3000, ['C5'], [flag('outpost.autonomy')]],
-    ['C9', 3, 5000, ['C8', 'C7'], [flag('federation')], { goal: true }],
+    ['C1', 0, 210, [], [B('canteen'), mul('food.use', 0.95), mul('morale.hungry', 0.7)]],
+    ['C2', 0, 280, ['C1'], [mul('hire.fee', 0.7), flag('hire.stats')]],
+    ['C3', 1, 1200, [], [{ kind: 'unlock', what: 'outpostTier', id: '2' }, mul('outpost.supply', 1.5)]],
+    ['C4a', 1, 2000, ['C1', 'C3'], [B('market'), flag('trade'), mul('food.price', 0.8), mul('wage', 1.1)], { excludes: 'C4b' }],
+    ['C4b', 1, 2000, ['C1', 'C3'], [B('barracks'), mul('wage', 0.75), mul('job.all', 1.1), mul('morale.max', 0.8), flag('desert.armed')], { excludes: 'C4a' }],
+    ['C5', 2, 2700, ['C3'], [{ kind: 'unlock', what: 'outpostTier', id: '3' }, B('monument'), add('colony.popCap', 1000)]],
+    ['C6a', 2, 3600, ['C5'], [B('radio'), flag('radio'), mul('raid.hordeGain', 1.5)], { excludes: 'C6b' }],
+    ['C6b', 2, 3600, ['C5'], [flag('horde.scout'), flag('intel.scout'), add('expedition.danger', -0.1)], { excludes: 'C6a' }],
+    ['C7', 2, 4200, [], [mul('wage', 0.9), flag('ears.receipt')], { any: ['C4a', 'C4b'] }],
+    ['C8', 3, 6000, ['C5'], [flag('outpost.autonomy')]],
+    ['C9', 3, 10000, ['C8', 'C7'], [flag('federation')], { goal: true }],
   ]),
 ];
 
@@ -276,9 +278,9 @@ export const RESEARCH = {
 
 /** Modifiers by difficulty (low / normal / high), merged into getMod. */
 export const DIFFICULTY_MODS: readonly (readonly TechEffect[])[] = [
-  [mul('weapon.sway', 0.8), mul('raid.hordeGain', 0.75), mul('raid.nightSize', 0.7), mul('zombie.active', 0.8), mul('raid.hordeMax', 80 / 150)],
+  [mul('weapon.sway', 0.8), mul('raid.hordeGain', 0.75), mul('raid.nightSize', 0.7), mul('zombie.active', 0.8), mul('raid.hordeMax', 160 / 300)],
   [],
-  [mul('weapon.sway', 1.25), mul('raid.hordeGain', 1.3), mul('raid.nightSize', 1.3), mul('zombie.active', 1.2), mul('raid.hordeMax', 250 / 150)],
+  [mul('weapon.sway', 1.25), mul('raid.hordeGain', 1.3), mul('raid.nightSize', 1.3), mul('zombie.active', 1.2), mul('raid.hordeMax', 500 / 300)],
 ];
 
 /** Nodes that can never be taken once `id` has been: its exclusive partner and everything that needs a locked node. */

@@ -204,8 +204,20 @@ export const BUILD = {
     /** Horde threshold = base + perHead * population (player included). */
     hordeBase: 60,
     hordePerHead: 4,
-    /** Largest horde (normal difficulty; 80 / 150 / 250 through the modifier `raid.hordeMax`). */
-    hordeMax: 150,
+    /**
+     * Largest horde (normal difficulty; 160 / 300 / 500 through the modifier `raid.hordeMax`).
+     * 09: 150 -> 300 — the threshold grows with the colony (60 people: 300), the cap did not, and a
+     * late colony with rifles on its towers put 150 down without losing a wall.
+     */
+    hordeMax: 300,
+    /**
+     * 09: the dead take time to find a new settlement — over the first hordeRampDays days of a game the
+     * meter takes only (day / hordeRampDays) ^ hordeRampPower of the inflow (a busy start cell filled
+     * it in four days: a horde of 95 against five people on the fifth morning). With 14 days squared
+     * the busiest start candidates see their first horde around day 11, the quiet ones around day 25-30.
+     */
+    hordeRampDays: 14,
+    hordeRampPower: 2,
     /** Hours between the horde forming and its arrival; who gets told when. */
     leadHours: 6,
     warnTowerHours: 6,
@@ -227,7 +239,7 @@ export const BUILD = {
     /** A zombie pressing into a moat goes over the edge after this many seconds. */
     moatFallSeconds: 4,
     /** Buildings are far tougher than fences: zombies pawing at one do this share of their wall damage. */
-    buildingDamage: 0.025,
+    buildingDamage: 0.05,
     /** Zombies that can work on one wall tile at once (the abstract battle uses the same figure). */
     attackersPerTile: 5,
     /** Bites on people out in the open: damage per second and zombie within reach (m). */

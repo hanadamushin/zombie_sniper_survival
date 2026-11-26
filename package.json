@@ -18,7 +18,8 @@
     "tactical:preview": "node tools/tactical-preview.ts tmp/tactical",
     "buildings:preview": "node tools/building-preview.ts tmp/buildings",
     "e2e": "playwright test",
-    "data:region": "node tools/real/region.ts"
+    "data:region": "node tools/real/region.ts",
+    "balance": "node tests/balance/run.ts"
   },
   "dependencies": {
     "preact": "^11.2.0",

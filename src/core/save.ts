@@ -3,7 +3,7 @@
 // the (de)serialisation half is pure and unit-tested against an in-memory store.
 
 import { BALANCE } from '../data/balance.ts';
-import { defaultAim, initialColony, STATE_VERSION, type GameState } from './types.ts';
+import { createInitialState, defaultAim, initialColony, STATE_VERSION, type GameState } from './types.ts';
 
 export const AUTO_SLOT = 'auto';
 export type SlotId = string; // 'auto' | 'slot1' | 'slot2' | 'slot3'
@@ -97,9 +97,92 @@ const MIGRATIONS: Record<number, Migration> = {
     const build = { raid: null, pendingEars: 0, lastRaid: null, ...(old.build as Record<string, unknown>) };
     return { ...old, build };
   },
+  // 5 -> 6 (09): the release baseline. Whatever 07..O1 added without a version of its own is filled
+  // in from a fresh game, section by section; what the save has always wins.
+  5: (old) => {
+    const fresh = createInitialState(typeof old.seed === 'number' ? old.seed : 0, 1) as unknown as Record<string, Record<string, unknown>>;
+    const obj = (v: unknown): Record<string, unknown> => (typeof v === 'object' && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
+    const fill = (key: string, nested: string[] = []): Record<string, unknown> => {
+      const out = { ...fresh[key], ...obj(old[key]) };
+      for (const n of nested) out[n] = { ...obj(fresh[key]![n]), ...obj(obj(old[key])[n]) };
+      return out;
+    };
+    const colony = fill('colony', ['market', 'work', 'policy', 'stock', 'capacity']);
+    const person = (s: unknown): unknown => ({ meals: 0, missed: 0, infectedUntil: null, unpaidDays: 0, lowMoraleDays: 0, task: null, ...obj(s) });
+    for (const list of ['survivors', 'candidates']) colony[list] = Array.isArray(colony[list]) ? (colony[list] as unknown[]).map(person) : [];
+    return {
+      ...old,
+      rngStreams: obj(old.rngStreams),
+      flags: obj(old.flags),
+      world: fill('world'),
+      player: fill('player', ['weapon', 'stats', 'aim', 'inv']),
+      colony,
+      build: fill('build'),
+      research: fill('research', ['allocation', 'active']),
+    };
+  },
 };
 
 export class SaveError extends Error {}
+
+const RESOURCES = ['ears', 'food', 'ammo', 'wood', 'metal', 'cement', 'parts', 'medicine', 'fuel'] as const;
+
+/**
+ * 09: refuse a save that cannot be played instead of crashing somewhere in the first frame (a file
+ * cut off by a full disk, hand-edited, or from a build whose shape this one does not know). Checks
+ * the skeleton every system reads on its first tick — not the game rules.
+ */
+export function validate(state: GameState): GameState {
+  const bad = (what: string): never => {
+    throw new SaveError(`Save data is damaged: ${what}`);
+  };
+  const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+  const num = (v: unknown, what: string): number => (typeof v === 'number' && Number.isFinite(v) ? v : bad(what));
+  const s = state as unknown as Record<string, unknown>;
+  for (const key of ['time', 'world', 'player', 'colony', 'build', 'research', 'flags', 'rng', 'rngStreams']) if (!isObj(s[key])) bad(key);
+  num(s.seed, 'seed');
+  if (![0, 1, 2].includes(s.difficulty as number)) bad('difficulty');
+  if (!['tactical', 'command', 'world', 'menu'].includes(s.mode as string)) bad('mode');
+  const t = state.time;
+  num(t.day, 'time.day');
+  if (!(num(t.minute, 'time.minute') >= 0 && t.minute < BALANCE.time.minutesPerDay)) bad('time.minute');
+  num(t.sub, 'time.sub');
+  const w = state.world;
+  if (!isObj(w.cells)) bad('world.cells');
+  const size = num(w.gridW, 'world.gridW') * num(w.gridH, 'world.gridH');
+  for (const key of ['S', 'Z', 'H', 'loot', 'visited', 'intel'] as const) if (!Array.isArray(w.cells[key]) || w.cells[key].length !== size) bad(`world.cells.${key}`);
+  if (!Array.isArray(w.outposts) || !Array.isArray(w.expeditions)) bad('world.outposts');
+  if (w.homeCell !== null && !(num(w.homeCell, 'world.homeCell') >= 0 && w.homeCell < Math.max(1, size))) bad('world.homeCell');
+  num(w.hordeMeter, 'world.hordeMeter');
+  const p = state.player;
+  if (!Array.isArray(p.pos) || p.pos.length !== 3 || !isObj(p.inv) || !isObj(p.weapon) || !isObj(p.stats) || !isObj(p.aim)) bad('player');
+  for (const v of p.pos) num(v, 'player.pos');
+  num(p.hp, 'player.hp');
+  const c = state.colony;
+  if (!isObj(c.stock) || !isObj(c.capacity) || !isObj(c.market) || !isObj(c.work) || !isObj(c.policy)) bad('colony');
+  for (const r of RESOURCES) {
+    num(c.stock[r], `colony.stock.${r}`);
+    num(c.capacity[r], `colony.capacity.${r}`);
+  }
+  for (const key of ['survivors', 'candidates', 'ledger', 'log', 'memorial'] as const) if (!Array.isArray(c[key])) bad(`colony.${key}`);
+  for (const person of [...c.survivors, ...c.candidates]) {
+    if (!isObj(person) || !isObj(person.location)) bad('colony.survivors');
+    num(person.id, 'survivor.id');
+    num(person.hp, 'survivor.hp');
+  }
+  if (!Array.isArray(state.build.structures)) bad('build.structures');
+  for (const st of state.build.structures) {
+    if (!isObj(st) || typeof st.def !== 'string' || !isObj(st.delivered)) bad('build.structures');
+    num(st.tx, 'structure.tx');
+    num(st.ty, 'structure.ty');
+    num(st.hp, 'structure.hp');
+    num(st.progress, 'structure.progress');
+  }
+  const r = state.research;
+  if (!Array.isArray(r.done) || !Array.isArray(r.locked) || !isObj(r.active) || !isObj(r.allocation)) bad('research');
+  if (state.tactical !== null && (!isObj(state.tactical) || !Array.isArray(state.tactical.lootSpots))) bad('tactical');
+  return state;
+}
 
 export function migrate(raw: Record<string, unknown>): GameState {
   let data = raw;
@@ -113,7 +196,7 @@ export function migrate(raw: Record<string, unknown>): GameState {
     version += 1;
     data.version = version;
   }
-  return data as unknown as GameState;
+  return validate(data as unknown as GameState);
 }
 
 export function deserialize(json: string): GameState {

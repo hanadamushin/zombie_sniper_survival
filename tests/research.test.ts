@@ -271,9 +271,9 @@ describe('modifiers', () => {
     expect(getMod(state, 'weapon.sway', 1)).toBe(1);
     state.difficulty = 2;
     expect(getMod(state, 'weapon.sway', 1)).toBe(1.25);
-    expect(getMod(state, 'raid.hordeMax', BUILD.raid.hordeMax)).toBeCloseTo(250, 6);
+    expect(getMod(state, 'raid.hordeMax', BUILD.raid.hordeMax)).toBeCloseTo(500, 6);
     state.difficulty = 0;
-    expect(getMod(state, 'raid.hordeMax', BUILD.raid.hordeMax)).toBeCloseTo(80, 6);
+    expect(getMod(state, 'raid.hordeMax', BUILD.raid.hordeMax)).toBeCloseTo(160, 6);
 
     // In-place edits nobody could notice need the explicit call.
     state.difficulty = 1;
@@ -733,7 +733,10 @@ describe('victory', () => {
 });
 
 describe('pacing', () => {
-  it('four researchers on an even allocation reach the eras around day 15, 45 and 90', () => {
+  // 09: the costs are now set for a colony that grows (tests/balance: the solid bot reaches the eras around
+  // days 15 / 45 / 90 with 2 -> 14 researchers, a laboratory and a school). Four researchers who never get
+  // help are quick through the first era and slow after it; this pins that curve down.
+  it('four researchers on an even allocation: the settled era in about ten days, the rebuilding era in about seventy', () => {
     const r = rig(3, true);
     const { state } = r;
     for (let i = 0; i < 4; i++) r.add('research', { kno: 6, spd: 5, sta: 5 });
@@ -765,11 +768,10 @@ describe('pacing', () => {
     console.log(`[pacing] ${perDay.toFixed(0)} RP/day; eras reached on day ${eraDay.slice(1).map((d) => d?.toFixed(1)).join(' / ')}; nodes ${state.research.done.length}`);
     expect(perDay).toBeGreaterThan(150);
     expect(perDay).toBeLessThan(280);
-    expect(eraDay[1]).toBeGreaterThan(10);
-    expect(eraDay[1]).toBeLessThan(20);
-    expect(eraDay[2]).toBeGreaterThan(35);
-    expect(eraDay[2]).toBeLessThan(55);
-    expect(eraDay[3]).toBeGreaterThan(75);
-    expect(eraDay[3]).toBeLessThan(105);
+    expect(eraDay[1]).toBeGreaterThan(7);
+    expect(eraDay[1]).toBeLessThan(14);
+    expect(eraDay[2]).toBeGreaterThan(55);
+    expect(eraDay[2]).toBeLessThan(85);
+    expect(state.research.era).toBe(2); // the revival era needs more heads than four
   }, 120_000);
 });

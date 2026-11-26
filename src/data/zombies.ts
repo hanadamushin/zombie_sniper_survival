@@ -33,8 +33,8 @@ export interface ZombieDef {
 export const KILL = 99999;
 
 export const ZOMBIES: Record<ZombieKind, ZombieDef> = {
-  walker: { hp: 100, speed: 1.0, wallDps: 4, attack: 15, head: KILL, torso: 55, legs: 30, topples: true, height: 1.75, width: 0.5, headR: 0.125, torsoR: 0.21, legR: 0.16, lean: 0.1, radius: 0.32, prone: false },
-  runner: { hp: 70, speed: 4.5, wallDps: 3, attack: 12, head: KILL, torso: 70, legs: 40, topples: true, height: 1.72, width: 0.38, headR: 0.115, torsoR: 0.16, legR: 0.13, lean: 0.42, radius: 0.28, prone: false },
-  brute: { hp: 600, speed: 0.8, wallDps: 25, attack: 35, head: 300, torso: 40, legs: 25, topples: false, height: 2.15, width: 1.0, headR: 0.15, torsoR: 0.44, legR: 0.3, lean: 0.06, radius: 0.5, prone: false },
-  crawler: { hp: 50, speed: 0.6, wallDps: 2, attack: 10, head: KILL, torso: 50, legs: 50, topples: false, height: 1.7, width: 0.48, headR: 0.125, torsoR: 0.2, legR: 0.15, lean: 0, radius: 0.32, prone: true },
+  walker: { hp: 100, speed: 1.0, wallDps: 1, attack: 15, head: KILL, torso: 55, legs: 30, topples: true, height: 1.75, width: 0.5, headR: 0.125, torsoR: 0.21, legR: 0.16, lean: 0.1, radius: 0.32, prone: false },
+  runner: { hp: 70, speed: 4.5, wallDps: 0.8, attack: 12, head: KILL, torso: 70, legs: 40, topples: true, height: 1.72, width: 0.38, headR: 0.115, torsoR: 0.16, legR: 0.13, lean: 0.42, radius: 0.28, prone: false },
+  brute: { hp: 600, speed: 0.8, wallDps: 8, attack: 35, head: 300, torso: 40, legs: 25, topples: false, height: 2.15, width: 1.0, headR: 0.15, torsoR: 0.44, legR: 0.3, lean: 0.06, radius: 0.5, prone: false },
+  crawler: { hp: 50, speed: 0.6, wallDps: 0.5, attack: 10, head: KILL, torso: 50, legs: 50, topples: false, height: 1.7, width: 0.48, headR: 0.125, torsoR: 0.2, legR: 0.15, lean: 0, radius: 0.32, prone: true },
 };

@@ -278,6 +278,15 @@ function collectEars(state: GameState, ctx: Ctx): void {
 // The battle in numbers (player away)
 // ---------------------------------------------------------------------------------------------
 
+/**
+ * 09: a stand-in for the player's rifle in the battle in numbers. Null in the game (the player is
+ * away, that is why the battle is abstract). The headless balance bots (tests/balance) have no
+ * tactical map at all, so their player — who is at home — joins through this: called once per round
+ * with the seconds of the round and the raiders alive, it returns the zombies the player put down
+ * (the bot keeps the books on ammunition and ears itself).
+ */
+export const awayPlayer: { gun: ((state: GameState, seconds: number, alive: number) => number) | null } = { gun: null };
+
 export interface AwayResult {
   killed: number;
   wallsLost: number;
@@ -387,6 +396,11 @@ export function resolveAway(state: GameState, ctx: Ctx, kind: 'night' | 'horde',
     alive -= shot;
     killed += shot;
     bodies += shot;
+    if (awayPlayer.gun && alive > 0) {
+      const mine = Math.min(alive, Math.max(0, Math.floor(awayPlayer.gun(state, dt, alive))));
+      alive -= mine;
+      killed += mine;
+    }
     if (alive <= 0) continue;
     if (!reachable) continue;
 

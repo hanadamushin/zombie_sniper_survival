@@ -158,7 +158,7 @@ describe('flow field', () => {
     const ov = overlayOf(state, null);
     const goals = [{ tile: HQY * TILES + HQX, bias: 0 }];
     const times: number[] = [];
-    for (let i = 0; i < 15; i++) {
+    for (let i = 0; i < 60; i++) {
       const t0 = performance.now();
       computeField(ov.cost, goals);
       times.push(performance.now() - t0);
@@ -389,7 +389,7 @@ describe('raids', () => {
     r.run(62);
     expect(state.world.pendingHorde!.warned).toBe(true);
     expect(state.world.pendingHorde!.size).toBe(BUILD.raid.hordeMax);
-    expect(state.world.hordeMeter).toBe(350);
+    expect(state.world.hordeMeter).toBe(500 - BUILD.raid.hordeMax);
   });
 
   it('a moat with one opening makes them queue up there, and none gets across elsewhere', () => {
@@ -426,7 +426,7 @@ describe('raids', () => {
     hide(state);
     const fence = ring(state, 'palisade', 7);
     startHorde(r, 70, 1.2);
-    r.run(1500, () => state.flags.defeat === true);
+    r.run(4500, () => state.flags.defeat === true); // 09: walls and buildings hold four / two times as long
     expect(state.flags.defeat).toBe(true);
     expect(fence.some(isRuin)).toBe(true);
     const order = r.events.filter((e) => e.type === 'structureDestroyed').map((e) => (e as { def: string }).def);

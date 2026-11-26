@@ -72,6 +72,45 @@ describe('save', () => {
     expect(state.tactical?.zombies).toHaveLength(1);
   });
 
+  it('brings a version-5 save (before the release baseline) up to date and plays on', () => {
+    const state = played(600);
+    // What a save from session 06 looks like: version 5, none of the fields added later.
+    const old = JSON.parse(serialize(state)) as Record<string, Record<string, unknown>> & { version: number };
+    old.version = 5;
+    delete old.research!.progress;
+    delete old.colony!.metCells;
+    delete old.colony!.policy;
+    delete old.world!.cacheTaken;
+    delete (old.player!.aim as Record<string, unknown>).deadT;
+    const loaded = deserialize(JSON.stringify(old));
+    expect(loaded.version).toBe(STATE_VERSION);
+    expect(loaded.colony.metCells).toEqual({});
+    expect(loaded.colony.policy).toEqual(createInitialState(1, 1).colony.policy);
+    expect(loaded.player.aim.deadT).toBe(0);
+    const sim = createSim();
+    for (let i = 0; i < 600; i++) sim.tick(loaded, FIXED, input);
+    expect(loaded.time.minute).toBeGreaterThan(state.time.minute);
+  });
+
+  it('refuses a damaged save with a SaveError instead of failing later', () => {
+    const good = JSON.parse(serialize(played(60))) as Record<string, unknown>;
+    const broken = (change: (s: Record<string, Record<string, unknown>>) => void): string => {
+      const copy = JSON.parse(JSON.stringify(good)) as Record<string, Record<string, unknown>>;
+      change(copy);
+      return JSON.stringify(copy);
+    };
+    expect(() => deserialize(JSON.stringify(good))).not.toThrow();
+    expect(() => deserialize(broken((s) => delete (s as Record<string, unknown>).colony))).toThrow(SaveError);
+    expect(() => deserialize(broken((s) => { s.time!.minute = 'noon'; }))).toThrow(SaveError);
+    expect(() => deserialize(broken((s) => { s.time!.minute = 5000; }))).toThrow(SaveError);
+    expect(() => deserialize(broken((s) => { (s.colony!.stock as Record<string, unknown>).ammo = null; }))).toThrow(SaveError);
+    expect(() => deserialize(broken((s) => { (s.world!.cells as Record<string, unknown>).Z = [1, 2, 3]; }))).toThrow(SaveError);
+    expect(() => deserialize(broken((s) => { s.build!.structures = [{ id: 1 }]; }))).toThrow(SaveError);
+    expect(() => deserialize(broken((s) => { s.player!.pos = [0, 0]; }))).toThrow(SaveError);
+    expect(() => deserialize(JSON.stringify(good).slice(0, 900))).toThrow(SaveError); // cut off while writing
+    expect(() => deserialize('[]')).toThrow(SaveError);
+  });
+
   it('rejects broken, versionless and future saves', () => {
     expect(() => deserialize('{nope')).toThrow(SaveError);
     expect(() => deserialize('null')).toThrow(SaveError);

@@ -7,7 +7,13 @@ import { COLONY } from '../data/colony.ts';
 import { TACTICAL } from '../data/tactical.ts';
 import { seedRng, type RngState } from './rng.ts';
 
-export const STATE_VERSION = 5;
+/**
+ * 6 (09) is the shape the game ships with. Sessions 07..O1 added fields without raising the version
+ * (all optional or filled on use); the migration 5 -> 6 fills in whatever such a save lacks, and
+ * core/save.ts `validate` rejects a save whose shape cannot be played. From here on: raise this and
+ * add a migration whenever a field is added that old saves do not have.
+ */
+export const STATE_VERSION = 6;
 
 export type CellId = number; // gy * gridW + gx
 export type EntityId = number; // allocated from state.nextId (see allocId)
