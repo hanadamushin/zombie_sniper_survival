@@ -4012,7 +4012,18 @@ R1〜R8 の途中で共通部分に入った修正を全地方に行き渡らせ
 
 ### C. e2e の全件
 
-E2E_PLACEHOLDER
+`pkill -f "vite preview"` の後、本番ビルドを 1 つの preview サーバで、27 ファイルを 1 本ずつ回した（全部で約 6 時間。ソフトウェア描画・1 ワーカー）。**最終の状態で全ファイル通過**。
+
+- 最初の通しで通ったもの（24 ファイル）: `buildings` 4（07d から落ちていた city も通過）、`ui` 5、`playtest` 9、`build` 4、`research` 3、`balance` 3、`placement` 2、`buildings-residential` `-shop` `-office` `-public` `-transport` `-military` 各 3、`realmap` 3、`realmap_hokkaido` 2、`realmap_tohoku` `_kanto` `_chubu` `_kinki` `_chugoku` `_shikoku` `_kyushu` `realmap_all` 各 1、`bridges` 1
+- 落ちたもの 3 ファイルと直し方:
+  - **`smoke` の「60 人の拠点」**: ブラウザがメモリ不足で殺されていた（`Target crashed`／スクリーンショット失敗）。描画発行 20 回を続けて呼ぶと、ソフトウェア描画が 1 回あたり約 180MB を溜め込む（09b 以前のビルドでも 4.4GB、09b で 5GB になり、コンテナの上限を超えた）。**ゲーム側の漏れではない**（JS ヒープは 150MB 前後で一定、通常のフレームでは増えない）。テストの計測を 5 回ずつ・間に 0.4 秒の待ちに変えた。8/8 通過
+  - **`stash`**: 同じ原因のクラッシュが 1 度出た。再実行で通過（2 回）。他のファイルの「20 回の中央値」の計測は変えていない（落ちたら同じ直し方ができる）
+  - **`landmarks` の実地図**: (1) 76 か所を 1 件で回るので、1 か所約 3 分のこの環境では 1 時間の制限に収まらない（これまでは `LANDMARK_CELLS=` で一部だけ回していた）。**10 か所ずつ 8 件に分けた**（`real map 1`〜`8`。ファイル全体で約 4.4 時間）。(2) 踏み段で三角形の予算を超えた 2 か所: 東京・本郷 503,108、岐阜 503,762（岐阜は 09b の前から 496,186 で余裕が無かった）。下の「踏み段の描画」で直し、本郷 47.7 万・岐阜 48.3 万
+- **踏み段の描画（予算の直し）**: 踏み段の箱は (a) 見えない底面を描かない（1 箱 12 → 10 三角形）、(b) 128m のブロックごとに分け、カメラから `RENDER.buildings.stepRange` 350m 以内を、近い順に `stepTris` 15,000 三角形まで描く（カメラのいるブロックは必ず描く）、(c) **踏み段が使った三角形は、入れる建物の外観・内装の予算（`RENDER.enterables.triBudget` 14 万）から引く**。斜面の町でも、踏み段の無かった頃より多くは描かない。遠くの踏み段は描かれない（当たり判定・経路は全部ある）
+- 直した後の再実行（最終のビルド）: `buildings` 4/4、`smoke` 8/8、`stash` 1/1、`landmarks` の `real map 2`・`3`（本郷・岐阜を含む 20 か所）、`bridges` 1/1、`realmap_kanto` 1/1、`realmap_kinki` 1/1。**それ以外のファイルは (c) の前のビルドでの通過**（(c) は描く量を減らすだけの変更）。`landmarks` の残り（試験用の地図 1 件と `real map 1`・`4`〜`8`）は (b) までのビルドで通過
+- 計測（最終のビルド、sim 1 ステップ＋描画発行。すべて予算内）: 市街地 `buildings` 地上 87 コール・41.3 万・0.37＋1.50ms／屋上 69・41.1 万・0.01＋1.20／3 階の中 82・43.0 万・0.02＋1.10。拠点 60 人 78 コール・32.7 万・0.04＋2.18ms。本郷 74・47.7 万・0.37＋1.30、岐阜 104・48.3 万・0.18＋1.20、名古屋 71・41.2 万・0.20＋1.80。橋は最大 103 コール。関東・近畿の実地図は最大 111 コール・44.7 万（百里）。那覇の駐屯地 51・24.3 万・0.35＋0.80
+- 目視（`test-results/09b/`）: 開始地点（区域 22758）の農家の 1.0m の踏み段、札幌中心部（4800）の 2.4m の階段（アパートの外階段の下に続く）、経済タブの「行商人から耳で買う」（1280 幅と 360 幅。360 幅ではパネルを縦に送って読む）、弾薬 12・金属 6 を買って耳 240 → 228
+- `LANDMARK_DEBUG=1` を付けると、名所の計測地点で三角形の内訳（メッシュの種類ごと）をログに出す
 
 ### D. 危険な開始候補（記録のみ）
 
@@ -4020,7 +4031,11 @@ E2E_PLACEHOLDER
 
 ### テスト
 
-TEST_PLACEHOLDER
+- `npm run check`: 37 ファイル **1,336 件通過**（5 件は以前からのスキップ）。09b で足したのは 6 件（`tests/doorsteps.test.ts` 3、`tests/colony.test.ts` 2、`tests/save.test.ts` 1）
+- `npm run build`: 通過
+- `npm run e2e`: 上の C（27 ファイル、最終の状態で全ファイル通過）
+- `npm run balance`: 138 ゲーム、不変条件の違反 0（表は `docs/balance_log.md` §8）
+- `npm run doors`: 全国 4,108 区域、段差 0.5m 超 0、歩いて入れない扉 2（既知の 2 枚）
 
 ### 未完了・既知の問題
 
@@ -4056,7 +4071,7 @@ TEST_PLACEHOLDER
 - 型: `BuildingPlacement.steps?: DoorSteps[]`、`DoorSteps`（`gen/buildings/types.ts`）、`ColonyState.supplyBought`、`SupplyId`（`data/colony.ts`）
 - コマンド: `{ type: 'buySupply', resource, amount }`。拒否理由 `noPedlar` `dailyCap` `noEars` `noRoom` `unknownResource`
 - イベントの追加なし（ログ `log.supplyBought`）
-- データ: `DOORSTEPS`、`COLONY.economy.supply`、`RENDER.buildings.stepChunk`、`REAL_CHECK.maxMs` 1,200、`DOOR_RING`（`gen/builder.ts`）
+- データ: `DOORSTEPS`、`COLONY.economy.supply`、`RENDER.buildings.stepChunk`（128）・`stepRange`・`stepTris`、`REAL_CHECK.maxMs` 1,200、`DOOR_RING`（`gen/builder.ts`）
 - 関数: `gen/doorsteps.ts` `addDoorSteps` / `setDoorSteps` / `doorStepsDebug`、`sim/colony/economy.ts` `supplyPrice` / `supplyDailyEars` / `supplyLot` / `supplyOpen` / `buySupply`、`addEnterable(..., base?)`
 - 道具: `tools/real/doors.ts`（`npm run doors`）
 - 依存の追加なし
