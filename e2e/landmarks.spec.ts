@@ -343,6 +343,28 @@ for (let part = 0; part * PER_TEST < Math.max(VISITS.length, 1); part++) test(`r
     await settle(page);
     await heal(page);
     const m = await measure(page);
+    // 09b: `LANDMARK_DEBUG=1` logs the triangles each kind of mesh adds at this viewpoint.
+    if (process.env.LANDMARK_DEBUG) console.log(JSON.stringify(await page.evaluate(() => {
+      interface Node { name: string; isMesh?: boolean; layers: { mask: number; set(n: number): void } }
+      const g = window.__game!;
+      const s = g.state!;
+      const ctx = (g.renderer as unknown as { ctx: { scene: { traverse(f: (o: Node) => void): void }; renderer: { info: { render: { triangles: number } } } } }).ctx;
+      const info = ctx.renderer.info.render;
+      const meshes: Node[] = [];
+      ctx.scene.traverse((o) => { if (o.isMesh) meshes.push(o); });
+      g.renderer.draw(s, 0, 0);
+      const all = info.triangles;
+      const by: Record<string, number> = {};
+      for (const n of new Set(meshes.map((o) => o.name || 'unnamed'))) {
+        const mine = meshes.filter((o) => (o.name || 'unnamed') === n);
+        const saved = mine.map((o) => o.layers.mask);
+        mine.forEach((o) => o.layers.set(5));
+        g.renderer.draw(s, 0, 0);
+        by[n] = all - info.triangles;
+        mine.forEach((o, i) => { o.layers.mask = saved[i]!; });
+      }
+      return { all, by, stages: g.debug.enterableStages() };
+    })));
     rows.push(`${c.name} cell ${cell} (${list.length} landmarks): ${m.calls} calls, ${(m.triangles / 1e4).toFixed(1)}万 tris, sim ${m.tick.toFixed(2)} + draw ${m.draw.toFixed(2)} ms`);
     await page.screenshot({ path: `test-results/landmark-${c.name}-budget.png` });
     expect(m.calls, c.name).toBeLessThan(150);
